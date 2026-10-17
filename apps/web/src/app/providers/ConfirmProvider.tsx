@@ -32,7 +32,6 @@ export const ConfirmProvider = ({ children }: ConfirmProviderProps) => {
     (options) =>
       new Promise<boolean>((resolve) => {
         setPending((prev) => {
-          // Новый диалог отменяет предыдущий, чтобы его вызывающий код не ждал бесконечно.
           prev?.resolve(false);
 
           return { options, resolve };

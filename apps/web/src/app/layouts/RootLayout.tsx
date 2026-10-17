@@ -8,6 +8,13 @@ export const RootLayout = () => {
 
   return (
     <div className="min-h-screen">
+      <a
+        href="#main-content"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:rounded-md focus-visible:bg-primary focus-visible:px-4 focus-visible:py-2 focus-visible:text-primary-foreground"
+      >
+        Перейти к содержимому
+      </a>
+
       {isNavigating && (
         <div
           role="progressbar"
@@ -18,7 +25,7 @@ export const RootLayout = () => {
 
       <Header />
 
-      <main className="p-6">
+      <main id="main-content" className="p-6">
         <Outlet />
       </main>
     </div>
