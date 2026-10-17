@@ -1,13 +1,12 @@
-'use client';
-
 import { useCallback, useSyncExternalStore } from 'react';
 
-export const useMediaQuery = (query: string, serverValue = false) => {
+/** Реактивно следит за CSS media query. @example useMediaQuery('(min-width: 768px)') */
+export const useMediaQuery = (query: string): boolean => {
   const subscribe = useCallback(
-    (notify: () => void) => {
-      const media = window.matchMedia(query);
-      media.addEventListener('change', notify);
-      return () => media.removeEventListener('change', notify);
+    (onChange: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener('change', onChange);
+      return () => mql.removeEventListener('change', onChange);
     },
     [query],
   );
@@ -17,7 +16,5 @@ export const useMediaQuery = (query: string, serverValue = false) => {
     [query],
   );
 
-  const getServerSnapshot = useCallback(() => serverValue, [serverValue]);
-
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 };

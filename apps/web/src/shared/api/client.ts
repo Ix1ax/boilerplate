@@ -1,39 +1,62 @@
-import type { ApiErrorBody } from '@starter/contracts';
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-    message: string,
-    public requestId?: string,
-  ) {
-    super(message);
-  }
-}
-export const api = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`/api/v1${path}`, {
-    ...init,
-    credentials: 'same-origin',
-    cache: 'no-store',
-    headers: {
-      ...(init?.body instanceof FormData
-        ? {}
-        : { 'Content-Type': 'application/json' }),
-      ...init?.headers,
-    },
-  });
-  if (!response.ok) {
-    const body = (await response
-      .json()
-      .catch(() => null)) as ApiErrorBody | null;
-    throw new ApiError(
-      response.status,
-      body?.error?.code ?? 'request_failed',
-      body?.error?.message ?? 'Не удалось выполнить запрос',
-      body?.error?.request_id ??
-        response.headers.get('x-request-id') ??
-        undefined,
-    );
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-};
+import axios, {
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios';
+
+import { API_BASE_URL, API_TIMEOUT, getApiConfig } from './config';
+import { toApiError } from './errors';
+import { refreshAccessToken, shouldSkipRefresh } from './refresh';
+
+type RetriableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
+
+export const API = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+API.interceptors.request.use((req) => {
+  const token = getApiConfig().getAccessToken();
+  if (token) req.headers.Authorization = `Bearer ${token}`;
+  return req;
+});
+
+API.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
+
+    const { getRefreshToken, onUnauthorized } = getApiConfig();
+
+    const original = error.config as RetriableRequest | undefined;
+    const canRefresh =
+      error.response?.status === 401 &&
+      !!original &&
+      !original._retry &&
+      !shouldSkipRefresh(original.url) &&
+      !!getRefreshToken();
+
+    if (canRefresh) {
+      original._retry = true;
+
+      try {
+        await refreshAccessToken();
+        return API(original);
+      } catch (refreshError) {
+        const apiError = toApiError(refreshError);
+        if (apiError.isUnauthorized || apiError.isForbidden) onUnauthorized();
+        return Promise.reject(apiError);
+      }
+    }
+
+    const apiError = toApiError(error);
+    if (apiError.isUnauthorized) onUnauthorized();
+
+    return Promise.reject(apiError);
+  },
+);
+
+export const request = <T>(cfg: AxiosRequestConfig) =>
+  API.request<T>(cfg).then((r) => r.data);

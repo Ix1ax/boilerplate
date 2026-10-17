@@ -1,37 +1,14 @@
-'use client';
+import { useEffect, useState } from 'react';
 
-import { useCallback, useEffect, useRef } from 'react';
-
-export const useDebounce = <Args extends unknown[]>(
-  callback: (...args: Args) => void,
-  delay: number,
-) => {
-  const callbackRef = useRef(callback);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
+/** Отложенное значение: обновляется через delay мс после последнего изменения. */
+export const useDebounce = <T>(value: T, delay = 300): T => {
+  const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {
-    callbackRef.current = callback;
-  }, [callback]);
+    const id = setTimeout(() => setDebounced(value), delay);
 
-  const cancel = useCallback(() => {
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = undefined;
-  }, []);
+    return () => clearTimeout(id);
+  }, [value, delay]);
 
-  useEffect(() => cancel, [cancel, delay]);
-
-  const debounce = useCallback(
-    (...args: Args) => {
-      cancel();
-      timeoutRef.current = setTimeout(() => {
-        timeoutRef.current = undefined;
-        callbackRef.current(...args);
-      }, delay);
-    },
-    [cancel, delay],
-  );
-
-  return { debounce, cancel };
+  return debounced;
 };
