@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { bootstrap } from './bootstrap.ts';
 
-import './globals.css';
+import './styles/globals.css';
 
 bootstrap();
 
