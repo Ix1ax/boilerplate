@@ -29,7 +29,9 @@ export const FileItem = ({ file }: FileItemProps) => {
 
   return (
     <li className="flex items-center gap-3 py-2">
-      <span className="flex-1 truncate text-sm">{file.name}</span>
+      <span className="flex-1 truncate text-sm" title={file.name}>
+        {file.name}
+      </span>
       <span className="text-xs text-muted-foreground">
         {formatBytes(file.size)}
       </span>

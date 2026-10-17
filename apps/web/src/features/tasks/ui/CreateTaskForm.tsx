@@ -7,6 +7,7 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
   Input,
 } from '@/shared/ui';
@@ -41,6 +42,7 @@ export const CreateTaskForm = () => {
           name="title"
           render={({ field }) => (
             <FormItem className="flex-1">
+              <FormLabel className="sr-only">Новая задача</FormLabel>
               <FormControl>
                 <Input placeholder="Новая задача" {...field} />
               </FormControl>
