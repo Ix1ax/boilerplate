@@ -30,6 +30,7 @@ const values = Object.fromEntries(
 for (const name of [
   'POSTGRES_PASSWORD',
   'REDIS_PASSWORD',
+  'INTERNAL_TOKEN',
   'S3_SECRET_KEY',
   'KEYCLOAK_ADMIN_PASSWORD',
   'DEMO_PASSWORD',
@@ -44,7 +45,7 @@ for (const name of [
   }
 }
 if (text.includes('REPLACE_WITH_POSTGRES_PASSWORD'))
-  text = text.replace(
+  text = text.replaceAll(
     'REPLACE_WITH_POSTGRES_PASSWORD',
     values.POSTGRES_PASSWORD,
   );

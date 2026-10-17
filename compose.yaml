@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?run make setup}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make setup}
       POSTGRES_DB: ${POSTGRES_DB:?required}
-    ports: ['127.0.0.1:5432:5432']
+    ports: ['127.0.0.1:${POSTGRES_PORT:-5432}:5432']
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres:/docker-entrypoint-initdb.d:ro
@@ -46,6 +46,24 @@ services:
   mailpit:
     image: axllent/mailpit:v1.27.8
     ports: ['127.0.0.1:8025:8025']
+  ollama:
+    profiles: [llm]
+    image: ollama/ollama:latest
+    ports: ['127.0.0.1:11434:11434']
+    volumes: [ollama-data:/root/.ollama]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  ollama-pull:
+    profiles: [llm]
+    image: ollama/ollama:latest
+    entrypoint: [ollama, pull, '${LLM_MODEL:-qwen2.5:3b}']
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama: { condition: service_healthy }
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.0
     command: [start-dev, --import-realm]
@@ -75,41 +93,83 @@ services:
       timeout: 4s
       retries: 60
       start_period: 30s
-  migrate:
+  # У каждого сервиса своя база и свои миграции; миграции входят в бинарник сервиса.
+  tasks-migrate:
     profiles: [app]
-    build: ./apps/api
-    entrypoint: [migrate]
+    build: ./apps/tasks
+    command: [migrate, up]
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/tasks?sslmode=disable
     depends_on:
       postgres: { condition: service_healthy }
-  api:
+  files-migrate:
     profiles: [app]
-    build: ./apps/api
+    build: ./apps/files
+    command: [migrate, up]
     environment:
-      APP_ENV: development
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-      REDIS_ADDR: redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/files?sslmode=disable
+    depends_on:
+      postgres: { condition: service_healthy }
+  tasks:
+    profiles: [app]
+    build: ./apps/tasks
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/tasks?sslmode=disable
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      tasks-migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  files:
+    profiles: [app]
+    build: ./apps/files
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/files?sslmode=disable
       S3_ENDPOINT: http://s3:8333
       S3_REGION: us-east-1
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      s3: { condition: service_started }
+      files-migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  # Gateway: единственный публичный вход. Проверяет сессию/JWT и проксирует в tasks и files.
+  api:
+    profiles: [app]
+    build: ./apps/gateway
+    environment:
+      APP_ENV: development
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       OIDC_ISSUER: ${OIDC_ISSUER}
       OIDC_INTERNAL_URL: http://keycloak:8080/realms/hackathon
       OIDC_CLIENT_ID: hackathon-api
       OIDC_WEB_CLIENT_ID: hackathon-web
       APP_ORIGIN: ${APP_ORIGIN}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      TASKS_URL: http://tasks:8080
+      FILES_URL: http://files:8080
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      LLM_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
     ports: ['127.0.0.1:8080:8080']
     restart: on-failure:3
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       keycloak: { condition: service_healthy }
-      s3: { condition: service_started }
-      migrate: { condition: service_completed_successfully }
+      tasks: { condition: service_healthy }
+      files: { condition: service_healthy }
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
       interval: 5s
@@ -131,3 +191,4 @@ services:
 volumes:
   postgres-data:
   s3-data:
+  ollama-data:
