@@ -50,7 +50,7 @@ type Store interface {
 	List(ctx context.Context, owner string, limit, offset int) (Page, error)
 	Insert(ctx context.Context, owner, objectKey string, f File) error
 	Get(ctx context.Context, owner, id string) (objectKey, name, contentType string, err error)
-	Delete(ctx context.Context, owner, id string) (objectKey string, err error)
+	Delete(ctx context.Context, owner, id string) error
 }
 
 // Blobs — бинарное содержимое (S3-совместимое хранилище). Отдельный порт от
@@ -58,6 +58,7 @@ type Store interface {
 type Blobs interface {
 	Put(ctx context.Context, key, contentType string, data []byte) error
 	Get(ctx context.Context, key string) (body io.ReadCloser, size int64, err error)
+	// Удаление отсутствующего объекта успешно: это позволяет повторить операцию после сбоя БД.
 	Delete(ctx context.Context, key string) error
 }
 
@@ -76,6 +77,7 @@ func (s *Service) Upload(ctx context.Context, owner, name string, data []byte) (
 	if len(data) == 0 || len(data) > MaxSize {
 		return File{}, ErrInvalidSize
 	}
+	// Расширение и Content-Type от клиента недостоверны: проверяем содержимое файла.
 	contentType := http.DetectContentType(data)
 	if !allowedContentTypes[contentType] {
 		return File{}, ErrUnsupportedType
@@ -88,6 +90,7 @@ func (s *Service) Upload(ctx context.Context, owner, name string, data []byte) (
 	if err := s.blobs.Put(ctx, key, contentType, data); err != nil {
 		return File{}, fmt.Errorf("%w: %w", ErrStorageUnavailable, err)
 	}
+	// У S3 и PostgreSQL нет общей транзакции: при отказе БД пытаемся убрать загруженный объект.
 	if err := s.store.Insert(ctx, owner, key, f); err != nil {
 		_ = s.blobs.Delete(ctx, key)
 		return File{}, err
@@ -108,12 +111,14 @@ func (s *Service) Download(ctx context.Context, owner, id string) (body io.ReadC
 }
 
 func (s *Service) Delete(ctx context.Context, owner, id string) error {
-	key, err := s.store.Delete(ctx, owner, id)
+	// Владелец проверяется в SQL до обращения к S3, а не по данным из браузера.
+	key, _, _, err := s.store.Get(ctx, owner, id)
 	if err != nil {
 		return err
 	}
 	if err := s.blobs.Delete(ctx, key); err != nil {
 		return fmt.Errorf("%w: %w", ErrStorageUnavailable, err)
 	}
-	return nil
+	// Метаданные сохраняются до успеха S3, чтобы удаление можно было повторить.
+	return s.store.Delete(ctx, owner, id)
 }

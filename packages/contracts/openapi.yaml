@@ -6,7 +6,7 @@ info:
     Контракт Go API. Браузер использует cookie-сессию на том же origin;
     токены хранятся в Redis. Внешние клиенты используют Bearer JWT.
 servers:
-  - url: http://localhost:18080
+  - url: http://localhost:8080
     description: Локальный Go API
 security:
   - bearerAuth: []

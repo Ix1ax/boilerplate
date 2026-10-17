@@ -14,6 +14,8 @@ type fakeStore struct {
 	owner     string
 	insertErr error
 	deleteErr error
+	getErr    error
+	deleted   bool
 }
 
 func (f *fakeStore) List(context.Context, string, int, int) (Page, error) { return Page{}, nil }
@@ -26,13 +28,20 @@ func (f *fakeStore) Insert(_ context.Context, owner, _ string, file File) error 
 	return nil
 }
 func (f *fakeStore) Get(context.Context, string, string) (string, string, string, error) {
+	if f.getErr != nil {
+		return "", "", "", f.getErr
+	}
+	if f.deleted {
+		return "", "", "", ErrNotFound
+	}
 	return "key", "name.txt", "text/plain; charset=utf-8", nil
 }
-func (f *fakeStore) Delete(context.Context, string, string) (string, error) {
+func (f *fakeStore) Delete(context.Context, string, string) error {
 	if f.deleteErr != nil {
-		return "", f.deleteErr
+		return f.deleteErr
 	}
-	return "key", nil
+	f.deleted = true
+	return nil
 }
 
 type fakeBlobs struct {
@@ -112,9 +121,55 @@ func TestDownloadReportsStorageUnavailable(t *testing.T) {
 }
 
 func TestDeletePropagatesNotFound(t *testing.T) {
-	service := New(&fakeStore{deleteErr: ErrNotFound}, &fakeBlobs{})
+	service := New(&fakeStore{getErr: ErrNotFound}, &fakeBlobs{})
 
 	if err := service.Delete(context.Background(), "owner", "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("ожидался ErrNotFound: %v", err)
+	}
+}
+
+func TestDeleteRetainsMetadataOnStorageFailure(t *testing.T) {
+	store := &fakeStore{}
+	blobs := &fakeBlobs{deleteErr: errors.New("S3 недоступен")}
+	service := New(store, blobs)
+	if err := service.Delete(context.Background(), "owner", "id"); !errors.Is(err, ErrStorageUnavailable) {
+		t.Fatalf("ожидалась ошибка хранилища: %v", err)
+	}
+	if store.deleted {
+		t.Fatal("метаданные удалены до успешного удаления объекта")
+	}
+	blobs.deleteErr = nil
+	if err := service.Delete(context.Background(), "owner", "id"); err != nil || !store.deleted {
+		t.Fatalf("повтор удаления не завершился: %v", err)
+	}
+}
+
+func TestDeleteRetriesAfterMetadataFailure(t *testing.T) {
+	failure := errors.New("БД недоступна")
+	store := &fakeStore{deleteErr: failure}
+	blobs := &fakeBlobs{}
+	service := New(store, blobs)
+	if err := service.Delete(context.Background(), "owner", "id"); !errors.Is(err, failure) {
+		t.Fatalf("ожидалась ошибка БД: %v", err)
+	}
+	if store.deleted || len(blobs.deleted) != 1 {
+		t.Fatal("неверный порядок удаления")
+	}
+	store.deleteErr = nil
+	if err := service.Delete(context.Background(), "owner", "id"); err != nil || !store.deleted || len(blobs.deleted) != 2 {
+		t.Fatalf("повтор удаления не завершился: %v", err)
+	}
+}
+
+func TestDeleteDoesNotTouchStorageWithoutOwnedMetadata(t *testing.T) {
+	for _, failure := range []error{ErrNotFound, errors.New("БД недоступна")} {
+		store := &fakeStore{getErr: failure}
+		blobs := &fakeBlobs{}
+		if err := New(store, blobs).Delete(context.Background(), "other", "id"); !errors.Is(err, failure) {
+			t.Fatalf("ожидалась ошибка чтения метаданных: %v", err)
+		}
+		if store.deleted || len(blobs.deleted) != 0 {
+			t.Fatal("хранилища изменены без проверки владельца")
+		}
 	}
 }

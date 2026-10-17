@@ -19,6 +19,8 @@ import (
 
 const sessionCookie = "starter_session"
 const stateCookie = "starter_oidc_state"
+
+// Это предел с момента входа: обновление токенов не начинает новые восемь часов.
 const sessionLifetime = 8 * time.Hour
 
 type session struct {
@@ -69,6 +71,8 @@ func (s *Sessions) cookie(c *gin.Context, name, value string, maxAge int) {
 func sessionError(c *gin.Context, status int, code, message string) {
 	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"code": code, "message": message}})
 }
+
+// После входа возвращаем только внутрь приложения, чтобы next не стал внешним редиректом.
 func safeNext(value string) string {
 	u, err := url.Parse(value)
 	if err != nil || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || strings.ContainsAny(value, "\\\r\n") || strings.ContainsAny(u.Path, "\\\r\n") || u.IsAbs() || u.Host != "" || strings.HasPrefix(u.Path, "/auth/") {
@@ -96,6 +100,7 @@ func (s *Sessions) Register(r *gin.Engine) {
 			sessionError(c, 400, "invalid_state", "Не удалось проверить вход. Начните заново")
 			return
 		}
+		// State одноразовый: повторный callback не должен повторно обменять код входа.
 		raw, err := s.cache.GetDel(c.Request.Context(), "oidc:"+cookie).Bytes()
 		var state loginState
 		if err != nil || json.Unmarshal(raw, &state) != nil || c.Query("code") == "" {
@@ -124,46 +129,12 @@ func (s *Sessions) Register(r *gin.Engine) {
 		s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
 		c.Redirect(http.StatusFound, state.Next)
 	})
-	r.POST("/auth/refresh", func(c *gin.Context) {
-		if c.GetHeader("Origin") != s.origin {
-			sessionError(c, 403, "invalid_origin", "Запрос с этого адреса запрещён")
-			return
-		}
-		id, err := c.Cookie(sessionCookie)
-		if err != nil || id == "" {
-			sessionError(c, 401, "unauthorized", "Войдите, чтобы продолжить")
-			return
-		}
-		ctx := c.Request.Context()
-		raw, err := s.cache.Get(ctx, "session:"+id).Bytes()
-		var current session
-		if err != nil || json.Unmarshal(raw, &current) != nil || current.Token == nil || time.Now().After(current.Deadline) {
-			s.cookie(c, sessionCookie, "", -1)
-			sessionError(c, 401, "unauthorized", "Войдите, чтобы продолжить")
-			return
-		}
-		// Продлеваем абсолютный срок сессии (sliding window) при активности пользователя.
-		current.Deadline = time.Now().Add(sessionLifetime)
-		data, _ := json.Marshal(current)
-		saved, err := s.cache.SetXX(ctx, "session:"+id, data, sessionLifetime).Result()
-		if err != nil {
-			sessionError(c, 503, "session_unavailable", "Не удалось обновить сессию")
-			return
-		}
-		if !saved {
-			// SET XX не позволяет запоздалому refresh восстановить удалённую при выходе сессию.
-			s.cookie(c, sessionCookie, "", -1)
-			sessionError(c, 401, "unauthorized", "Войдите, чтобы продолжить")
-			return
-		}
-		s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
-		c.JSON(200, gin.H{"status": "ok"})
-	})
 	r.POST("/auth/logout", func(c *gin.Context) {
 		if c.GetHeader("Origin") != s.origin {
 			sessionError(c, 403, "invalid_origin", "Запрос с этого адреса запрещён")
 			return
 		}
+		// Сначала закрываем серверную сессию. При сбое Redis оставляем cookie для повтора выхода.
 		if id, _ := c.Cookie(sessionCookie); id != "" {
 			if err := s.cache.Del(c.Request.Context(), "session:"+id).Err(); err != nil {
 				sessionError(c, 503, "session_unavailable", "Не удалось завершить сессию. Повторите выход")
@@ -188,11 +159,14 @@ func (s *Sessions) CSRF() gin.HandlerFunc {
 	}
 }
 
+// Токен нужен только Go: браузер присылает cookie, а обновление проходит внутри того же запроса.
 func (s *Sessions) AccessToken(c *gin.Context) (string, error) {
 	id, err := c.Cookie(sessionCookie)
 	if err != nil || id == "" {
 		return "", redis.Nil
 	}
+	// Параллельные запросы одной сессии делят обновление токена только в этом процессе API.
+	// При нескольких репликах и ротации refresh token нужна распределённая блокировка.
 	result, err, _ := s.refresh.Do(id, func() (any, error) {
 		ctx := context.WithValue(c.Request.Context(), oauth2.HTTPClient, s.client)
 		raw, err := s.cache.Get(ctx, "session:"+id).Bytes()
@@ -215,6 +189,7 @@ func (s *Sessions) AccessToken(c *gin.Context) (string, error) {
 			}
 			return "", err
 		}
+		// Сохраняем весь ответ: Keycloak может выдать новый refresh token вместо прежнего.
 		current.Token = token
 		data, _ := json.Marshal(current)
 		// SET XX не позволяет запоздалому refresh восстановить удалённую при выходе сессию.
@@ -228,6 +203,7 @@ func (s *Sessions) AccessToken(c *gin.Context) (string, error) {
 		return token.AccessToken, nil
 	})
 	if err != nil {
+		// Cookie удаляем при потере сессии, но сохраняем при временной ошибке инфраструктуры.
 		if errors.Is(err, redis.Nil) {
 			s.cookie(c, sessionCookie, "", -1)
 		}

@@ -4,6 +4,7 @@ package files
 
 import (
 	"context"
+	"errors"
 	"example.com/hackathon/apps/api/internal/database"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,5 +46,38 @@ func TestFileListOwnershipAndPagination(t *testing.T) {
 	empty, err := repo.List(ctx, uuid.NewString(), 20, 0)
 	if err != nil || empty.Total != 0 || empty.Items == nil || len(empty.Items) != 0 {
 		t.Fatalf("пустой список: %+v %v", empty, err)
+	}
+}
+
+func TestFileGetAndDeleteOwnership(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	db, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	owner, other, id := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	defer db.Exec(context.Background(), "DELETE FROM files WHERE id=$1", id)
+	repo := NewRepository(db)
+	if err := repo.Insert(ctx, owner, "private-key", File{ID: id, Name: "test.txt", Size: 4, ContentType: "text/plain", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := repo.Get(ctx, other, id); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("чужой файл доступен: %v", err)
+	}
+	if err := repo.Delete(ctx, other, id); err != nil {
+		t.Fatal(err)
+	}
+	if key, _, _, err := repo.Get(ctx, owner, id); err != nil || key != "private-key" {
+		t.Fatalf("чужой запрос удалил файл: %v", err)
+	}
+	for range 2 {
+		if err := repo.Delete(ctx, owner, id); err != nil {
+			t.Fatalf("повтор удаления небезопасен: %v", err)
+		}
+	}
+	if _, _, _, err := repo.Get(ctx, owner, id); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("файл остался после удаления: %v", err)
 	}
 }

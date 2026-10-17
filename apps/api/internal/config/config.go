@@ -16,9 +16,9 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{
-		AppOrigin: Value("APP_ORIGIN", "http://localhost:13000"), OIDCWebClientID: Value("OIDC_WEB_CLIENT_ID", "hackathon-web"), SessionCookieSecure: os.Getenv("SESSION_COOKIE_SECURE") == "true",
+		AppOrigin: Value("APP_ORIGIN", "http://localhost:3000"), OIDCWebClientID: Value("OIDC_WEB_CLIENT_ID", "hackathon-web"), SessionCookieSecure: os.Getenv("SESSION_COOKIE_SECURE") == "true",
 		Env: Value("APP_ENV", "development"), Addr: Value("HTTP_ADDR", ":8080"),
-		DatabaseURL: os.Getenv("DATABASE_URL"), RedisAddr: Value("REDIS_ADDR", "localhost:16379"), RedisPassword: os.Getenv("REDIS_PASSWORD"),
+		DatabaseURL: os.Getenv("DATABASE_URL"), RedisAddr: Value("REDIS_ADDR", "localhost:6379"), RedisPassword: os.Getenv("REDIS_PASSWORD"),
 		S3Endpoint: os.Getenv("S3_ENDPOINT"), S3Region: Value("S3_REGION", "us-east-1"), S3AccessKey: os.Getenv("S3_ACCESS_KEY"), S3SecretKey: os.Getenv("S3_SECRET_KEY"), S3Bucket: os.Getenv("S3_BUCKET"),
 		OIDCIssuer: os.Getenv("OIDC_ISSUER"), OIDCClientID: Value("OIDC_CLIENT_ID", "hackathon-api"), OIDCInternalURL: os.Getenv("OIDC_INTERNAL_URL"),
 	}

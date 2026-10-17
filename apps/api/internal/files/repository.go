@@ -15,6 +15,7 @@ func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
 func (r *Repository) List(ctx context.Context, owner string, limit, offset int) (Page, error) {
 	page := Page{Items: []File{}, Limit: limit, Offset: offset}
+	// Список и total читаются из одного снимка, даже если параллельно добавляют или удаляют файлы.
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return page, err
@@ -57,17 +58,8 @@ func (r *Repository) Get(ctx context.Context, owner, id string) (objectKey, name
 	return
 }
 
-func (r *Repository) Delete(ctx context.Context, owner, id string) (string, error) {
-	var objectKey string
-	err := r.db.QueryRow(ctx, "SELECT object_key FROM files WHERE id=$1 AND owner_id=$2", id, owner).Scan(&objectKey)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	if err != nil {
-		return "", err
-	}
-	if _, err = r.db.Exec(ctx, "DELETE FROM files WHERE id=$1 AND owner_id=$2", id, owner); err != nil {
-		return "", err
-	}
-	return objectKey, nil
+// Delete допускает повтор после удаления объекта из S3, в том числе при параллельных запросах.
+func (r *Repository) Delete(ctx context.Context, owner, id string) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM files WHERE id=$1 AND owner_id=$2", id, owner)
+	return err
 }

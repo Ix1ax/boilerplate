@@ -1,7 +1,4 @@
-import axios, {
-  type AxiosRequestConfig,
-  type InternalAxiosRequestConfig,
-} from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 
 import {
   API_BASE_URL,
@@ -10,10 +7,8 @@ import {
   SILENT_UNAUTHORIZED_URL,
 } from './config';
 import { toApiError } from './errors';
-import { refreshSession, shouldSkipRefresh } from './refresh';
 
-type RetriableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
-
+// Same-origin cookie браузер отправляет сам. Токены хранятся и обновляются только в Go.
 export const API = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
@@ -21,37 +16,15 @@ export const API = axios.create({
 
 API.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     if (axios.isCancel(error)) return Promise.reject(error);
 
-    const original = error.config as RetriableRequest | undefined;
-    const canRefresh =
-      error.response?.status === 401 &&
-      !!original &&
-      !original._retry &&
-      !shouldSkipRefresh(original.url);
-
-    if (canRefresh) {
-      original._retry = true;
-      try {
-        await refreshSession();
-        return API(original);
-      } catch (refreshError) {
-        const refreshApiError = toApiError(refreshError);
-        // Молчим на /me: страница должна просто показать «не залогинен», а не
-        // форсировать редирект — это решает ProtectedRoute/Header сами.
-        if (
-          (refreshApiError.isUnauthorized || refreshApiError.isForbidden) &&
-          original.url !== SILENT_UNAUTHORIZED_URL
-        ) {
-          getApiConfig().onUnauthorized();
-        }
-        return Promise.reject(toApiError(error));
-      }
-    }
-
+    // 401 на /me допустим для гостя. Ошибки сети и 503 не должны отправлять пользователя на вход.
     const apiError = toApiError(error);
-    if (apiError.isUnauthorized && original?.url !== SILENT_UNAUTHORIZED_URL)
+    if (
+      apiError.isUnauthorized &&
+      error.config?.url !== SILENT_UNAUTHORIZED_URL
+    )
       getApiConfig().onUnauthorized();
     return Promise.reject(apiError);
   },

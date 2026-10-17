@@ -9,7 +9,7 @@ const env = Object.fromEntries(
       return [line.slice(0, i), line.slice(i + 1)];
     }),
 );
-const base = process.env.SMOKE_API_URL ?? 'http://localhost:18080';
+const base = process.env.SMOKE_API_URL ?? 'http://localhost:8080';
 const login = async (email, password) => {
   const response = await fetch(
     `${env.OIDC_ISSUER}/protocol/openid-connect/token`,

@@ -12,12 +12,12 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
   ],
   server: {
-    port: 13000,
+    port: 3000,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:18080',
-      '/auth': 'http://localhost:18080',
-      '/healthz': 'http://localhost:18080',
+      '/api': 'http://localhost:8080',
+      '/auth': 'http://localhost:8080',
+      '/healthz': 'http://localhost:8080',
     },
   },
 });
