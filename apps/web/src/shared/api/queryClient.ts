@@ -13,6 +13,7 @@ export const setErrorHandler = (fn: (error: ApiError) => void) => {
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error, query) => {
+      // Если экран сам показывает ошибку и кнопку повтора, второй toast ему не нужен.
       if (query.meta?.silent) return;
       onGlobalError(error);
     },
@@ -33,6 +34,7 @@ export const queryClient = new QueryClient({
         return failureCount < 2;
       },
     },
+    // Автоповтор записи после потери ответа может создать дубликат уже выполненной операции.
     mutations: { retry: false },
   },
 });

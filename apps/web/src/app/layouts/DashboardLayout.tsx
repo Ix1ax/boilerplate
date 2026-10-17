@@ -1,7 +1,14 @@
 import { Outlet, useLocation, useNavigate } from 'react-router';
 
 import { STATIC_ROUTES } from '@/shared/constants';
-import { Container, PageHeader, Section, Tabs, TabsList, TabsTrigger } from '@/shared/ui';
+import {
+  Container,
+  PageHeader,
+  Section,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@/shared/ui';
 
 const TABS = [
   { value: 'tasks', label: 'Задачи', to: STATIC_ROUTES.DASHBOARD_TASKS },
@@ -13,8 +20,7 @@ export const DashboardLayout = () => {
   const navigate = useNavigate();
 
   const activeTab =
-    TABS.find((tab) => location.pathname.startsWith(tab.to))?.value ??
-    'tasks';
+    TABS.find((tab) => location.pathname.startsWith(tab.to))?.value ?? 'tasks';
 
   return (
     <Container>

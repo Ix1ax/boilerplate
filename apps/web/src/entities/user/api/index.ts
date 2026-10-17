@@ -1,1 +1,1 @@
-export { getMe, getUser, getUsers } from './userApi';
+export { getMe } from './userApi';

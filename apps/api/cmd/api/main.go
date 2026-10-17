@@ -40,7 +40,8 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: c.Addr, Handler: httpapi.New(log, deps, verifier), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	sessions := auth.NewSessions(deps.Cache, verifier, c.OIDCIssuer, c.OIDCInternalURL, c.OIDCWebClientID, c.AppOrigin, c.SessionCookieSecure)
+	server := &http.Server{Addr: c.Addr, Handler: httpapi.New(log, deps, verifier, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		log.Info("API принимает запросы", "addr", c.Addr)

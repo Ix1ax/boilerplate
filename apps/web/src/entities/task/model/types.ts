@@ -17,16 +17,8 @@ export type TaskListParams = {
   offset?: number;
 };
 
-export type TaskDto = {
-  id: string;
-  title: string;
-  completed: boolean;
-  created_at: string;
-};
-
-export type TaskPageDto = {
-  items: TaskDto[];
-  total: number;
-  limit: number;
-  offset: number;
-};
+// DTO с проволоки — форма ответа Go API из общего контракта, не доменная модель выше.
+export type {
+  Task as TaskDto,
+  TaskPage as TaskPageDto,
+} from '@starter/contracts';

@@ -1,7 +1,6 @@
 export { configureWs, getWsConfig, WS_TUNING, type WsConfig } from './config';
 export { WsClient, wsClient } from './socket';
 export { bindWsToQuery, type WsQueryBinding } from './query';
-export { WsProvider } from './WsProvider';
 export {
   useWsClient,
   useWsStatus,
@@ -16,3 +15,4 @@ export type {
   WsMessageOf,
   WsHandler,
 } from './types';
+export { WsContext } from './context';

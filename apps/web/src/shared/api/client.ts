@@ -1,62 +1,34 @@
-import axios, {
-  type AxiosRequestConfig,
-  type InternalAxiosRequestConfig,
-} from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 
-import { API_BASE_URL, API_TIMEOUT, getApiConfig } from './config';
+import {
+  API_BASE_URL,
+  API_TIMEOUT,
+  getApiConfig,
+  SILENT_UNAUTHORIZED_URL,
+} from './config';
 import { toApiError } from './errors';
-import { refreshAccessToken, shouldSkipRefresh } from './refresh';
 
-type RetriableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
-
+// Same-origin cookie браузер отправляет сам. Токены хранятся и обновляются только в Go.
 export const API = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-API.interceptors.request.use((req) => {
-  const token = getApiConfig().getAccessToken();
-  if (token) req.headers.Authorization = `Bearer ${token}`;
-  return req;
 });
 
 API.interceptors.response.use(
-  (res) => res,
-  async (error) => {
+  (response) => response,
+  (error) => {
     if (axios.isCancel(error)) return Promise.reject(error);
 
-    const { getRefreshToken, onUnauthorized } = getApiConfig();
-
-    const original = error.config as RetriableRequest | undefined;
-    const canRefresh =
-      error.response?.status === 401 &&
-      !!original &&
-      !original._retry &&
-      !shouldSkipRefresh(original.url) &&
-      !!getRefreshToken();
-
-    if (canRefresh) {
-      original._retry = true;
-
-      try {
-        await refreshAccessToken();
-        return API(original);
-      } catch (refreshError) {
-        const apiError = toApiError(refreshError);
-        if (apiError.isUnauthorized || apiError.isForbidden) onUnauthorized();
-        return Promise.reject(apiError);
-      }
-    }
-
+    // 401 на /me допустим для гостя. Ошибки сети и 503 не должны отправлять пользователя на вход.
     const apiError = toApiError(error);
-    if (apiError.isUnauthorized) onUnauthorized();
-
+    if (
+      apiError.isUnauthorized &&
+      error.config?.url !== SILENT_UNAUTHORIZED_URL
+    )
+      getApiConfig().onUnauthorized();
     return Promise.reject(apiError);
   },
 );
 
-export const request = <T>(cfg: AxiosRequestConfig) =>
-  API.request<T>(cfg).then((r) => r.data);
+export const request = <T>(config: AxiosRequestConfig) =>
+  API.request<T>(config).then((response) => response.data);

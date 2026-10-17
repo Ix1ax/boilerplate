@@ -39,8 +39,8 @@ fmt:
 	npm run format
 smoke:
 	npm run smoke
-integration:
-	set -a; . ./.env; set +a; cd apps/api && go test -race -tags=integration ./internal/tasks
+integration: migrate
+	set -a; . ./.env; set +a; cd apps/api && go test -race -tags=integration ./internal/tasks ./internal/files ./internal/auth
 backup:
 	@mkdir -p .local/backups
 	docker compose exec -T postgres sh -c 'exec pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > .local/backups/database-$$(date +%Y%m%d-%H%M%S).dump

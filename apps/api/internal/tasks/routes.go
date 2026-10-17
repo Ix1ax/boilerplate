@@ -3,16 +3,15 @@ package tasks
 import (
 	"errors"
 	"example.com/hackathon/apps/api/internal/auth"
+	"example.com/hackathon/apps/api/internal/platform"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"strconv"
 )
 
 func Register(group *gin.RouterGroup, s *Service) {
 	group.GET("/tasks", func(c *gin.Context) {
-		limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
-		offset, e := strconv.Atoi(c.DefaultQuery("offset", "0"))
-		if err != nil || e != nil || limit < 1 || limit > 100 || offset < 0 || offset > 100000 {
+		limit, offset, ok := platform.ParsePagination(c.DefaultQuery("limit", "20"), c.DefaultQuery("offset", "0"))
+		if !ok {
 			fail(c, 400, "invalid_pagination", "limit должен быть от 1 до 100, offset — от 0 до 100000")
 			return
 		}

@@ -1,9 +1,21 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import { Button, Form, FormControl, FormField, FormItem, FormMessage, Input } from '@/shared/ui';
+import {
+  Button,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+  Input,
+} from '@/shared/ui';
 
-import { createTaskSchema, type CreateTaskValues, useCreateTask } from '../model';
+import {
+  createTaskSchema,
+  type CreateTaskValues,
+  useCreateTask,
+} from '../model';
 
 export const CreateTaskForm = () => {
   const createTask = useCreateTask();

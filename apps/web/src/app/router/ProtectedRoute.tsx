@@ -15,6 +15,7 @@ export const ProtectedRoute = ({ roles }: ProtectedRouteProps) => {
 
   if (isLoading) return <LoaderScreen />;
 
+  // При сбое проверки предлагаем повторить запрос, а не считаем пользователя вышедшим.
   if (isError && !user) {
     return (
       <ErrorScreen
@@ -30,6 +31,7 @@ export const ProtectedRoute = ({ roles }: ProtectedRouteProps) => {
     );
   }
 
+  // Это удобство навигации. Доступ к данным всё равно проверяет Go на каждом запросе.
   if (roles && !hasRole(user, roles)) {
     return <Navigate to={STATIC_ROUTES.FORBIDDEN} replace />;
   }

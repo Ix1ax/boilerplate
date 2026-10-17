@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 const schema = z.object({
-  // Обязателен: без него HTTP-слой не знает, куда ходить.
-  VITE_API_URL: z.string().min(1, 'не задан'),
+  // Один origin работает и в Docker-сборке без локального .env.
+  VITE_API_URL: z.string().min(1, 'не задан').default('/api/v1'),
   // Опционален: пусто → WebSocket просто не подключается.
   VITE_WS_URL: z.string().optional().default(''),
 });

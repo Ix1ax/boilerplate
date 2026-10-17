@@ -1,16 +1,23 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-let text = await readFile(
-  path.join(
-    root,
-    existsSync(path.join(root, '.env')) ? '.env' : '.env.example',
-  ),
-  'utf8',
-);
+const addMissing = (existing, template) => {
+  let merged = existing;
+  for (const line of template.split('\n')) {
+    const key = line.match(/^([A-Z][A-Z0-9_]*)=/)?.[1];
+    if (key && !new RegExp(`^${key}=`, 'm').test(merged)) {
+      merged += `${merged.endsWith('\n') ? '' : '\n'}${line}\n`;
+    }
+  }
+  return merged;
+};
+const template = await readFile(path.join(root, '.env.example'), 'utf8');
+let text = existsSync(path.join(root, '.env'))
+  ? addMissing(await readFile(path.join(root, '.env'), 'utf8'), template)
+  : template;
 const values = Object.fromEntries(
   text
     .split('\n')
@@ -76,20 +83,16 @@ await writeFile(
   { mode: 0o644 },
 );
 await chmod(path.join(root, '.local/keycloak/hackathon-realm.json'), 0o644);
-if (!existsSync(path.join(root, 'apps/web/.env.local'))) {
-  const web = await readFile(path.join(root, 'apps/web/.env.example'), 'utf8');
-  await writeFile(
-    path.join(root, 'apps/web/.env.local'),
-    web
-      .replace(/^APP_ORIGIN=.*$/m, `APP_ORIGIN=${origin}`)
-      .replace(/^OIDC_ISSUER=.*$/m, `OIDC_ISSUER=${values.OIDC_ISSUER}`)
-      .replace(
-        /^OIDC_INTERNAL_URL=.*$/m,
-        `OIDC_INTERNAL_URL=${values.OIDC_ISSUER}`,
-      ),
-    { mode: 0o600 },
-  );
-}
+const webPath = path.join(root, 'apps/web/.env.local');
+const webTemplate = await readFile(
+  path.join(root, 'apps/web/.env.example'),
+  'utf8',
+);
+const web = existsSync(webPath)
+  ? addMissing(await readFile(webPath, 'utf8'), webTemplate)
+  : webTemplate;
+await writeFile(webPath, web, { mode: 0o600 });
+await chmod(webPath, 0o600);
 console.log(
   'Локальные настройки готовы. Пароли находятся в .env; существующие пароли и настройки фронтенда сохранены.',
 );
