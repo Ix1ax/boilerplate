@@ -1,0 +1,24 @@
+# Секреты
+.env
+.env.*
+!.env.example
+!*.env.example
+*.pem
+*.key
+# Результаты сборки
+node_modules/
+dist/
+.next/
+.next-dev/
+.next-preview/
+coverage/
+*.out
+bin/
+.DS_Store
+.idea/
+.tmp/
+*.tsbuildinfo
+
+# Локальные макеты, инструкции, скриншоты и демо
+/design-handoff/
+/apps/web/src/app/preview/

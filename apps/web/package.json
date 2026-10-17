@@ -1,0 +1,23 @@
+{
+  "name": "@starter/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 13000",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port 13000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "15.5.27",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "next-themes": "0.4.6",
+    "server-only": "0.0.1",
+    "react-hook-form": "7.89.0",
+    "@hookform/resolvers": "5.9.1",
+    "sonner": "2.0.8",
+    "@starter/ui": "*",
+    "@starter/contracts": "*"
+  }
+}
