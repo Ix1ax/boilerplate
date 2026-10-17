@@ -10,10 +10,13 @@ type Config struct {
 	Env, Addr, DatabaseURL, RedisAddr, RedisPassword         string
 	S3Endpoint, S3Region, S3AccessKey, S3SecretKey, S3Bucket string
 	OIDCIssuer, OIDCClientID, OIDCInternalURL                string
+	AppOrigin, OIDCWebClientID                               string
+	SessionCookieSecure                                      bool
 }
 
 func Load() (Config, error) {
 	c := Config{
+		AppOrigin: Value("APP_ORIGIN", "http://localhost:13000"), OIDCWebClientID: Value("OIDC_WEB_CLIENT_ID", "hackathon-web"), SessionCookieSecure: os.Getenv("SESSION_COOKIE_SECURE") == "true",
 		Env: Value("APP_ENV", "development"), Addr: Value("HTTP_ADDR", ":8080"),
 		DatabaseURL: os.Getenv("DATABASE_URL"), RedisAddr: Value("REDIS_ADDR", "localhost:16379"), RedisPassword: os.Getenv("REDIS_PASSWORD"),
 		S3Endpoint: os.Getenv("S3_ENDPOINT"), S3Region: Value("S3_REGION", "us-east-1"), S3AccessKey: os.Getenv("S3_ACCESS_KEY"), S3SecretKey: os.Getenv("S3_SECRET_KEY"), S3Bucket: os.Getenv("S3_BUCKET"),
@@ -23,6 +26,13 @@ func Load() (Config, error) {
 		if v == "" {
 			return c, fmt.Errorf("Не задана переменная %s; выполните make setup", name)
 		}
+	}
+	origin, err := url.Parse(c.AppOrigin)
+	if err != nil || origin.Host == "" || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" || (origin.Scheme != "http" && origin.Scheme != "https") {
+		return c, fmt.Errorf("APP_ORIGIN должен содержать только схему и адрес приложения")
+	}
+	if c.Env == "production" && (origin.Scheme != "https" || !c.SessionCookieSecure) {
+		return c, fmt.Errorf("В production нужны HTTPS APP_ORIGIN и SESSION_COOKIE_SECURE=true")
 	}
 	if c.Env != "development" && c.Env != "production" && c.Env != "test" {
 		return c, fmt.Errorf("Недопустимое значение APP_ENV")

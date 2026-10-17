@@ -13,6 +13,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,6 +29,21 @@ type File struct {
 }
 
 func Register(group *gin.RouterGroup, d *platform.Dependencies) {
+	group.GET("/files", func(c *gin.Context) {
+		limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset, offsetErr := strconv.Atoi(c.DefaultQuery("offset", "0"))
+		if err != nil || offsetErr != nil || limit < 1 || limit > 100 || offset < 0 || offset > 100000 {
+			fail(c, 400, "limit должен быть от 1 до 100, offset — от 0 до 100000")
+			return
+		}
+		page, err := List(c.Request.Context(), d.DB, auth.Current(c).Subject, limit, offset)
+		if err != nil {
+			_ = c.Error(err)
+			fail(c, 500, "Не удалось загрузить список файлов")
+			return
+		}
+		c.JSON(200, page)
+	})
 	group.POST("/files", func(c *gin.Context) {
 		if err := c.Request.ParseMultipartForm(MaxSize + 1); err != nil {
 			fail(c, 413, "Файл превышает 10 МиБ или запрос имеет неверный формат")

@@ -50,7 +50,7 @@ const fsdBoundary = (layer, forbidden) => ({
 });
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.next/**', 'node_modules/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

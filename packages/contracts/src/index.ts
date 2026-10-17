@@ -33,3 +33,9 @@ export type UploadedFile = {
   content_type: string;
   created_at: string;
 };
+export type FilePage = {
+  items: UploadedFile[];
+  total: number;
+  limit: number;
+  offset: number;
+};

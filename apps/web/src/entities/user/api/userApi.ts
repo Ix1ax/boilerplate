@@ -1,7 +1,8 @@
 import { request } from '@/shared/api';
 
 import type { User } from '../model';
-
-export const getMe = () => request<User>({ url: '/me' });
-export const getUser = (id: string) => request<User>({ url: `/users/${id}` });
-export const getUsers = () => request<User[]>({ url: '/users' });
+export const getMe = () =>
+  request<User | null>({ url: '/me' }).catch((error) => {
+    if (error.status === 401) return null;
+    throw error;
+  });

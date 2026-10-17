@@ -22,6 +22,9 @@ const excluded = new Set([
   '.git',
   '.next',
   '.next-dev',
+  '.next-preview',
+  'dist',
+  '.tmp',
   '.local',
   'bin',
   'coverage',
@@ -50,8 +53,8 @@ for (const file of ['package.json', 'package-lock.json']) {
 }
 for (const file of [
   '.env.example',
-  'apps/web/src/screens/dashboard/Dashboard.tsx',
-  'apps/web/src/app/layout.tsx',
+  'apps/web/src/pages/home/ui/HomePage.tsx',
+  'apps/web/index.html',
   'infra/keycloak/realm.template.json',
 ]) {
   const target = path.join(destination, file);
@@ -63,11 +66,6 @@ for (const file of [
       .replaceAll('hackathon-starter', name),
   );
 }
-// Next.js добавляет ссылки на файлы сборки. В новой копии этих файлов ещё нет.
-await writeFile(
-  path.join(destination, 'apps/web/next-env.d.ts'),
-  '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n',
-);
 console.log(
   `Шаблон создан: ${destination}. Для запуска выполните make up из нового каталога.`,
 );

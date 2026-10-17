@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier) *gin.Engine {
+func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, sessions ...*auth.Sessions) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	gin.EnableJsonDecoderDisallowUnknownFields()
 	r := gin.New()
@@ -45,7 +45,11 @@ func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier) *gi
 		}
 		c.JSON(200, gin.H{"status": "ready"})
 	})
-	api := r.Group("/api/v1", auth.Middleware(verifier))
+	if len(sessions) > 0 && sessions[0] != nil {
+		sessions[0].Register(r)
+		r.Use(sessions[0].CSRF())
+	}
+	api := r.Group("/api/v1", auth.Middleware(verifier, sessions...))
 	api.GET("/me", func(c *gin.Context) {
 		i := auth.Current(c)
 		roles := i.RealmAccess.Roles

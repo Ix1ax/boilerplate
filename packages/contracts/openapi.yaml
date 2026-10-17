@@ -3,14 +3,75 @@ info:
   title: API стартового проекта
   version: 0.1.0
   description: >-
-    Контракт Go API. Браузер использует одноимённые маршруты через BFF Next.js; токены BFF хранит в
-    HttpOnly cookies.
+    Контракт Go API. Браузер использует cookie-сессию на том же origin;
+    токены хранятся в Redis. Внешние клиенты используют Bearer JWT.
 servers:
   - url: http://localhost:18080
     description: Локальный Go API
 security:
   - bearerAuth: []
+  - cookieAuth: []
 paths:
+  /auth/login:
+    get:
+      summary: Начать браузерный вход через Keycloak с PKCE
+      security: []
+      parameters:
+        - name: next
+          in: query
+          schema: { type: string, default: /dashboard/tasks }
+          description: Внутренний путь возврата после входа
+      responses:
+        '302':
+          description: Переход в Keycloak; одноразовый state в HttpOnly cookie
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /auth/callback:
+    get:
+      summary: Обменять OIDC-код и установить HttpOnly cookie сессии
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: Сессия создана, переход на внутренний путь возврата
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /auth/logout:
+    post:
+      summary: Удалить браузерную сессию и получить URL выхода Keycloak
+      security: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema: { type: string }
+          description: Должен точно совпадать с APP_ORIGIN
+      responses:
+        '200':
+          description: Сессия удалена; откройте url для завершения SSO
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, format: uri }
+        '403':
+          description: Origin не совпадает с адресом приложения
+        '503':
+          $ref: '#/components/responses/InternalError'
   /healthz:
     get:
       summary: Проверить, что процесс работает
@@ -213,6 +274,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
   /api/v1/files:
+    get:
+      summary: Получить свои файлы
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+      responses:
+        '200':
+          description: Страница файлов текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
     post:
       summary: Загрузить приватный файл
       responses:
@@ -321,6 +404,10 @@ paths:
                 $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
     bearerAuth:
       type: http
       scheme: bearer
@@ -455,6 +542,17 @@ components:
         created_at:
           type: string
           format: date-time
+    FilePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 100000 }
     Health:
       type: object
       required:

@@ -17,16 +17,7 @@ export type TaskListParams = {
   offset?: number;
 };
 
-export type TaskDto = {
-  id: string;
-  title: string;
-  completed: boolean;
-  created_at: string;
-};
-
-export type TaskPageDto = {
-  items: TaskDto[];
-  total: number;
-  limit: number;
-  offset: number;
-};
+export type {
+  Task as TaskDto,
+  TaskPage as TaskPageDto,
+} from '@starter/contracts';

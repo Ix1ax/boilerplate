@@ -49,8 +49,10 @@ export const toApiError = (error: unknown): ApiError => {
 
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? null;
-    const data = error.response?.data as { message?: string } | undefined;
+    const data = error.response?.data as
+      { error?: { message?: string }; message?: string } | undefined;
     const message =
+      data?.error?.message ??
       data?.message ??
       (status === null
         ? 'Нет соединения с сервером'

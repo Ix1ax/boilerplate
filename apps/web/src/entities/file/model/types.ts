@@ -6,10 +6,7 @@ export type FileMeta = {
   createdAt: string;
 };
 
-export type FileDto = {
-  id: string;
-  name: string;
-  size: number;
-  content_type: string;
-  created_at: string;
-};
+export type {
+  UploadedFile as FileDto,
+  FilePage as FilePageDto,
+} from '@starter/contracts';

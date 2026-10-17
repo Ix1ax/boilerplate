@@ -1,0 +1,9 @@
+/* Base UI сообщает состояние атрибутами; варианты нужны без зависимости от CLI. */
+@custom-variant data-open (&[data-open]);
+@custom-variant data-closed (&[data-closed]);
+@custom-variant data-checked (&[data-checked]);
+@custom-variant data-unchecked (&[data-unchecked]);
+@custom-variant data-active (&[data-active]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-horizontal (&[data-orientation='horizontal']);
+@custom-variant data-vertical (&[data-orientation='vertical']);

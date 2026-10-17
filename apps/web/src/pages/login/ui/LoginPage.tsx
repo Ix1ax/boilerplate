@@ -14,7 +14,7 @@ export const LoginPage = () => {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Вход</CardTitle>
-          <CardDescription>Введите данные аккаунта</CardDescription>
+          <CardDescription>Вход и регистрация через Keycloak</CardDescription>
         </CardHeader>
         <CardContent>
           <LoginForm />

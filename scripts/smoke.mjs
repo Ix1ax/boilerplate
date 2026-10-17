@@ -31,6 +31,28 @@ const login = async (email, password) => {
   );
   return (await response.json()).access_token;
 };
+const webHealth = await fetch(`${env.APP_ORIGIN}/healthz`);
+assert.equal(webHealth.status, 200);
+const deepLink = await fetch(`${env.APP_ORIGIN}/dashboard/files`);
+assert.equal(deepLink.status, 200);
+assert.match(await deepLink.text(), /<div id="root"><\/div>/);
+const startedLogin = await fetch(`${env.APP_ORIGIN}/auth/login`, {
+  redirect: 'manual',
+});
+assert.equal(startedLogin.status, 302);
+const authorization = new URL(startedLogin.headers.get('location'));
+assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256');
+assert.ok(authorization.searchParams.get('state'));
+assert.match(startedLogin.headers.get('set-cookie'), /HttpOnly/i);
+const invalidCallback = await fetch(
+  `${env.APP_ORIGIN}/auth/callback?code=invalid&state=invalid`,
+);
+assert.equal(invalidCallback.status, 400);
+const invalidLogout = await fetch(`${env.APP_ORIGIN}/auth/logout`, {
+  method: 'POST',
+  headers: { Origin: 'https://untrusted.example' },
+});
+assert.equal(invalidLogout.status, 403);
 const owner = await login(env.DEMO_EMAIL, env.DEMO_PASSWORD);
 const other = await login(env.SECOND_DEMO_EMAIL, env.SECOND_DEMO_PASSWORD);
 const request = (path, token, init = {}) =>
@@ -48,6 +70,7 @@ const request = (path, token, init = {}) =>
 assert.equal((await request('/readyz')).status, 200);
 assert.equal((await request('/api/v1/me')).status, 401);
 assert.equal((await request('/api/v1/me', owner)).status, 200);
+assert.equal((await request('/api/v1/files?limit=0', owner)).status, 400);
 assert.equal((await request('/api/v1/admin/ping', owner)).status, 403);
 assert.equal(
   (
@@ -103,6 +126,19 @@ try {
   assert.equal(uploaded.status, 201);
   file = await uploaded.json();
   assert.equal((await request(`/api/v1/files/${file.id}`, other)).status, 404);
+  const ownFiles = await request('/api/v1/files?limit=100', owner);
+  assert.equal(ownFiles.status, 200);
+  assert.ok((await ownFiles.json()).items.some((item) => item.id === file.id));
+  const otherFiles = await request('/api/v1/files?limit=100', other);
+  assert.equal(otherFiles.status, 200);
+  assert.ok(
+    !(await otherFiles.json()).items.some((item) => item.id === file.id),
+  );
+  assert.equal(
+    (await request(`/api/v1/files/${file.id}`, other, { method: 'DELETE' }))
+      .status,
+    404,
+  );
   const downloaded = await request(`/api/v1/files/${file.id}`, owner);
   assert.equal(downloaded.status, 200);
   assert.equal(await downloaded.text(), 'Проверка файлового хранилища');
@@ -116,7 +152,7 @@ try {
   });
   assert.equal(csrf.status, 403);
   console.log(
-    'Проверка пройдена: готовность сервисов, вход, роли, валидация, задачи, права доступа, S3 и CSRF.',
+    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3 и CSRF.',
   );
 } finally {
   if (file)

@@ -1,4 +1,4 @@
-export const USER_ROLES = ['admin', 'organizer', 'participant'] as const;
+export const USER_ROLES = ['admin', 'user'] as const;
 
 export const USER_KEYS = {
   ALL: ['users'] as const,
