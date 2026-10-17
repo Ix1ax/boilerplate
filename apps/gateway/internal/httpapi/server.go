@@ -1,0 +1,133 @@
+package httpapi
+
+import (
+	"context"
+	"example.com/hackathon/apps/gateway/internal/auth"
+	"example.com/hackathon/apps/gateway/internal/platform"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// Тело запроса ограничено размером крупнейшей загрузки (10 МиБ файла) плюс служебный запас.
+const maxBody = 11 << 20
+
+// New собирает gateway без внутренних сервисов: вход, /me и служебные маршруты.
+func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, sessions ...*auth.Sessions) *gin.Engine {
+	return NewGateway(log, d, verifier, Upstreams{}, "", sessions...)
+}
+
+// NewGateway — единственная публичная точка входа: проверяет сессию или JWT, ограничивает
+// частоту изменений и проксирует домены во внутренние сервисы.
+func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, up Upstreams, internalToken string, sessions ...*auth.Sessions) *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	gin.EnableJsonDecoderDisallowUnknownFields()
+	r := gin.New()
+	_ = r.SetTrustedProxies(nil)
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		id := uuid.NewString()
+		c.Set("request_id", id)
+		c.Header("X-Request-ID", id)
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("Cache-Control", "no-store")
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
+		c.Next()
+		log.Info("HTTP-запрос", "method", c.Request.Method, "path", c.Request.URL.Path, "status", c.Writer.Status(), "duration_ms", time.Since(start).Milliseconds(), "request_id", id)
+		for _, e := range c.Errors {
+			log.Error("Ошибка HTTP-запроса", "request_id", id, "error", e.Err)
+		}
+	}, gin.CustomRecovery(func(c *gin.Context, _ any) {
+		c.AbortWithStatusJSON(500, gin.H{"error": gin.H{"code": "internal_error", "message": "Внутренняя ошибка сервера", "request_id": c.GetString("request_id")}})
+	}))
+	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
+	r.GET("/readyz", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+		if d == nil || d.Check(ctx) != nil || !upstreamsReady(ctx, up) {
+			c.JSON(503, gin.H{"status": "unavailable"})
+			return
+		}
+		c.JSON(200, gin.H{"status": "ready"})
+	})
+	if len(sessions) > 0 && sessions[0] != nil {
+		r.Use(sessions[0].CSRF())
+		sessions[0].Register(r)
+	}
+	api := r.Group("/api/v1", auth.Middleware(verifier, sessions...))
+	api.GET("/me", func(c *gin.Context) {
+		i := auth.Current(c)
+		roles := i.RealmAccess.Roles
+		if roles == nil {
+			roles = []string{}
+		}
+		c.JSON(200, gin.H{"id": i.Subject, "email": i.Email, "name": i.Name, "roles": roles})
+	})
+	api.GET("/admin/ping", auth.RequireRole("admin"), func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
+	if d != nil {
+		// Счётчик общий для экземпляров API. Без Redis изменять данные временно нельзя.
+		api.Use(func(c *gin.Context) {
+			if c.Request.Method == http.MethodGet {
+				c.Next()
+				return
+			}
+			key := "rate:" + auth.Current(c).Subject + ":" + time.Now().UTC().Format("200601021504")
+			count, err := d.Cache.Eval(c.Request.Context(), `local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],120) end; return n`, []string{key}).Int64()
+			if err != nil {
+				_ = c.Error(err)
+				c.AbortWithStatusJSON(503, gin.H{"error": gin.H{"code": "cache_unavailable", "message": "Попробуйте ещё раз позже"}})
+				return
+			}
+			if count > 60 {
+				c.Header("Retry-After", "60")
+				c.AbortWithStatusJSON(429, gin.H{"error": gin.H{"code": "rate_limit", "message": "Слишком много запросов. Подождите минуту"}})
+				return
+			}
+			c.Next()
+		})
+		if up.Tasks != nil {
+			h := proxy(up.Tasks, internalToken)
+			api.Any("/tasks", h)
+			api.Any("/tasks/*path", h)
+		}
+		if up.Files != nil {
+			h := proxy(up.Files, internalToken)
+			api.Any("/files", h)
+			api.Any("/files/*path", h)
+		}
+	}
+	r.NoRoute(func(c *gin.Context) {
+		code := "not_found"
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(404, gin.H{"error": gin.H{"code": code, "message": "Маршрут не найден"}})
+			return
+		}
+		c.Status(404)
+	})
+	return r
+}
+
+func upstreamsReady(ctx context.Context, up Upstreams) bool {
+	for _, u := range []*url.URL{up.Tasks, up.Files} {
+		if u == nil {
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.ResolveReference(&url.URL{Path: "/readyz"}).String(), nil)
+		if err != nil {
+			return false
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+	}
+	return true
+}

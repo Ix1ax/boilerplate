@@ -4,5 +4,7 @@ node_modules
 **/dist
 **/pnpm-lock.yaml
 **/*.tsbuildinfo
-apps/api
+apps/gateway
+apps/tasks
+apps/files
 package-lock.json
