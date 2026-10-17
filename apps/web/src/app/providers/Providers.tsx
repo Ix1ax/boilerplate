@@ -1,32 +1,30 @@
 import type { ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 
-import { ThemeProvider, useTheme } from '@/features/theme';
+import { Accessibility } from '@/widgets/accessibility';
+import { ThemeToaster } from '@/widgets/toaster';
+
+import { ThemeProvider } from '@/features/theme';
 
 import { queryClient } from '@/shared/api';
-import { MotionProvider } from '@/shared/motion';
-import { Toaster } from '@/shared/ui';
 
+import { AccessibleMotionProvider } from './AccessibleMotionProvider';
 import { ConfirmProvider } from './ConfirmProvider';
 
 interface ProvidersProps {
   children?: ReactNode;
 }
 
-const ThemeToaster = () => {
-  const { resolvedTheme } = useTheme();
-  return <Toaster theme={resolvedTheme} />;
-};
-
 export const Providers = ({ children }: ProvidersProps) => {
   return (
     <ThemeProvider>
-      <MotionProvider>
+      <AccessibleMotionProvider>
         <QueryClientProvider client={queryClient}>
           <ConfirmProvider>{children}</ConfirmProvider>
           <ThemeToaster />
+          <Accessibility />
         </QueryClientProvider>
-      </MotionProvider>
+      </AccessibleMotionProvider>
     </ThemeProvider>
   );
 };
