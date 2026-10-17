@@ -1,6 +1,12 @@
 import { type ReactNode, useCallback, useState } from 'react';
 
 import {
+  type Confirm,
+  ConfirmContext,
+  type ConfirmOptions,
+} from '@/features/confirm';
+
+import {
   Button,
   Dialog,
   DialogContent,
@@ -9,9 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui';
-
-import { type Confirm, ConfirmContext } from './context';
-import type { ConfirmOptions } from './types';
 
 type Pending = {
   options: ConfirmOptions;
@@ -29,7 +32,8 @@ export const ConfirmProvider = ({ children }: ConfirmProviderProps) => {
     (options) =>
       new Promise<boolean>((resolve) => {
         setPending((prev) => {
-          prev?.resolve(false); // не копим висячие промисы при повторном вызове
+          prev?.resolve(false);
+
           return { options, resolve };
         });
       }),

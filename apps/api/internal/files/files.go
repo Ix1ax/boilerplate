@@ -1,0 +1,119 @@
+package files
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+const MaxSize = 10 << 20
+
+var allowedContentTypes = map[string]bool{
+	"image/png":                 true,
+	"image/jpeg":                true,
+	"image/webp":                true,
+	"application/pdf":           true,
+	"text/plain; charset=utf-8": true,
+}
+
+var (
+	ErrNotFound           = errors.New("Файл не найден")
+	ErrInvalidSize        = errors.New("Размер файла должен быть от 1 байта до 10 МиБ")
+	ErrUnsupportedType    = errors.New("Можно загрузить PNG, JPEG, WebP, PDF или текстовый файл")
+	ErrInvalidName        = errors.New("Недопустимое имя файла")
+	ErrStorageUnavailable = errors.New("Хранилище временно недоступно")
+)
+
+type File struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Size        int       `json:"size"`
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Page struct {
+	Items  []File `json:"items"`
+	Total  int    `json:"total"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
+}
+
+// Store — метаданные файлов (Postgres).
+type Store interface {
+	List(ctx context.Context, owner string, limit, offset int) (Page, error)
+	Insert(ctx context.Context, owner, objectKey string, f File) error
+	Get(ctx context.Context, owner, id string) (objectKey, name, contentType string, err error)
+	Delete(ctx context.Context, owner, id string) (objectKey string, err error)
+}
+
+// Blobs — бинарное содержимое (S3-совместимое хранилище). Отдельный порт от
+// Store: подменяется независимо (другой бакет, другой провайдер, мок в тестах).
+type Blobs interface {
+	Put(ctx context.Context, key, contentType string, data []byte) error
+	Get(ctx context.Context, key string) (body io.ReadCloser, size int64, err error)
+	Delete(ctx context.Context, key string) error
+}
+
+type Service struct {
+	store Store
+	blobs Blobs
+}
+
+func New(store Store, blobs Blobs) *Service { return &Service{store: store, blobs: blobs} }
+
+func (s *Service) List(ctx context.Context, owner string, limit, offset int) (Page, error) {
+	return s.store.List(ctx, owner, limit, offset)
+}
+
+func (s *Service) Upload(ctx context.Context, owner, name string, data []byte) (File, error) {
+	if len(data) == 0 || len(data) > MaxSize {
+		return File{}, ErrInvalidSize
+	}
+	contentType := http.DetectContentType(data)
+	if !allowedContentTypes[contentType] {
+		return File{}, ErrUnsupportedType
+	}
+	if name == "" || len(name) > 255 || strings.ContainsAny(name, "\r\n") {
+		return File{}, ErrInvalidName
+	}
+	f := File{ID: uuid.NewString(), Name: name, Size: len(data), ContentType: contentType, CreatedAt: time.Now().UTC()}
+	key := owner + "/" + f.ID
+	if err := s.blobs.Put(ctx, key, contentType, data); err != nil {
+		return File{}, fmt.Errorf("%w: %w", ErrStorageUnavailable, err)
+	}
+	if err := s.store.Insert(ctx, owner, key, f); err != nil {
+		_ = s.blobs.Delete(ctx, key)
+		return File{}, err
+	}
+	return f, nil
+}
+
+func (s *Service) Download(ctx context.Context, owner, id string) (body io.ReadCloser, size int64, name, contentType string, err error) {
+	key, name, contentType, err := s.store.Get(ctx, owner, id)
+	if err != nil {
+		return nil, 0, "", "", err
+	}
+	body, size, err = s.blobs.Get(ctx, key)
+	if err != nil {
+		return nil, 0, "", "", fmt.Errorf("%w: %w", ErrStorageUnavailable, err)
+	}
+	return body, size, name, contentType, nil
+}
+
+func (s *Service) Delete(ctx context.Context, owner, id string) error {
+	key, err := s.store.Delete(ctx, owner, id)
+	if err != nil {
+		return err
+	}
+	if err := s.blobs.Delete(ctx, key); err != nil {
+		return fmt.Errorf("%w: %w", ErrStorageUnavailable, err)
+	}
+	return nil
+}
