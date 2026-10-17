@@ -1,10 +1,10 @@
 # Стартовая монорепа для хакатонов
 
-Самостоятельный шаблон: Vite + React + TypeScript, Go API, PostgreSQL, Redis, приватные файлы S3 и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
+Самостоятельный шаблон: Vite + React + TypeScript, Go-микросервисы (gateway, tasks, files), PostgreSQL, Redis, приватные файлы S3 и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
 
 ## Быстрый старт
 
-Нужны Docker Desktop с Compose v2 и Node.js 24 из `.nvmrc`. Для разработки API на компьютере нужен Go версии из `apps/api/go.mod`.
+Нужны Docker Desktop с Compose v2 и Node.js 24 из `.nvmrc`. Для разработки API на компьютере нужен Go версии из `apps/gateway/go.mod`.
 
 ```sh
 make up
@@ -38,14 +38,12 @@ make up
 ## Структура
 
 ```text
-apps/api/
-  cmd/api/                    # Запуск API
-  cmd/migrate/                # Миграции
-  internal/auth/              # JWT, OIDC и серверные сессии
-  internal/tasks/             # Пример предметного модуля
-  internal/files/             # Приватные файлы и список метаданных
-  internal/database/          # Встроенные SQL-миграции
-  internal/platform/          # PostgreSQL, Redis и S3
+apps/gateway/                 # Публичный вход: JWT, OIDC, сессии, проксирование (свой go.mod)
+  cmd/gateway/  internal/auth/  internal/httpapi/  internal/config/  internal/platform/
+apps/tasks/                   # Сервис задач (свой go.mod, своя база tasks)
+  cmd/tasks/  internal/tasks/  internal/database/  internal/platform/  internal/config/
+apps/files/                   # Сервис файлов (свой go.mod, своя база files, S3)
+  cmd/files/  internal/files/  internal/database/  internal/platform/  internal/config/
 apps/web/src/
   app/                        # Провайдеры, маршруты, layouts
   pages/                      # Страницы
