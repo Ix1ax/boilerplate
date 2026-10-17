@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { getMe } from '../api';
 import { USER_KEYS } from './constants';
 
-export const useCurrentUser = () => {
-  return useQuery({
+const STALE_TIME = 30_000;
+
+export const useCurrentUser = () =>
+  useQuery({
     queryKey: USER_KEYS.ME,
     queryFn: getMe,
-    staleTime: 30_000,
+    staleTime: STALE_TIME,
     retry: false,
     meta: { silent: true },
   });
-};

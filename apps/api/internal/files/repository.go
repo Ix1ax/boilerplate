@@ -2,20 +2,20 @@ package files
 
 import (
 	"context"
+	"errors"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Page struct {
-	Items  []File `json:"items"`
-	Total  int    `json:"total"`
-	Limit  int    `json:"limit"`
-	Offset int    `json:"offset"`
-}
+// Repository — реализация Store на Postgres.
+type Repository struct{ db *pgxpool.Pool }
 
-func List(ctx context.Context, db *pgxpool.Pool, owner string, limit, offset int) (Page, error) {
+func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
+
+func (r *Repository) List(ctx context.Context, owner string, limit, offset int) (Page, error) {
 	page := Page{Items: []File{}, Limit: limit, Offset: offset}
-	tx, err := db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return page, err
 	}
@@ -40,4 +40,34 @@ func List(ctx context.Context, db *pgxpool.Pool, owner string, limit, offset int
 	}
 	rows.Close()
 	return page, tx.Commit(ctx)
+}
+
+func (r *Repository) Insert(ctx context.Context, owner, objectKey string, f File) error {
+	_, err := r.db.Exec(ctx, "INSERT INTO files(id,owner_id,object_key,name,size,content_type,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)",
+		f.ID, owner, objectKey, f.Name, f.Size, f.ContentType, f.CreatedAt)
+	return err
+}
+
+func (r *Repository) Get(ctx context.Context, owner, id string) (objectKey, name, contentType string, err error) {
+	err = r.db.QueryRow(ctx, "SELECT object_key,name,content_type FROM files WHERE id=$1 AND owner_id=$2", id, owner).
+		Scan(&objectKey, &name, &contentType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return
+}
+
+func (r *Repository) Delete(ctx context.Context, owner, id string) (string, error) {
+	var objectKey string
+	err := r.db.QueryRow(ctx, "SELECT object_key FROM files WHERE id=$1 AND owner_id=$2", id, owner).Scan(&objectKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	if _, err = r.db.Exec(ctx, "DELETE FROM files WHERE id=$1 AND owner_id=$2", id, owner); err != nil {
+		return "", err
+	}
+	return objectKey, nil
 }

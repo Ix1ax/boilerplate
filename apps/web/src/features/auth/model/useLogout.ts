@@ -1,13 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { logout } from '../api';
+
 export const useLogout = () => {
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: logout,
-    onSuccess: ({ url }) => {
+    meta: { silent: true },
+    onSettled: (data) => {
       queryClient.clear();
-      window.location.assign(url);
+      if (data) window.location.assign(data.url);
     },
   });
 };

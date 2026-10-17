@@ -111,6 +111,27 @@ func TestBrowserSessionLifecycle(t *testing.T) {
 	if exchanges.Load() != 2 {
 		t.Fatalf("обновлений: %d", exchanges.Load()-1)
 	}
+	if got := request("POST", "/auth/refresh", []*http.Cookie{sessionCookieValue}, "https://other.test"); got.Code != 403 {
+		t.Fatal("CSRF обновления сессии принят")
+	}
+	if got := request("POST", "/auth/refresh", nil, s.origin); got.Code != 401 {
+		t.Fatal("refresh без cookie принят")
+	}
+	refreshed := request("POST", "/auth/refresh", []*http.Cookie{sessionCookieValue}, s.origin)
+	if refreshed.Code != 200 {
+		t.Fatalf("refresh: %d %s", refreshed.Code, refreshed.Body)
+	}
+	raw, err := cache.Get(context.Background(), "session:"+id).Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var extended session
+	if json.Unmarshal(raw, &extended) != nil {
+		t.Fatal("не удалось прочитать сессию после refresh")
+	}
+	if !extended.Deadline.After(time.Now().Add(sessionLifetime - time.Minute)) {
+		t.Fatal("refresh не продлил срок сессии")
+	}
 	if got := request("POST", "/auth/logout", []*http.Cookie{sessionCookieValue}, "https://other.test"); got.Code != 403 {
 		t.Fatal("CSRF выхода принят")
 	}

@@ -1,21 +1,28 @@
-import { useState } from 'react';
-
 import { useFileList } from '@/entities/file';
 
+import { useOffsetPagination } from '@/shared/hooks';
 import { Button, Skeleton } from '@/shared/ui';
 
 import { FileItem } from './FileItem';
+
 export const FileList = () => {
-  const [offset, setOffset] = useState(0);
-  const { data, isPending, isError, refetch } = useFileList(offset);
+  const pagination = useOffsetPagination();
+  const { data, isPending, isError, refetch } = useFileList(
+    pagination.offset,
+    pagination.pageSize,
+  );
+
   if (isPending) return <Skeleton className="h-24 w-full" />;
-  if (isError)
+
+  if (isError) {
     return (
       <div role="alert">
         Не удалось загрузить файлы.{' '}
         <Button onClick={() => void refetch()}>Повторить</Button>
       </div>
     );
+  }
+
   return (
     <div className="space-y-4">
       {data.items.length ? (
@@ -32,16 +39,16 @@ export const FileList = () => {
       <nav aria-label="Страницы файлов" className="flex items-center gap-3">
         <Button
           variant="outline"
-          disabled={offset === 0}
-          onClick={() => setOffset(Math.max(0, offset - 20))}
+          disabled={!pagination.hasPrev}
+          onClick={pagination.toPrev}
         >
           Назад
         </Button>
         <span className="text-sm">Всего: {data.total}</span>
         <Button
           variant="outline"
-          disabled={offset + 20 >= data.total || offset + 20 > 100000}
-          onClick={() => setOffset(offset + 20)}
+          disabled={!pagination.hasNext(data.total)}
+          onClick={pagination.toNext}
         >
           Далее
         </Button>

@@ -8,3 +8,4 @@ export { useTimeout } from './useTimeout';
 export { useDebounce } from './useDebounce';
 export { useMountedRef } from './useMountedRef';
 export { useCopyToClipboard } from './useCopyToClipboard';
+export { useOffsetPagination } from './useOffsetPagination';

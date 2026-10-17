@@ -46,8 +46,8 @@ func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, ses
 		c.JSON(200, gin.H{"status": "ready"})
 	})
 	if len(sessions) > 0 && sessions[0] != nil {
-		sessions[0].Register(r)
 		r.Use(sessions[0].CSRF())
+		sessions[0].Register(r)
 	}
 	api := r.Group("/api/v1", auth.Middleware(verifier, sessions...))
 	api.GET("/me", func(c *gin.Context) {
@@ -81,7 +81,7 @@ func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, ses
 			c.Next()
 		})
 		tasks.Register(api, tasks.New(tasks.NewRepository(d.DB)))
-		files.Register(api, d)
+		files.Register(api, files.New(files.NewRepository(d.DB), files.NewS3Blobs(d.Objects, d.Bucket)))
 	}
 	r.NoRoute(func(c *gin.Context) {
 		code := "not_found"

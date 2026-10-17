@@ -1,1 +1,2 @@
-export { ConfirmProvider, useConfirm, type ConfirmOptions } from './model';
+export { type Confirm, ConfirmContext, useConfirm } from './model';
+export type { ConfirmOptions } from './model';

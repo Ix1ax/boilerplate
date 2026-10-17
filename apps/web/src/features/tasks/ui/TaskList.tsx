@@ -1,13 +1,17 @@
-import { useState } from 'react';
-
 import { useTasks } from '@/entities/task';
 
+import { useOffsetPagination } from '@/shared/hooks';
 import { Button, Skeleton } from '@/shared/ui';
 
 import { TaskItem } from './TaskItem';
+
 export const TaskList = () => {
-  const [offset, setOffset] = useState(0);
-  const { data, isPending, isError, refetch } = useTasks({ offset, limit: 20 });
+  const pagination = useOffsetPagination();
+  const { data, isPending, isError, refetch } = useTasks({
+    offset: pagination.offset,
+    limit: pagination.pageSize,
+  });
+
   if (isPending) return <Skeleton className="h-24 w-full" />;
   if (isError)
     return (
@@ -16,6 +20,7 @@ export const TaskList = () => {
         <Button onClick={() => void refetch()}>Повторить</Button>
       </div>
     );
+
   return (
     <div className="space-y-4">
       {data.items.length ? (
@@ -32,16 +37,16 @@ export const TaskList = () => {
       <nav aria-label="Страницы задач" className="flex items-center gap-3">
         <Button
           variant="outline"
-          disabled={offset === 0}
-          onClick={() => setOffset(Math.max(0, offset - 20))}
+          disabled={!pagination.hasPrev}
+          onClick={pagination.toPrev}
         >
           Назад
         </Button>
         <span className="text-sm">Всего: {data.total}</span>
         <Button
           variant="outline"
-          disabled={offset + 20 >= data.total || offset + 20 > 100000}
-          onClick={() => setOffset(offset + 20)}
+          disabled={!pagination.hasNext(data.total)}
+          onClick={pagination.toNext}
         >
           Далее
         </Button>

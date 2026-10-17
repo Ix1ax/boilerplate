@@ -33,15 +33,16 @@ func TestFileListOwnershipAndPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page, err := List(ctx, db, owner, 1, 1)
+	repo := NewRepository(db)
+	page, err := repo.List(ctx, owner, 1, 1)
 	if err != nil || page.Total != 2 || len(page.Items) != 1 || page.Limit != 1 || page.Offset != 1 {
 		t.Fatalf("пагинация: %+v %v", page, err)
 	}
-	otherPage, err := List(ctx, db, other, 20, 0)
+	otherPage, err := repo.List(ctx, other, 20, 0)
 	if err != nil || otherPage.Total != 1 || otherPage.Items[0].ID == page.Items[0].ID {
 		t.Fatalf("изоляция владельцев: %+v %v", otherPage, err)
 	}
-	empty, err := List(ctx, db, uuid.NewString(), 20, 0)
+	empty, err := repo.List(ctx, uuid.NewString(), 20, 0)
 	if err != nil || empty.Total != 0 || empty.Items == nil || len(empty.Items) != 0 {
 		t.Fatalf("пустой список: %+v %v", empty, err)
 	}

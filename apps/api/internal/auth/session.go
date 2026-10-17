@@ -124,6 +124,41 @@ func (s *Sessions) Register(r *gin.Engine) {
 		s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
 		c.Redirect(http.StatusFound, state.Next)
 	})
+	r.POST("/auth/refresh", func(c *gin.Context) {
+		if c.GetHeader("Origin") != s.origin {
+			sessionError(c, 403, "invalid_origin", "Запрос с этого адреса запрещён")
+			return
+		}
+		id, err := c.Cookie(sessionCookie)
+		if err != nil || id == "" {
+			sessionError(c, 401, "unauthorized", "Войдите, чтобы продолжить")
+			return
+		}
+		ctx := c.Request.Context()
+		raw, err := s.cache.Get(ctx, "session:"+id).Bytes()
+		var current session
+		if err != nil || json.Unmarshal(raw, &current) != nil || current.Token == nil || time.Now().After(current.Deadline) {
+			s.cookie(c, sessionCookie, "", -1)
+			sessionError(c, 401, "unauthorized", "Войдите, чтобы продолжить")
+			return
+		}
+		// Продлеваем абсолютный срок сессии (sliding window) при активности пользователя.
+		current.Deadline = time.Now().Add(sessionLifetime)
+		data, _ := json.Marshal(current)
+		saved, err := s.cache.SetXX(ctx, "session:"+id, data, sessionLifetime).Result()
+		if err != nil {
+			sessionError(c, 503, "session_unavailable", "Не удалось обновить сессию")
+			return
+		}
+		if !saved {
+			// SET XX не позволяет запоздалому refresh восстановить удалённую при выходе сессию.
+			s.cookie(c, sessionCookie, "", -1)
+			sessionError(c, 401, "unauthorized", "Войдите, чтобы продолжить")
+			return
+		}
+		s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
+		c.JSON(200, gin.H{"status": "ok"})
+	})
 	r.POST("/auth/logout", func(c *gin.Context) {
 		if c.GetHeader("Origin") != s.origin {
 			sessionError(c, 403, "invalid_origin", "Запрос с этого адреса запрещён")

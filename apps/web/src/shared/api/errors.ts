@@ -11,6 +11,11 @@ type ApiErrorInit = {
   silent?: boolean;
 };
 
+type ApiErrorResponseBody = {
+  error?: { message?: string };
+  message?: string;
+};
+
 export class ApiError extends ErrorLogger {
   readonly status: number | null;
   readonly data: unknown;
@@ -49,8 +54,7 @@ export const toApiError = (error: unknown): ApiError => {
 
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? null;
-    const data = error.response?.data as
-      { error?: { message?: string }; message?: string } | undefined;
+    const data = error.response?.data as ApiErrorResponseBody | undefined;
     const message =
       data?.error?.message ??
       data?.message ??
