@@ -1,0 +1,1 @@
+export { DashboardFilesPage } from './DashboardFilesPage';

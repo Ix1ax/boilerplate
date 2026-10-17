@@ -1,6 +1,6 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 
-import { RootLayout } from '@/app/layouts';
+import { DashboardLayout, RootLayout } from '@/app/layouts';
 
 import { ErrorPage } from '@/pages/error';
 import { ForbiddenPage } from '@/pages/forbidden';
@@ -28,7 +28,23 @@ export const router = createBrowserRouter([
             children: [
               {
                 path: STATIC_ROUTES.DASHBOARD,
-                lazy: () => import('@/pages/dashboard'),
+                element: <DashboardLayout />,
+                children: [
+                  {
+                    index: true,
+                    element: (
+                      <Navigate to={STATIC_ROUTES.DASHBOARD_TASKS} replace />
+                    ),
+                  },
+                  {
+                    path: 'tasks',
+                    lazy: () => import('@/pages/dashboard-tasks'),
+                  },
+                  {
+                    path: 'files',
+                    lazy: () => import('@/pages/dashboard-files'),
+                  },
+                ],
               },
             ],
           },

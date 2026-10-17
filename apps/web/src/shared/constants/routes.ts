@@ -3,6 +3,8 @@ export const STATIC_ROUTES = {
   PROFILE: '/profile',
   LOGIN: '/login',
   DASHBOARD: '/dashboard',
+  DASHBOARD_TASKS: '/dashboard/tasks',
+  DASHBOARD_FILES: '/dashboard/files',
   FORBIDDEN: '/403',
 } as const;
 
