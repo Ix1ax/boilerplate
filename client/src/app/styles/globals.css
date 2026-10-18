@@ -139,25 +139,38 @@
   --ease-intro: cubic-bezier(0.16, 1, 0.3, 1);
   --animate-intro-exit: intro-exit 500ms var(--ease-intro) 3100ms both;
   --animate-intro-move: intro-move 650ms var(--ease-intro) 1850ms both;
-  --animate-intro-draw: intro-draw 700ms cubic-bezier(0.65, 0, 0.35, 1) 100ms
-    both;
-  --animate-intro-person:
-    intro-appear 350ms var(--ease-intro) 850ms both,
-    intro-person-toss 800ms cubic-bezier(0.65, 0, 0.35, 1) 1150ms;
-  --animate-intro-ticket:
-    intro-appear 250ms var(--ease-intro) 950ms both,
-    intro-ticket-toss 850ms linear 1150ms;
+  --animate-intro-drop: intro-drop 1000ms linear 100ms both;
+  --animate-intro-person: intro-person-toss 800ms cubic-bezier(0.65, 0, 0.35, 1)
+    760ms both;
+  --animate-intro-ticket: intro-ticket-toss 850ms linear 760ms both;
   --animate-intro-letter: intro-letter 400ms var(--ease-intro) both;
   --animate-intro-assembled: intro-clear 1ms steps(1, end) 2750ms both;
   --animate-intro-settled: intro-appear 1ms steps(1, end) 2750ms both;
-  --animate-intro-solid: intro-appear 100ms linear 700ms both;
 
-  @keyframes intro-draw {
-    from {
-      stroke-dashoffset: 34.2;
+  @keyframes intro-drop {
+    0% {
+      opacity: 0;
+      transform: translateY(-220px) rotate(-8deg);
+      animation-timing-function: cubic-bezier(0.55, 0.05, 0.9, 0.5);
     }
-    to {
-      stroke-dashoffset: 0;
+    62% {
+      opacity: 1;
+      transform: translateY(0) rotate(1deg);
+      animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+    }
+    70% {
+      opacity: 1;
+      transform: scale(1.07, 0.9);
+      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    84% {
+      opacity: 1;
+      transform: translateY(-2px) scale(0.99, 1.02);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
     }
   }
 

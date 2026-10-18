@@ -32,7 +32,7 @@ export const LoadingPage = ({ onComplete }: LoadingPageProps) => {
   return (
     <div
       className={cn(
-        'grid min-h-dvh w-full animate-intro-exit place-items-center bg-intro-yellow text-[#121212] motion-reduce:animate-none motion-reduce:[&_*]:animate-none!',
+        'grid min-h-dvh w-full animate-intro-exit overflow-hidden place-items-center bg-intro-yellow text-[#121212] motion-reduce:animate-none motion-reduce:[&_*]:animate-none!',
         reduce && 'animate-none! [&_*]:animate-none!',
       )}
       onAnimationEnd={(event) => {
@@ -77,37 +77,23 @@ export const LoadingPage = ({ onComplete }: LoadingPageProps) => {
           )}
         >
           <g className="animate-intro-move">
-            <circle
-              className="animate-intro-draw [stroke-dasharray:34.2_34.2]"
-              cx="10.87"
-              cy="19.43"
-              r="5.435"
-              strokeWidth="10.87"
-              stroke="currentColor"
-              fill="none"
-              transform="rotate(-90 10.87 19.43)"
-            />
-            <circle
-              className="animate-intro-solid"
-              cx="10.87"
-              cy="19.43"
-              r="10.87"
-              fill="currentColor"
-            />
-            <g className="origin-[10.87px_26px] animate-intro-person">
-              <circle
-                cx="10.87"
-                cy="19.43"
-                r="10.6"
-                className="fill-intro-yellow"
-                mask="url(#intro-person-mask)"
+            <g className="origin-[10.87px_30.3px] animate-intro-drop">
+              <circle cx="10.87" cy="19.43" r="10.87" fill="currentColor" />
+              <g className="origin-[10.87px_26px] animate-intro-person">
+                <circle
+                  cx="10.87"
+                  cy="19.43"
+                  r="10.6"
+                  className="fill-intro-yellow"
+                  mask="url(#intro-person-mask)"
+                />
+              </g>
+              <path
+                className="origin-[14px_6px] animate-intro-ticket"
+                d={ticket}
+                fill="currentColor"
               />
             </g>
-            <path
-              className="origin-[14px_6px] animate-intro-ticket"
-              d={ticket}
-              fill="currentColor"
-            />
           </g>
           {letters.map(([x], index) => (
             <g key={x} clipPath={`url(#intro-letter-${index})`}>
