@@ -103,3 +103,10 @@ export {
   FormMessage,
   useFormField,
 } from './Form';
+export {
+  AnimatedTextLines,
+  type AnimatedTextLinesLayer,
+  type AnimatedTextLinesProps,
+  type AnimatedTextLinesSegment,
+  type AnimatedTextLinesSlot,
+} from './AnimatedTextLines';
