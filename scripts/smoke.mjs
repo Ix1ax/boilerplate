@@ -113,6 +113,59 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
     0,
   );
 }
+// Live-уведомление по SSE и письмо в Mailpit для новой задачи.
+{
+  const before = await (
+    await fetch('http://localhost:8025/api/v1/messages')
+  ).json();
+  const stream = await fetch(`${base}/api/v1/notifications/stream`, {
+    headers: { Authorization: `Bearer ${owner}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(stream.status, 200);
+  const reader = stream.body.pipeThrough(new TextDecoderStream()).getReader();
+  await reader.read(); // «: connected» — подписка активна до создания задачи
+  const created = await request('/api/v1/tasks', owner, {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Звони +7 999 123-45-67 срочно' }),
+  });
+  const live = await created.json();
+  let text = '';
+  while (!text.includes('event: notification')) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += value;
+  }
+  await reader.cancel();
+  await request(`/api/v1/tasks/${live.id}`, owner, { method: 'DELETE' });
+  assert.ok(
+    text.includes('event: notification'),
+    'Нет live-уведомления по SSE',
+  );
+  const after = await (
+    await fetch('http://localhost:8025/api/v1/messages')
+  ).json();
+  assert.ok(
+    after.messages_count > before.messages_count,
+    'Письмо не дошло до Mailpit',
+  );
+}
+// Idempotency-Key: повтор того же создания не создаёт дубль и помечается заголовком.
+{
+  const key = `smoke-${Date.now()}`;
+  const send = () =>
+    request('/api/v1/tasks', owner, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: JSON.stringify({ title: 'Проверка идемпотентности' }),
+    });
+  const first = await send();
+  const second = await send();
+  const [a, b] = [await first.json(), await second.json()];
+  assert.equal(second.headers.get('idempotent-replayed'), 'true');
+  assert.equal(a.id, b.id, 'Повтор с тем же ключом создал вторую задачу');
+  await request(`/api/v1/tasks/${a.id}`, owner, { method: 'DELETE' });
+}
 // Админская выгрузка: обычному пользователю запрещена, администратору отдаёт CSV для Excel.
 {
   assert.equal(
@@ -212,7 +265,7 @@ try {
   });
   assert.equal(csrf.status, 403);
   console.log(
-    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления и выгрузка CSV.',
+    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления (SSE и почта), идемпотентность и выгрузка CSV.',
   );
 } finally {
   if (file)
