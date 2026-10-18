@@ -4,16 +4,17 @@
 
 ## Карта репозитория
 
-| Путь                       | Что это                                                                                                                |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `apps/gateway`             | Единственный публичный вход (:8080): Keycloak OIDC/PKCE, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы |
-| `apps/tasks`, `apps/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `apps/tasks`**                                                |
-| `apps/notifications`       | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                            |
-| `apps/llm`                 | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                |
-| `apps/web`                 | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                        |
-| `packages/contracts`       | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                  |
-| `compose.yaml`, `Makefile` | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                        |
-| `docs/`                    | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)        |
+| Путь                       | Что это                                                                                                                 |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `apps/gateway`             | Единственный публичный вход (:8080): Keycloak OIDC/PKCE, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы  |
+| `apps/tasks`, `apps/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `apps/tasks`**                                                 |
+| `apps/notifications`       | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                             |
+| `apps/audit`               | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit` |
+| `apps/llm`                 | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                 |
+| `apps/web`                 | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
+| `packages/contracts`       | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                   |
+| `compose.yaml`, `Makefile` | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                         |
+| `docs/`                    | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)         |
 
 Каждый Go-модуль независим: свой `go.mod`, база, миграции, Dockerfile. Общего Go-кода нет — обвязку (`internal/platform`) копируем, а не выносим.
 
@@ -58,20 +59,26 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Готовые заготовки
 
-| Нужно                                     | Где образец                                                                                                                                         |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`) |
-| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                |
-| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                    |
-| ИИ-проверка с человеком в контуре         | `apps/tasks/internal/copilot`                                                                                                                       |
-| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                          |
-| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                          |
-| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`apps/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                             |
-| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                |
-| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                              |
-| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                            |
-| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                  |
-| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                   |
+| Нужно                                     | Где образец                                                                                                                                               |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`)       |
+| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                      |
+| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                          |
+| ИИ-проверка с человеком в контуре         | `apps/tasks/internal/copilot`                                                                                                                             |
+| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                                |
+| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                                |
+| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`apps/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                                   |
+| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                      |
+| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                                    |
+| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                                  |
+| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                        |
+| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                         |
+| История статусов с комментарием           | `Workflow.RequireComment(...)` + `platform.RecordTransition` / `platform.History` (таблица `status_history`, писать в одной транзакции со сменой статуса) |
+| Дашборд админа                            | `GET /api/v1/admin/tasks/stats` (`Repository.Stats`): итоги + ряд за 14 дней в одном снимке                                                               |
+| Файлы-вложения к записи                   | `POST /api/v1/files` с `entity_type`/`entity_id`, список — `?entity_type=&entity_id=`                                                                     |
+| Кто что сделал                            | Журнал `apps/audit` (включается вместе с `AMQP_URL` у gateway)                                                                                            |
+| Демо-данные                               | `fixtures/*.json` и `fixtures/files/` → `make seed` (через API, с событиями и уведомлениями)                                                              |
+| Найти цепочку по логам                    | `request_id` идёт из gateway в сервисы, outbox и события (`platform.RequestID(ctx)`)                                                                      |
 
 ## Как добавить сервис (рецепт на 10 минут)
 
