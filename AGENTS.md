@@ -45,7 +45,7 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Архитектурные инварианты (нарушать нельзя)
 
-1. Браузер ходит **только в gateway**. Сервисы не публикуют порты и принимают запросы только с `X-Internal-Token` + `X-User-ID` (`platform.TrustGateway`). Владелец записи — всегда `platform.Owner(c)`, проверка владельца — **в SQL** (`WHERE owner_id=$1`). Роли приходят в `X-User-Roles`: админские маршруты закрывайте `platform.RequireRole("admin")` в сервисе **и** `auth.RequireRole` в gateway.
+1. Браузер ходит **только в gateway**. Сервисы не публикуют порты и принимают запросы только с `X-Internal-Token` + `X-User-ID` (`platform.TrustGateway`). Владелец записи — всегда `platform.Owner(c)`, проверка владельца — **в SQL** (`WHERE owner_id=$1`). Роли приходят в `X-User-Roles`, почта — в `X-User-Email` (`platform.Email(ctx)`): админские маршруты закрывайте `platform.RequireRole("admin")` в сервисе **и** `auth.RequireRole` в gateway.
 2. Роли и доступ проверяет Go, не клиент. Токены не хранятся в браузере.
 3. Сервисы не импортируют друг друга и не читают чужие базы (у каждого свой Postgres). Связь — HTTP через gateway или события в RabbitMQ через transactional outbox (образец — `apps/tasks/internal/broker`). Обработчики событий идемпотентны.
 4. Миграции — только новыми файлами в `internal/database/migrations` сервиса; применённые не правим.
@@ -58,14 +58,20 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Готовые заготовки
 
-| Нужно                                    | Где образец                                                                                                                                         |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Уведомить пользователя из любого сервиса | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`) |
-| Асинхронная обработка / связь сервисов   | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                |
-| Отчёт в Excel                            | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                    |
-| ИИ-проверка с человеком в контуре        | `apps/tasks/internal/copilot`                                                                                                                       |
-| Потоковый чат с моделью                  | `features/assistant` + `shared/api/sse.ts`                                                                                                          |
-| Страница только для роли                 | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                          |
+| Нужно                                     | Где образец                                                                                                                                         |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`) |
+| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                |
+| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                    |
+| ИИ-проверка с человеком в контуре         | `apps/tasks/internal/copilot`                                                                                                                       |
+| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                          |
+| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                          |
+| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`apps/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                             |
+| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                |
+| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                              |
+| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                            |
+| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                  |
+| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                   |
 
 ## Как добавить сервис (рецепт на 10 минут)
 
