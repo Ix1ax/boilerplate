@@ -4,6 +4,8 @@ package notifications
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -13,7 +15,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrNotFound = errors.New("Уведомление не найдено")
+var (
+	ErrNotFound    = errors.New("Уведомление не найдено")
+	ErrMaxDisabled = errors.New("Уведомления в MAX не настроены")
+)
 
 type Notification struct {
 	ID        string     `json:"id"`
@@ -40,10 +45,31 @@ type Store interface {
 }
 
 type Service struct {
-	store  Store
-	hub    *Hub
-	mailer Mailer
-	log    func(msg string, args ...any)
+	store    Store
+	hub      *Hub
+	mailer   Mailer
+	log      func(msg string, args ...any)
+	max      MaxChannel
+	maxLinks MaxStore
+}
+
+// MaxChannel — мессенджер MAX (maxbot.Bot). nil — канал выключен (нет токена бота).
+type MaxChannel interface {
+	Send(ctx context.Context, maxUserID int64, text string) error
+	LinkURL(code string) string
+}
+
+// MaxStore — привязки аккаунтов к MAX (Repository).
+type MaxStore interface {
+	CreateLinkCode(ctx context.Context, user, code string, ttl time.Duration) error
+	MaxUserID(ctx context.Context, user string) (int64, bool, error)
+	UnlinkUser(ctx context.Context, user string) error
+}
+
+// WithMax включает канал MAX.
+func (s *Service) WithMax(ch MaxChannel, store MaxStore) *Service {
+	s.max, s.maxLinks = ch, store
+	return s
 }
 
 // New: hub и mailer необязательны (nil — без live-событий и писем).
@@ -101,5 +127,51 @@ func (s *Service) HandleEvent(ctx context.Context, eventID, eventType, userID st
 			s.log("Не удалось отправить письмо", "error", err)
 		}
 	}
+	// MAX — как и письмо, дополнительный канал без повторов при сбое.
+	if s.max != nil {
+		if maxID, ok, err := s.maxLinks.MaxUserID(ctx, userID); err != nil {
+			s.log("MAX: не удалось прочитать привязку", "error", err)
+		} else if ok {
+			text := n.Title
+			if n.Body != "" {
+				text += "\n" + n.Body
+			}
+			if err := s.max.Send(ctx, maxID, text); err != nil {
+				s.log("MAX: уведомление не отправлено", "error", err)
+			}
+		}
+	}
 	return nil
+}
+
+// MaxStatus — включён ли канал и привязан ли аккаунт пользователя.
+func (s *Service) MaxStatus(ctx context.Context, user string) (enabled, linked bool, err error) {
+	if s.max == nil {
+		return false, false, nil
+	}
+	_, linked, err = s.maxLinks.MaxUserID(ctx, user)
+	return true, linked, err
+}
+
+// MaxLinkURL выдаёт одноразовую ссылку привязки (10 минут).
+func (s *Service) MaxLinkURL(ctx context.Context, user string) (string, error) {
+	if s.max == nil {
+		return "", ErrMaxDisabled
+	}
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	code := base64.RawURLEncoding.EncodeToString(b)
+	if err := s.maxLinks.CreateLinkCode(ctx, user, code, 10*time.Minute); err != nil {
+		return "", err
+	}
+	return s.max.LinkURL(code), nil
+}
+
+func (s *Service) MaxUnlink(ctx context.Context, user string) error {
+	if s.max == nil {
+		return ErrMaxDisabled
+	}
+	return s.maxLinks.UnlinkUser(ctx, user)
 }

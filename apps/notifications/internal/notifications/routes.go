@@ -62,6 +62,42 @@ func Register(group *gin.RouterGroup, s *Service) {
 		}
 		c.JSON(200, page)
 	})
+	// Канал MAX: статус, одноразовая ссылка привязки и отвязка.
+	group.GET("/notifications/max", func(c *gin.Context) {
+		enabled, linked, err := s.MaxStatus(c.Request.Context(), platform.Owner(c))
+		if err != nil {
+			_ = c.Error(err)
+			fail(c, 500, "internal_error", "Не удалось проверить подключение MAX")
+			return
+		}
+		c.JSON(200, gin.H{"enabled": enabled, "linked": linked})
+	})
+	group.POST("/notifications/max/link", func(c *gin.Context) {
+		url, err := s.MaxLinkURL(c.Request.Context(), platform.Owner(c))
+		if errors.Is(err, ErrMaxDisabled) {
+			fail(c, 503, "max_disabled", err.Error())
+			return
+		}
+		if err != nil {
+			_ = c.Error(err)
+			fail(c, 500, "internal_error", "Не удалось создать ссылку")
+			return
+		}
+		c.JSON(200, gin.H{"url": url})
+	})
+	group.DELETE("/notifications/max", func(c *gin.Context) {
+		err := s.MaxUnlink(c.Request.Context(), platform.Owner(c))
+		if errors.Is(err, ErrMaxDisabled) {
+			fail(c, 503, "max_disabled", err.Error())
+			return
+		}
+		if err != nil {
+			_ = c.Error(err)
+			fail(c, 500, "internal_error", "Не удалось отключить MAX")
+			return
+		}
+		c.Status(204)
+	})
 	group.POST("/notifications/read-all", func(c *gin.Context) {
 		if err := s.MarkAllRead(c.Request.Context(), platform.Owner(c)); err != nil {
 			_ = c.Error(err)
