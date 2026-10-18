@@ -18,7 +18,9 @@ type fakeStore struct {
 	deleted   bool
 }
 
-func (f *fakeStore) List(context.Context, string, int, int) (Page, error) { return Page{}, nil }
+func (f *fakeStore) List(context.Context, string, *Entity, int, int) (Page, error) {
+	return Page{}, nil
+}
 func (f *fakeStore) Insert(_ context.Context, owner, _ string, file File) error {
 	if f.insertErr != nil {
 		return f.insertErr
@@ -170,6 +172,20 @@ func TestDeleteDoesNotTouchStorageWithoutOwnedMetadata(t *testing.T) {
 		}
 		if store.deleted || len(blobs.deleted) != 0 {
 			t.Fatal("хранилища изменены без проверки владельца")
+		}
+	}
+}
+
+func TestParseEntity(t *testing.T) {
+	if e, err := ParseEntity("", ""); e != nil || err != nil {
+		t.Fatal("пустая привязка должна быть допустима")
+	}
+	if e, err := ParseEntity("application", "7f3b8a52-1c1e-4c8e-9a43-3a1d2f0b9c01"); err != nil || e.Type != "application" {
+		t.Fatal(err)
+	}
+	for _, c := range [][2]string{{"application", ""}, {"", "1"}, {"Bad-Type", "1"}, {"x", "a b"}, {"x", strings.Repeat("1", 65)}} {
+		if _, err := ParseEntity(c[0], c[1]); !errors.Is(err, ErrInvalidEntity) {
+			t.Errorf("%v: ожидалась ошибка", c)
 		}
 	}
 }

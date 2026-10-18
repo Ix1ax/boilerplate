@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -35,15 +36,15 @@ func TestFileListOwnershipAndPagination(t *testing.T) {
 		}
 	}
 	repo := NewRepository(db)
-	page, err := repo.List(ctx, owner, 1, 1)
+	page, err := repo.List(ctx, owner, nil, 1, 1)
 	if err != nil || page.Total != 2 || len(page.Items) != 1 || page.Limit != 1 || page.Offset != 1 {
 		t.Fatalf("пагинация: %+v %v", page, err)
 	}
-	otherPage, err := repo.List(ctx, other, 20, 0)
+	otherPage, err := repo.List(ctx, other, nil, 20, 0)
 	if err != nil || otherPage.Total != 1 || otherPage.Items[0].ID == page.Items[0].ID {
 		t.Fatalf("изоляция владельцев: %+v %v", otherPage, err)
 	}
-	empty, err := repo.List(ctx, uuid.NewString(), 20, 0)
+	empty, err := repo.List(ctx, uuid.NewString(), nil, 20, 0)
 	if err != nil || empty.Total != 0 || empty.Items == nil || len(empty.Items) != 0 {
 		t.Fatalf("пустой список: %+v %v", empty, err)
 	}
@@ -79,5 +80,31 @@ func TestFileGetAndDeleteOwnership(t *testing.T) {
 	}
 	if _, _, _, err := repo.Get(ctx, owner, id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("файл остался после удаления: %v", err)
+	}
+}
+
+func TestAttachmentFilter(t *testing.T) {
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	repo := NewRepository(db)
+	owner := uuid.NewString()
+	defer db.Exec(context.Background(), "DELETE FROM files WHERE owner_id=$1", owner)
+	entity := &Entity{Type: "application", ID: uuid.NewString()}
+	for i, e := range []*Entity{entity, nil} {
+		f := File{ID: uuid.NewString(), Name: "doc.txt", Size: 1, ContentType: "text/plain; charset=utf-8", CreatedAt: time.Now(), Entity: e}
+		if err = repo.Insert(ctx, owner, owner+"/"+f.ID+"-"+strconv.Itoa(i), f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := repo.List(ctx, owner, entity, 20, 0)
+	if err != nil || page.Total != 1 || page.Items[0].Entity == nil || page.Items[0].Entity.ID != entity.ID {
+		t.Fatalf("%+v %v", page, err)
+	}
+	if all, _ := repo.List(ctx, owner, nil, 20, 0); all.Total != 2 {
+		t.Fatalf("без фильтра: %+v", all)
 	}
 }

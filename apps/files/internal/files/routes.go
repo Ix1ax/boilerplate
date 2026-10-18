@@ -17,7 +17,12 @@ func Register(group *gin.RouterGroup, s *Service) {
 			fail(c, 400, "invalid_pagination", "limit должен быть от 1 до 100, offset — от 0 до 100000")
 			return
 		}
-		page, err := s.List(c.Request.Context(), platform.Owner(c), limit, offset)
+		entity, err := ParseEntity(c.Query("entity_type"), c.Query("entity_id"))
+		if err != nil {
+			fail(c, 400, "invalid_entity", err.Error())
+			return
+		}
+		page, err := s.List(c.Request.Context(), platform.Owner(c), entity, limit, offset)
 		if err != nil {
 			_ = c.Error(err)
 			fail(c, 500, "internal_error", "Не удалось загрузить список файлов")
@@ -47,7 +52,12 @@ func Register(group *gin.RouterGroup, s *Service) {
 			fail(c, 400, "invalid_body", "Не удалось прочитать файл")
 			return
 		}
-		f, err := s.Upload(c.Request.Context(), platform.Owner(c), header.Filename, data)
+		entity, err := ParseEntity(c.Request.FormValue("entity_type"), c.Request.FormValue("entity_id"))
+		if err != nil {
+			fail(c, 400, "invalid_entity", err.Error())
+			return
+		}
+		f, err := s.UploadFor(c.Request.Context(), platform.Owner(c), header.Filename, data, entity)
 		if handleUploadError(c, err) {
 			return
 		}
