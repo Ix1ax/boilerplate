@@ -5,6 +5,7 @@ services:
   tasks-postgres: { ports: !reset [] }
   files-postgres: { ports: !reset [] }
   notifications-postgres: { ports: !reset [] }
+  audit-postgres: { ports: !reset [] }
   gateway-redis: { ports: !reset [] }
   files-s3: { ports: !reset [] }
   rabbitmq: { ports: !reset [] }

@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, tasks, files, llm, notifications]
+        service: [gateway, tasks, files, llm, notifications, audit]
     defaults:
       run:
         working-directory: apps/${{ matrix.service }}
@@ -85,7 +85,7 @@ jobs:
           cache-dependency-path: apps/*/go.sum
       - run: make setup
       - name: Поднять хранилища и брокер
-        run: docker compose up -d --wait --wait-timeout 300 tasks-postgres files-postgres notifications-postgres gateway-redis files-s3 rabbitmq
+        run: docker compose up -d --wait --wait-timeout 300 tasks-postgres files-postgres notifications-postgres audit-postgres gateway-redis files-s3 rabbitmq
       - run: make integration
 
   images:
@@ -95,7 +95,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, tasks, files, llm, notifications]
+        service: [gateway, tasks, files, llm, notifications, audit]
     steps:
       - uses: actions/checkout@v4
       - name: Сборка

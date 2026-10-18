@@ -34,3 +34,4 @@ e2e/playwright-report/
 /apps/*/files
 /apps/*/llm
 /apps/*/notifications
+/apps/*/audit

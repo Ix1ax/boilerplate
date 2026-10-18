@@ -48,6 +48,18 @@ services:
     healthcheck:
       <<: *pg-health
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  audit-postgres:
+    container_name: audit-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${AUDIT_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${AUDIT_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${AUDIT_DB_NAME:?required}
+    ports: ['127.0.0.1:${AUDIT_DB_PORT:-5436}:5432']
+    volumes: [audit-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
   keycloak-postgres:
     container_name: keycloak-postgres
     image: postgres:17-alpine
@@ -194,6 +206,15 @@ services:
       DATABASE_URL: postgres://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-postgres:5432/${NOTIFICATIONS_DB_NAME}?sslmode=disable
     depends_on:
       notifications-postgres: { condition: service_healthy }
+  audit-migrate:
+    container_name: audit-migrate
+    profiles: [app]
+    build: ./apps/audit
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
+    depends_on:
+      audit-postgres: { condition: service_healthy }
   tasks-service:
     container_name: tasks-service
     profiles: [app]
@@ -243,6 +264,20 @@ services:
       notifications-migrate: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
     healthcheck: *svc-health
+  # Журнал действий: сохраняет audit.recorded, которые публикует gateway; читает только admin.
+  audit-service:
+    container_name: audit-service
+    profiles: [app]
+    build: ./apps/audit
+    environment:
+      DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      audit-migrate: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
   # Шлюз к Ollama. Готов и без модели: генерация вернёт 503, пока не запущен make llm.
   llm-service:
     container_name: llm-service
@@ -273,6 +308,8 @@ services:
       FILES_URL: http://files-service:8080
       LLM_SERVICE_URL: http://llm-service:8080
       NOTIFICATIONS_URL: http://notifications-service:8080
+      AUDIT_URL: http://audit-service:8080
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
@@ -285,6 +322,7 @@ services:
       files-service: { condition: service_healthy }
       llm-service: { condition: service_healthy }
       notifications-service: { condition: service_healthy }
+      audit-service: { condition: service_healthy }
     healthcheck: *svc-health
   web-service:
     container_name: web-service
@@ -305,6 +343,7 @@ volumes:
   tasks-postgres-data:
   files-postgres-data:
   notifications-postgres-data:
+  audit-postgres-data:
   keycloak-postgres-data:
   files-s3-data:
   rabbitmq-data:
