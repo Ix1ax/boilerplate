@@ -7,7 +7,7 @@ import { ThemeToggle } from '@/features/theme';
 import { useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
-import { Button, Container } from '@/shared/ui';
+import { Button, Container, LogoIcon } from '@/shared/ui';
 
 export const Header = () => {
   const { data: user, isLoading } = useCurrentUser();
@@ -17,7 +17,7 @@ export const Header = () => {
     <header className="border-b">
       <Container className="flex items-center gap-4 py-3">
         <Link to={STATIC_ROUTES.HOME} className="font-semibold">
-          Hackathon
+          <LogoIcon />
         </Link>
 
         <span className="flex-1" />

@@ -13,16 +13,21 @@ import { ConfirmProvider } from './ConfirmProvider';
 
 interface ProvidersProps {
   children?: ReactNode;
+  showWidgets?: boolean;
 }
 
-export const Providers = ({ children }: ProvidersProps) => {
+export const Providers = ({ children, showWidgets = true }: ProvidersProps) => {
   return (
     <ThemeProvider>
       <AccessibleMotionProvider>
         <QueryClientProvider client={queryClient}>
           <ConfirmProvider>{children}</ConfirmProvider>
-          <ThemeToaster />
-          <Accessibility />
+          {showWidgets && (
+            <>
+              <ThemeToaster />
+              <Accessibility />
+            </>
+          )}
         </QueryClientProvider>
       </AccessibleMotionProvider>
     </ThemeProvider>

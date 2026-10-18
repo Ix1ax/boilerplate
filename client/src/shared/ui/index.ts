@@ -121,3 +121,4 @@ export {
   type AnimatedTextLinesSegment,
   type AnimatedTextLinesSlot,
 } from './AnimatedTextLines';
+export { LogoIcon, STOLOTO_PATH } from './icons';

@@ -9,6 +9,7 @@ import {
 import { useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
+import { useSmoothScroll } from '@/shared/hooks';
 import { Button, Card, CardContent, Container, Section } from '@/shared/ui';
 
 const FEATURES = [
@@ -40,6 +41,7 @@ const FEATURES = [
 
 export const HomePage = () => {
   const { data: user } = useCurrentUser();
+  useSmoothScroll();
 
   return (
     <Container>
