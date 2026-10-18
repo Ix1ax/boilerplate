@@ -782,6 +782,111 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/tasks/stats': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Сводка для дашборда (только администратор) */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Итоги, разбивка по ИИ-проверке и создание задач за 14 дней */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['TaskStats'];
+          };
+        };
+        401: components['responses']['Unauthorized'];
+        /** @description Нет роли admin */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/audit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Журнал изменяющих действий (только администратор)
+     * @description Фильтры actor, method, status, request_id; поиск q по пути и email; sort=-occurred|occurred|status|-status.
+     */
+    get: {
+      parameters: {
+        query?: {
+          actor?: string;
+          method?: string;
+          status?: string;
+          request_id?: string;
+          q?: string;
+          sort?: string;
+          limit?: number;
+          offset?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Страница журнала */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['AuditPage'];
+          };
+        };
+        400: components['responses']['BadRequest'];
+        401: components['responses']['Unauthorized'];
+        /** @description Нет роли admin */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/files': {
     parameters: {
       query?: never;
@@ -793,6 +898,9 @@ export interface paths {
     get: {
       parameters: {
         query?: {
+          /** @description Только файлы, приложенные к записи (вместе с entity_id) */
+          entity_type?: string;
+          entity_id?: string;
           limit?: number;
           offset?: number;
         };
@@ -833,6 +941,9 @@ export interface paths {
           'multipart/form-data': {
             /** Format: binary */
             file: string;
+            /** @description Необязательная привязка к записи другого сервиса (вместе с entity_id) */
+            entity_type?: string;
+            entity_id?: string;
           };
         };
       };
@@ -1169,6 +1280,39 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    TaskStats: {
+      total: number;
+      completed: number;
+      owners: number;
+      moderation: {
+        ok: number;
+        needs_review: number;
+        unchecked: number;
+      };
+      by_day: {
+        /** Format: date */
+        date: string;
+        count: number;
+      }[];
+    };
+    AuditRecord: {
+      actor: string;
+      actor_email: string;
+      method: string;
+      route: string;
+      path: string;
+      status: number;
+      request_id: string;
+      ip: string;
+      /** Format: date-time */
+      occurred_at: string;
+    };
+    AuditPage: {
+      items: components['schemas']['AuditRecord'][];
+      total: number;
+      limit: number;
+      offset: number;
+    };
     Notification: {
       /** Format: uuid */
       id: string;
@@ -1264,6 +1408,10 @@ export interface components {
       name: string;
       size: number;
       content_type: string;
+      entity?: {
+        type: string;
+        id: string;
+      } | null;
       /** Format: date-time */
       created_at: string;
     };
