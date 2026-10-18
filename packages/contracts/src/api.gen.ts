@@ -1004,6 +1004,53 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/ws': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * WebSocket — каналы реального времени
+     * @description Upgrade до WebSocket (сервис realtime). Для cookie-сессии обязателен Origin приложения. Сообщения {type, payload}. Клиент → сервер: ping, subscribe {channel}, unsubscribe {channel}, publish {channel, data}. Сервер → клиент: pong, message {channel, from, data, at}, error {code, message}. Каналы: user:<id> — личный (только чтение, пишет сервер), room:<имя> — читать и писать могут все вошедшие, broadcast — читать все, писать admin. Ограничения: 16 КиБ на сообщение, 20 сообщений в секунду, 50 подписок, соединение закрывается после 70 с без сообщений (клиент шлёт ping каждые 25 с). Сервисы пишут в канал событием realtime.publish {data: {channel, from, data}} в exchange events.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Протокол переключён на WebSocket */
+        101: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        401: components['responses']['Unauthorized'];
+        /** @description Origin не совпадает с адресом приложения */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/files': {
     parameters: {
       query?: never;

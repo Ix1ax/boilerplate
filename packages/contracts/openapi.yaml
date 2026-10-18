@@ -488,6 +488,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/ws:
+    get:
+      summary: WebSocket — каналы реального времени
+      description: >-
+        Upgrade до WebSocket (сервис realtime). Для cookie-сессии обязателен Origin приложения.
+        Сообщения {type, payload}. Клиент → сервер: ping, subscribe {channel}, unsubscribe {channel},
+        publish {channel, data}. Сервер → клиент: pong, message {channel, from, data, at}, error {code, message}.
+        Каналы: user:<id> — личный (только чтение, пишет сервер), room:<имя> — читать и писать могут все вошедшие,
+        broadcast — читать все, писать admin. Ограничения: 16 КиБ на сообщение, 20 сообщений в секунду, 50 подписок,
+        соединение закрывается после 70 с без сообщений (клиент шлёт ping каждые 25 с).
+        Сервисы пишут в канал событием realtime.publish {data: {channel, from, data}} в exchange events.
+      responses:
+        '101':
+          description: Протокол переключён на WebSocket
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Origin не совпадает с адресом приложения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/files:
     get:
       summary: Получить свои файлы
