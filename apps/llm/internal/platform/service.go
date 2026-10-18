@@ -49,6 +49,7 @@ func NewEngine(log *slog.Logger, maxBody int64, check func(context.Context) erro
 			id = "internal"
 		}
 		c.Set("request_id", id)
+		c.Request = c.Request.WithContext(WithRequestID(c.Request.Context(), id))
 		c.Header("X-Request-ID", id)
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
@@ -110,5 +111,19 @@ func WithEmail(ctx context.Context, email string) context.Context {
 // Email — адрес пользователя из контекста запроса или события.
 func Email(ctx context.Context) string {
 	v, _ := ctx.Value(emailKey{}).(string)
+	return v
+}
+
+type requestIDKey struct{}
+
+// WithRequestID кладёт идентификатор запроса в контекст: он уходит в события outbox, и цепочку
+// «HTTP-запрос → событие → обработчик → следующее событие» видно по одному request_id в логах.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDKey{}, id)
+}
+
+// RequestID — идентификатор запроса или события, породившего текущую работу.
+func RequestID(ctx context.Context) string {
+	v, _ := ctx.Value(requestIDKey{}).(string)
 	return v
 }

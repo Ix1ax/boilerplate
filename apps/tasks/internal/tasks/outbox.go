@@ -17,7 +17,7 @@ func (r *Repository) ClaimEvents(ctx context.Context, n int) ([]Event, error) {
 	rows, err := r.db.Query(ctx, `UPDATE outbox SET locked_until = now() + interval '30 seconds'
 WHERE id IN (SELECT id FROM outbox WHERE sent_at IS NULL AND (locked_until IS NULL OR locked_until < now())
               ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-RETURNING id, type, user_id, payload, created_at`, n)
+RETURNING id, type, user_id, request_id, payload, created_at`, n)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ RETURNING id, type, user_id, payload, created_at`, n)
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err = rows.Scan(&e.ID, &e.Type, &e.UserID, &e.Payload, &e.CreatedAt); err != nil {
+		if err = rows.Scan(&e.ID, &e.Type, &e.UserID, &e.RequestID, &e.Payload, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -67,7 +67,7 @@ RETURNING (xmax = 0)`, taskID, m.Verdict, m.Source, result).Scan(&inserted); err
 		}
 		// email непустой — notifications дополнительно отправит письмо (если настроен SMTP).
 		payload, _ := json.Marshal(map[string]string{"title": title, "body": "Откройте задачу, чтобы посмотреть рекомендацию. Решение остаётся за вами.", "link": "/dashboard/tasks", "email": platform.Email(ctx)})
-		if _, err = tx.Exec(ctx, "INSERT INTO outbox(id,type,user_id,payload) VALUES($1,'notification.requested',$2,$3)", uuid.NewString(), owner, payload); err != nil {
+		if _, err = tx.Exec(ctx, "INSERT INTO outbox(id,type,user_id,request_id,payload) VALUES($1,'notification.requested',$2,$3,$4)", uuid.NewString(), owner, platform.RequestID(ctx), payload); err != nil {
 			return err
 		}
 	}

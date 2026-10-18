@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"time"
 
+	"example.com/hackathon/apps/notifications/internal/platform"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -21,9 +22,9 @@ const (
 
 // Event — строка outbox, ожидающая публикации.
 type Event struct {
-	ID, Type, UserID string
-	Payload          []byte
-	CreatedAt        time.Time
+	ID, Type, UserID, RequestID string
+	Payload                     []byte
+	CreatedAt                   time.Time
 }
 
 // Outbox — источник неотправленных событий (nil — сервис только потребляет).
@@ -41,8 +42,8 @@ type Options struct {
 
 // Message — полученное событие. Handler вернул ошибку — сообщение вернётся в очередь (до лимита, затем в DLQ).
 type Message struct {
-	ID, Type, UserID string
-	Data             json.RawMessage
+	ID, Type, UserID, RequestID string
+	Data                        json.RawMessage
 }
 type Handler func(ctx context.Context, m Message) error
 
@@ -160,19 +161,20 @@ func (b *Broker) session(ctx context.Context) error {
 
 func (b *Broker) consume(ctx context.Context, d amqp.Delivery) {
 	var env struct {
-		ID     string          `json:"id"`
-		Type   string          `json:"type"`
-		UserID string          `json:"user_id"`
-		Data   json.RawMessage `json:"data"`
+		ID        string          `json:"id"`
+		Type      string          `json:"type"`
+		UserID    string          `json:"user_id"`
+		RequestID string          `json:"request_id"`
+		Data      json.RawMessage `json:"data"`
 	}
 	if json.Unmarshal(d.Body, &env) != nil {
 		_ = d.Nack(false, false) // нечитаемое сообщение сразу в DLQ
 		return
 	}
-	hctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	hctx, cancel := context.WithTimeout(platform.WithRequestID(ctx, env.RequestID), 2*time.Minute)
 	defer cancel()
-	if err := b.handler(hctx, Message{ID: env.ID, Type: env.Type, UserID: env.UserID, Data: env.Data}); err != nil {
-		b.log.Warn("Обработка события не удалась", "type", env.Type, "error", err)
+	if err := b.handler(hctx, Message{ID: env.ID, Type: env.Type, UserID: env.UserID, RequestID: env.RequestID, Data: env.Data}); err != nil {
+		b.log.Warn("Обработка события не удалась", "type", env.Type, "request_id", env.RequestID, "error", err)
 		_ = d.Nack(false, true)
 		return
 	}
@@ -198,9 +200,9 @@ func (b *Broker) relay(ctx context.Context, ch *amqp.Channel) error {
 			continue
 		}
 		for _, e := range events {
-			body, _ := json.Marshal(map[string]any{"id": e.ID, "type": e.Type, "user_id": e.UserID, "occurred_at": e.CreatedAt, "data": json.RawMessage(e.Payload)})
+			body, _ := json.Marshal(map[string]any{"id": e.ID, "type": e.Type, "user_id": e.UserID, "request_id": e.RequestID, "occurred_at": e.CreatedAt, "data": json.RawMessage(e.Payload)})
 			dc, err := ch.PublishWithDeferredConfirmWithContext(ctx, exchange, e.Type, false, false, amqp.Publishing{
-				ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: e.ID, Body: body,
+				ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: e.ID, CorrelationId: e.RequestID, Body: body,
 			})
 			if err != nil {
 				return err
