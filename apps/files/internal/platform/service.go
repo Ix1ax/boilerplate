@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -47,6 +48,7 @@ func TrustGateway(token string) gin.HandlerFunc {
 			return
 		}
 		c.Set("owner_id", user)
+		c.Set("roles", c.GetHeader(HeaderRoles))
 		c.Next()
 	}
 }
@@ -90,4 +92,28 @@ func NewEngine(log *slog.Logger, maxBody int64, check func(context.Context) erro
 
 func OpenObjects(c config.S3Config) *s3.Client {
 	return s3.New(s3.Options{Region: c.Region, BaseEndpoint: aws.String(c.Endpoint), UsePathStyle: true, Credentials: credentials.NewStaticCredentialsProvider(c.AccessKey, c.SecretKey, ""), RetryMaxAttempts: 2})
+}
+
+// HeaderRoles — роли пользователя, которые gateway взял из проверенного JWT.
+const HeaderRoles = "X-User-Roles"
+
+// HasRole сообщает, есть ли у пользователя роль. Доверять можно, потому что запрос прошёл TrustGateway.
+func HasRole(c *gin.Context, role string) bool {
+	for _, r := range strings.Split(c.GetString("roles"), ",") {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+// RequireRole пропускает только пользователей с ролью.
+func RequireRole(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !HasRole(c, role) {
+			c.AbortWithStatusJSON(403, gin.H{"error": gin.H{"code": "forbidden", "message": "Недостаточно прав для этого действия"}})
+			return
+		}
+		c.Next()
+	}
 }

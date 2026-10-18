@@ -31,3 +31,20 @@ func TestTrustGatewayRejectsDirectCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestRequireRole(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.GET("/admin", TrustGateway("s"), RequireRole("admin"), func(c *gin.Context) { c.Status(204) })
+	for roles, want := range map[string]int{"": 403, "user": 403, "user,admin": 204, "administrator": 403} {
+		req := httptest.NewRequest("GET", "/admin", nil)
+		req.Header.Set(HeaderToken, "s")
+		req.Header.Set(HeaderUserID, "u")
+		req.Header.Set(HeaderRoles, roles)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != want {
+			t.Errorf("%q: %d", roles, w.Code)
+		}
+	}
+}

@@ -31,9 +31,9 @@ go get путь/пакета
 go mod tidy
 ```
 
-Запуск сервисов вне Docker (после `make infra`): `make gateway`, `make tasks`, `make files`; tasks слушает :8081, files — :8082 (в `.env` для этого заданы `TASKS_URL` и `FILES_URL`).
+Инфраструктура (`make infra`): `tasks-postgres` на :5433, `files-postgres` на :5434, `rabbitmq` на :5672 (консоль http://localhost:15672, логин и пароль в `.env`). Запуск сервисов вне Docker (после `make infra`): `make gateway`, `make tasks`, `make files`; tasks слушает :8081, files — :8082 (в `.env` для этого заданы `TASKS_URL` и `FILES_URL`).
 
-Миграции есть у каждого сервиса и применяются к его базе: `make migrate`, состояние: `make migrate-status`. Базы `tasks` и `files` создаёт сам `migrate up`. Добавляйте новую миграцию вместо редактирования применённой. Откат (`go run ./cmd/tasks migrate down` после загрузки `.env` с `DATABASE_URL=$TASKS_DATABASE_URL`) может удалить данные.
+Миграции есть у каждого сервиса и применяются к его базе: `make migrate`, состояние: `make migrate-status`. Добавляйте новую миграцию вместо редактирования применённой. Откат (`go run ./cmd/tasks migrate down` после загрузки `.env` с `DATABASE_URL=$TASKS_DATABASE_URL`) может удалить данные.
 
 ## Фронтенд
 
