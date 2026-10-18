@@ -1,0 +1,109 @@
+name: Проверки
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway, tasks, files, llm, notifications]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/${{ matrix.service }}/go.mod
+          cache-dependency-path: apps/${{ matrix.service }}/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build ./cmd/...
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Типы API актуальны (генерация из OpenAPI)
+        run: |
+          npm run gen -w @starter/contracts
+          git diff --exit-code packages/contracts/src/api.gen.ts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+
+  compose:
+    name: Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/setup.mjs
+      - run: docker compose --profile app --profile llm config -q
+      - run: METRICS_TOKEN=ci docker compose -f compose.yaml -f compose.prod.yaml --profile app config -q
+
+  integration:
+    name: Интеграционные тесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/gateway/go.mod
+          cache-dependency-path: apps/*/go.sum
+      - run: make setup
+      - name: Поднять хранилища и брокер
+        run: docker compose up -d --wait --wait-timeout 300 tasks-postgres files-postgres notifications-postgres gateway-redis files-s3 rabbitmq
+      - run: make integration
+
+  images:
+    name: Образ ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway, tasks, files, llm, notifications]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сборка
+        run: docker build -t local/${{ matrix.service }}:ci apps/${{ matrix.service }}
+      - name: Сканирование уязвимостей (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: local/${{ matrix.service }}:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
