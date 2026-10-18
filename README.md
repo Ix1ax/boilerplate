@@ -12,16 +12,17 @@ make demo
 
 Одна команда создаёт `.env` и realm Keycloak, собирает образы, применяет миграции, заполняет демо-данные и **печатает ссылки и тестовых пользователей** (роли пользователь и администратор, пароли генерируются для каждой копии и лежат в локальном `.env`). Первый запуск занимает несколько минут. Только поднять стек без данных: `make up`. Локальная модель Qwen ставится отдельно: `make llm`.
 
-| Сервис                 | Адрес                                    |
-| ---------------------- | ---------------------------------------- |
-| Приложение             | http://localhost:3000                    |
-| Swagger UI (API)       | http://localhost:3000/api/docs           |
-| OpenAPI-описание       | http://localhost:3000/api/openapi.yaml   |
-| Проверка состояния API | http://localhost:8080/healthz, `/readyz` |
-| Метрики Prometheus     | http://localhost:8080/metrics            |
-| Keycloak               | http://localhost:8180                    |
-| RabbitMQ (консоль)     | http://localhost:15672                   |
-| Mailpit                | http://localhost:8025                    |
+| Сервис                 | Адрес                                           |
+| ---------------------- | ----------------------------------------------- |
+| Приложение             | http://localhost:3000                           |
+| Swagger UI (API)       | http://localhost:3000/api/docs                  |
+| OpenAPI-описание       | http://localhost:3000/api/openapi.yaml          |
+| Проверка состояния API | http://localhost:8080/healthz, `/readyz`        |
+| WebSocket              | ws://localhost:3000/api/v1/ws (страница «Лайв») |
+| Метрики Prometheus     | http://localhost:8080/metrics                   |
+| Keycloak               | http://localhost:8180                           |
+| RabbitMQ (консоль)     | http://localhost:15672                          |
+| Mailpit                | http://localhost:8025                           |
 
 ## Подготовка и защита
 
