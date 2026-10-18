@@ -19,6 +19,8 @@ const (
 	// HeaderRoles — роли пользователя из проверенного JWT через запятую: сервисы сами решают,
 	// какие действия доступны (например, админская выгрузка), не разбирая токен.
 	HeaderRoles = "X-User-Roles"
+	// HeaderEmail — адрес из JWT: нужен сервисам, чтобы отправить письмо (уведомления).
+	HeaderEmail = "X-User-Email"
 )
 
 // Upstreams — адреса внутренних сервисов, за которыми стоит gateway.
@@ -53,6 +55,7 @@ func proxy(target *url.URL, token string, slow ...time.Duration) gin.HandlerFunc
 		identity := auth.Current(c)
 		c.Request.Header.Set(HeaderUserID, identity.Subject)
 		c.Request.Header.Set(HeaderRoles, strings.Join(identity.RealmAccess.Roles, ","))
+		c.Request.Header.Set(HeaderEmail, identity.Email)
 		c.Request.Header.Set("X-Request-ID", c.GetString("request_id"))
 		if len(slow) > 0 {
 			_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(slow[0] + 10*time.Second))

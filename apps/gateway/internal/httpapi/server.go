@@ -84,7 +84,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	api.GET("/admin/ping", auth.RequireRole("admin"), func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	if d != nil {
 		// Счётчик общий для экземпляров API. Без Redis изменять данные временно нельзя.
-		api.Use(limit(d, "rate", 60, true))
+		api.Use(limit(d, "rate", 60, true), idempotency(d))
 		if up.Tasks != nil {
 			h := proxy(up.Tasks, internalToken)
 			// ИИ-проверка задачи вызывает модель: на неё действует тот же строгий лимит, что и на /llm.
@@ -109,7 +109,8 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 			g.Any("/*path", h)
 		}
 		if up.Notifications != nil {
-			h := proxy(up.Notifications, internalToken)
+			// slowUpstream: поток /notifications/stream (SSE) живёт до нескольких минут.
+			h := proxy(up.Notifications, internalToken, slowUpstream)
 			api.Any("/notifications", h)
 			api.Any("/notifications/*path", h)
 		}

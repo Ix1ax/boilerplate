@@ -5,6 +5,8 @@ info:
   description: >-
     Контракт Go API. Браузер использует cookie-сессию на том же origin;
     токены хранятся в Redis. Внешние клиенты используют Bearer JWT.
+    Изменяющие запросы принимают необязательный заголовок Idempotency-Key:
+    повтор с тем же ключом вернёт сохранённый ответ (заголовок Idempotent-Replayed).
 servers:
   - url: /
     description: Тот же origin (в Docker — через Nginx на :3000)
@@ -320,6 +322,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/stream:
+    get:
+      summary: Поток новых уведомлений (SSE)
+      description: 'События event: notification с JSON уведомления; комментарии-пинги каждые 25 с; соединение закрывается через 2 минуты, клиент переподключается.'
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/v1/notifications/{id}/read:
