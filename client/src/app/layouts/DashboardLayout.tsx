@@ -27,6 +27,7 @@ const TABS: Tab[] = [
     label: 'Ассистент',
     to: STATIC_ROUTES.DASHBOARD_ASSISTANT,
   },
+  { value: 'live', label: 'Лайв', to: STATIC_ROUTES.DASHBOARD_LIVE },
   {
     value: 'admin',
     label: 'Админка',

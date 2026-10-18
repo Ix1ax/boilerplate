@@ -7,6 +7,7 @@ export {
   useWsSend,
   useWsSubscription,
   useWsInvalidate,
+  useChannel,
 } from './hooks';
 export type {
   WsStatus,

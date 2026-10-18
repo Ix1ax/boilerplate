@@ -45,3 +45,18 @@ test('ассистент: ответ модели или понятное соо
     .or(page.locator('[aria-live="polite"]').filter({ hasText: /\S/ }));
   await expect(result.first()).toBeVisible({ timeout: 45_000 });
 });
+
+test('лайв: сообщение в комнате доходит во вторую вкладку по WebSocket', async ({
+  page,
+  context,
+}) => {
+  const second = await context.newPage();
+  for (const p of [page, second]) {
+    await p.goto('/dashboard/live');
+    await expect(p.getByText('онлайн')).toBeVisible({ timeout: 15_000 });
+  }
+  const text = `Привет из e2e ${Date.now()}`;
+  await page.getByLabel('Сообщение в комнату').fill(text);
+  await page.getByRole('button', { name: 'Отправить' }).click();
+  await expect(second.getByText(text)).toBeVisible({ timeout: 10_000 });
+});

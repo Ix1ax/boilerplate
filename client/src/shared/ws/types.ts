@@ -14,6 +14,20 @@ export const wsIncomingSchema = z.discriminatedUnion('type', [
     type: z.literal('notification'),
     payload: z.object({ id: z.string(), message: z.string() }),
   }),
+  // Сообщение канала от сервиса realtime (server/realtime): data — произвольный JSON.
+  z.object({
+    type: z.literal('message'),
+    payload: z.object({
+      channel: z.string(),
+      from: z.string(),
+      data: z.unknown(),
+      at: z.string(),
+    }),
+  }),
+  z.object({
+    type: z.literal('error'),
+    payload: z.object({ code: z.string(), message: z.string() }),
+  }),
 ]);
 
 /** Исходящие сообщения (клиент → сервер). */
@@ -26,6 +40,11 @@ export const wsOutgoingSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('unsubscribe'),
     payload: z.object({ channel: z.string() }),
+  }),
+  // Писать можно в room:<имя> (все вошедшие) и broadcast (только admin) — правила в server/realtime.
+  z.object({
+    type: z.literal('publish'),
+    payload: z.object({ channel: z.string(), data: z.unknown() }),
   }),
 ]);
 

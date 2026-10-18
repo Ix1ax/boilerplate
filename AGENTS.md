@@ -10,6 +10,7 @@
 | `server/tasks`, `server/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `server/tasks`**                                               |
 | `server/notifications`         | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                             |
 | `server/audit`                 | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit` |
+| `server/realtime`              | WebSocket `GET /api/v1/ws`: каналы `user:<id>`, `room:<имя>`, `broadcast`; реплики связаны через RabbitMQ               |
 | `server/llm`                   | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                 |
 | `client`                       | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
 | `packages/contracts`           | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                   |
@@ -77,6 +78,7 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 | Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                                                                       |
 | Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                                                             |
 | Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                                                              |
+| Двусторонний realtime (чат, «кто онлайн») | `useChannel(channel)` из `shared/ws` + сервис `server/realtime`; права на каналы — `realtime.Policy`; сервер пишет в канал событием `realtime.publish`. Образец — страница «Лайв»              |
 | Уведомления в мессенджер MAX              | `server/notifications/internal/maxbot` (официальный клиент `max-bot-api-client-go`): задайте `MAX_BOT_TOKEN` и `MAX_BOT_USERNAME`, кнопка «Получать уведомления в MAX» появится в колокольчике |
 | История статусов с комментарием           | `Workflow.RequireComment(...)` + `platform.RecordTransition` / `platform.History` (таблица `status_history`, писать в одной транзакции со сменой статуса)                                      |
 | Дашборд админа                            | `GET /api/v1/admin/tasks/stats` (`Repository.Stats`): итоги + ряд за 14 дней в одном снимке                                                                                                    |

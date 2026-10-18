@@ -7,6 +7,7 @@ export const STATIC_ROUTES = {
   DASHBOARD_FILES: '/dashboard/files',
   DASHBOARD_ASSISTANT: '/dashboard/assistant',
   DASHBOARD_ADMIN: '/dashboard/admin',
+  DASHBOARD_LIVE: '/dashboard/live',
   FORBIDDEN: '/403',
 } as const;
 

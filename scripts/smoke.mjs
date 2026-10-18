@@ -164,6 +164,50 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
       503,
     );
 }
+// WebSocket через gateway: комната доставляет сообщение второму пользователю, чужой личный канал закрыт.
+{
+  const open = (token) =>
+    new Promise((resolve, reject) => {
+      const ws = new WebSocket(`${base.replace('http', 'ws')}/api/v1/ws`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      ws.onopen = () => resolve(ws);
+      ws.onerror = () => reject(new Error('WebSocket не подключился'));
+    });
+  const next = (ws) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Нет сообщения WebSocket')),
+        5000,
+      );
+      ws.onmessage = (event) => {
+        clearTimeout(timer);
+        resolve(JSON.parse(event.data));
+      };
+    });
+  const [a, b] = [await open(owner), await open(other)];
+  const room = `room:smoke-${Date.now()}`;
+  a.send(JSON.stringify({ type: 'subscribe', payload: { channel: room } }));
+  a.send(JSON.stringify({ type: 'ping' }));
+  assert.equal((await next(a)).type, 'pong'); // подписка обработана раньше ping
+  const received = next(a);
+  b.send(
+    JSON.stringify({
+      type: 'publish',
+      payload: { channel: room, data: { text: 'smoke' } },
+    }),
+  );
+  assert.deepEqual((await received).payload.data, { text: 'smoke' });
+  b.send(
+    JSON.stringify({
+      type: 'subscribe',
+      payload: { channel: 'user:someone-else' },
+    }),
+  );
+  assert.equal((await next(b)).payload.code, 'forbidden');
+  a.close();
+  b.close();
+}
 // Idempotency-Key: повтор того же создания не создаёт дубль и помечается заголовком.
 {
   const key = `smoke-${Date.now()}`;
@@ -345,7 +389,7 @@ try {
   });
   assert.equal(csrf.status, 403);
   console.log(
-    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления (SSE и почта), идемпотентность, выгрузка CSV, статистика, журнал аудита и вложения.',
+    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления (SSE и почта), идемпотентность, выгрузка CSV, статистика, журнал аудита, вложения и WebSocket.',
   );
 } finally {
   if (file)
