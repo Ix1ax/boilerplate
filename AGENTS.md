@@ -1,20 +1,20 @@
 # AGENTS.md — рабочие правила для AI-агентов
 
-Шаблон хакатонного проекта: микросервисный Go-бэкенд + React SPA + Keycloak + локальная LLM (Qwen в Ollama). Цель — за часы собрать **работающий, красиво показанный** продукт. Фронтенд: `web/CLAUDE.md`.
+Шаблон хакатонного проекта: микросервисный Go-бэкенд + React SPA + Keycloak + локальная LLM (Qwen в Ollama). Цель — за часы собрать **работающий, красиво показанный** продукт. Фронтенд: `client/CLAUDE.md`.
 
 ## Карта репозитория
 
-| Путь                       | Что это                                                                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `apps/gateway`             | Единственный публичный вход (:8080): Keycloak OIDC/PKCE, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы  |
-| `apps/tasks`, `apps/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `apps/tasks`**                                                 |
-| `apps/notifications`       | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                             |
-| `apps/audit`               | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit` |
-| `apps/llm`                 | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                 |
-| `web`                      | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
-| `packages/contracts`       | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                   |
-| `compose.yaml`, `Makefile` | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                         |
-| `docs/`                    | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)         |
+| Путь                           | Что это                                                                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `server/gateway`               | Единственный публичный вход (:8080): Keycloak OIDC/PKCE, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы  |
+| `server/tasks`, `server/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `server/tasks`**                                               |
+| `server/notifications`         | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                             |
+| `server/audit`                 | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit` |
+| `server/llm`                   | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                 |
+| `client`                       | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
+| `packages/contracts`           | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                   |
+| `compose.yaml`, `Makefile`     | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                         |
+| `docs/`                        | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)         |
 
 Каждый Go-модуль независим: свой `go.mod`, база, миграции, Dockerfile. Общего Go-кода нет — обвязку (`internal/platform`) копируем, а не выносим.
 
@@ -52,42 +52,42 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 1. Браузер ходит **только в gateway**. Сервисы не публикуют порты и принимают запросы только с `X-Internal-Token` + `X-User-ID` (`platform.TrustGateway`). Владелец записи — всегда `platform.Owner(c)`, проверка владельца — **в SQL** (`WHERE owner_id=$1`). Роли приходят в `X-User-Roles`, почта — в `X-User-Email` (`platform.Email(ctx)`): админские маршруты закрывайте `platform.RequireRole("admin")` в сервисе **и** `auth.RequireRole` в gateway.
 2. Роли и доступ проверяет Go, не клиент. Токены не хранятся в браузере.
-3. Сервисы не импортируют друг друга и не читают чужие базы (у каждого свой Postgres). Связь — HTTP через gateway или события в RabbitMQ через transactional outbox (образец — `apps/tasks/internal/broker`). Обработчики событий идемпотентны.
+3. Сервисы не импортируют друг друга и не читают чужие базы (у каждого свой Postgres). Связь — HTTP через gateway или события в RabbitMQ через transactional outbox (образец — `server/tasks/internal/broker`). Обработчики событий идемпотентны.
 4. Миграции — только новыми файлами в `internal/database/migrations` сервиса; применённые не правим.
 5. Секреты только из окружения; в git — лишь `.env.example`. Не добавляйте значения по умолчанию для секретов.
 6. LLM — советник, не судья: ответы модели проходят валидацию, решения по людям принимает человек (human-in-the-loop). Факты берём из БД, модель их только формулирует.
 
 ## Образец ИИ-функции (копировать, а не изобретать)
 
-`apps/tasks/internal/copilot`: **правила** (детерминированно ставят флаги и вердикт) → **LLM** (опциональный совет, строго валидируемый JSON, текст пользователя передаётся как данные в `<task>`) → **человек решает** (`decision_required`). Сбой модели не ломает проверку: остаются правила. Дорогие эндпоинты, вызывающие модель, ограничиваются в gateway тем же лимитом `rate:llm` (10 в минуту). Потоковый чат — `web/src/features/assistant` + `shared/api/sse.ts`.
+`server/tasks/internal/copilot`: **правила** (детерминированно ставят флаги и вердикт) → **LLM** (опциональный совет, строго валидируемый JSON, текст пользователя передаётся как данные в `<task>`) → **человек решает** (`decision_required`). Сбой модели не ломает проверку: остаются правила. Дорогие эндпоинты, вызывающие модель, ограничиваются в gateway тем же лимитом `rate:llm` (10 в минуту). Потоковый чат — `client/src/features/assistant` + `shared/api/sse.ts`.
 
 ## Готовые заготовки
 
-| Нужно                                     | Где образец                                                                                                                                                                                  |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`)                                          |
-| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                                                         |
-| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                                                             |
-| ИИ-проверка с человеком в контуре         | `apps/tasks/internal/copilot`                                                                                                                                                                |
-| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                                                                   |
-| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                                                                   |
-| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`apps/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                                                                      |
-| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                                                         |
-| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                                                                       |
-| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                                                                     |
-| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                                                           |
-| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                                                            |
-| Уведомления в мессенджер MAX              | `apps/notifications/internal/maxbot` (официальный клиент `max-bot-api-client-go`): задайте `MAX_BOT_TOKEN` и `MAX_BOT_USERNAME`, кнопка «Получать уведомления в MAX» появится в колокольчике |
-| История статусов с комментарием           | `Workflow.RequireComment(...)` + `platform.RecordTransition` / `platform.History` (таблица `status_history`, писать в одной транзакции со сменой статуса)                                    |
-| Дашборд админа                            | `GET /api/v1/admin/tasks/stats` (`Repository.Stats`): итоги + ряд за 14 дней в одном снимке                                                                                                  |
-| Файлы-вложения к записи                   | `POST /api/v1/files` с `entity_type`/`entity_id`, список — `?entity_type=&entity_id=`                                                                                                        |
-| Кто что сделал                            | Журнал `apps/audit` (включается вместе с `AMQP_URL` у gateway)                                                                                                                               |
-| Демо-данные                               | `fixtures/*.json` и `fixtures/files/` → `make seed` (через API, с событиями и уведомлениями)                                                                                                 |
-| Найти цепочку по логам                    | `request_id` идёт из gateway в сервисы, outbox и события (`platform.RequestID(ctx)`)                                                                                                         |
+| Нужно                                     | Где образец                                                                                                                                                                                    |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `server/tasks/internal/tasks/outbox.go`)                                          |
+| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                                                           |
+| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`server/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                                                             |
+| ИИ-проверка с человеком в контуре         | `server/tasks/internal/copilot`                                                                                                                                                                |
+| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                                                                     |
+| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                                                                     |
+| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`server/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                                                                      |
+| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                                                           |
+| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                                                                         |
+| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                                                                       |
+| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                                                             |
+| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                                                              |
+| Уведомления в мессенджер MAX              | `server/notifications/internal/maxbot` (официальный клиент `max-bot-api-client-go`): задайте `MAX_BOT_TOKEN` и `MAX_BOT_USERNAME`, кнопка «Получать уведомления в MAX» появится в колокольчике |
+| История статусов с комментарием           | `Workflow.RequireComment(...)` + `platform.RecordTransition` / `platform.History` (таблица `status_history`, писать в одной транзакции со сменой статуса)                                      |
+| Дашборд админа                            | `GET /api/v1/admin/tasks/stats` (`Repository.Stats`): итоги + ряд за 14 дней в одном снимке                                                                                                    |
+| Файлы-вложения к записи                   | `POST /api/v1/files` с `entity_type`/`entity_id`, список — `?entity_type=&entity_id=`                                                                                                          |
+| Кто что сделал                            | Журнал `server/audit` (включается вместе с `AMQP_URL` у gateway)                                                                                                                               |
+| Демо-данные                               | `fixtures/*.json` и `fixtures/files/` → `make seed` (через API, с событиями и уведомлениями)                                                                                                   |
+| Найти цепочку по логам                    | `request_id` идёт из gateway в сервисы, outbox и события (`platform.RequestID(ctx)`)                                                                                                           |
 
 ## Как добавить сервис (рецепт на 10 минут)
 
-1. `cp -r apps/tasks apps/<имя>`; замените модуль в `go.mod` и импортах, домен — в `internal/<имя>`, миграцию — в `internal/database/migrations`.
+1. `cp -r server/tasks server/<имя>`; замените модуль в `go.mod` и импортах, домен — в `internal/<имя>`, миграцию — в `internal/database/migrations`.
 2. `compose.yaml`: контейнеры `<имя>-postgres`, `<имя>-migrate` (`command: [migrate, up]`), `<имя>-service` (имя контейнера = имя сервиса) с `INTERNAL_TOKEN` и `DATABASE_URL`; пароль БД — `<ИМЯ>_DB_PASSWORD` в `.env.example` и `scripts/setup.mjs`.
 3. `.env.example`, `scripts/setup.mjs` (если новые секреты), `go.work`, цели `Makefile`.
 4. Gateway: адрес в `config` (`<ИМЯ>_URL`), поле в `httpapi.Upstreams`, маршрут `api.Any("/<имя>", …)` + `/*path`.
@@ -96,7 +96,7 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Как работать агенту
 
-- Сначала читайте код рядом с задачей и образец (`apps/tasks`), потом пишите. Не угадывайте имена и пути.
+- Сначала читайте код рядом с задачей и образец (`server/tasks`), потом пишите. Не угадывайте имена и пути.
 - Малыми шагами: изменение → `go build ./... && go test ./...` в затронутом модуле → дальше. `make check` — перед коммитом.
 - Не раздувайте контекст: читайте файлы по частям, ищите `grep`-ом, не печатайте большие логи (`| tail`). Тяжёлые независимые куски отдавайте подагентам.
 - Ошибки пользователю — по-русски и без внутренних деталей; в лог — с `request_id`.

@@ -4,7 +4,7 @@
 
 ## Быстрый старт
 
-Нужны Docker Desktop с Compose v2 и Node.js 24 из `.nvmrc`. Для разработки API на компьютере нужен Go версии из `apps/gateway/go.mod`.
+Нужны Docker Desktop с Compose v2 и Node.js 24 из `.nvmrc`. Для разработки API на компьютере нужен Go версии из `server/gateway/go.mod`.
 
 ```sh
 make demo
@@ -51,13 +51,13 @@ make demo
 ## Структура
 
 ```text
-apps/gateway/                 # Публичный вход: JWT, OIDC, сессии, проксирование (свой go.mod)
+server/gateway/                 # Публичный вход: JWT, OIDC, сессии, проксирование (свой go.mod)
   cmd/gateway/  internal/auth/  internal/httpapi/  internal/config/  internal/platform/
-apps/tasks/                   # Сервис задач (свой go.mod, своя база tasks)
+server/tasks/                   # Сервис задач (свой go.mod, своя база tasks)
   cmd/tasks/  internal/tasks/  internal/database/  internal/platform/  internal/config/
-apps/files/                   # Сервис файлов (свой go.mod, своя база files, S3)
+server/files/                   # Сервис файлов (свой go.mod, своя база files, S3)
   cmd/files/  internal/files/  internal/database/  internal/platform/  internal/config/
-web/src/
+client/src/
   app/                        # Провайдеры, маршруты, layouts
   pages/                      # Страницы
   widgets/                    # Композиция UI, шапка
@@ -71,7 +71,7 @@ deploy/                       # Пример Caddy
 scripts/                      # Настройка, экспорт и smoke-проверка
 ```
 
-Основной UI нового фронтенда находится в `web/src/shared/ui` и использует Base UI. `packages/ui` — отдельный набор на Radix, он не импортирует приложение. При добавлении компонентов выбирайте один набор для конкретного экрана.
+Основной UI нового фронтенда находится в `client/src/shared/ui` и использует Base UI. `packages/ui` — отдельный набор на Radix, он не импортирует приложение. При добавлении компонентов выбирайте один набор для конкретного экрана.
 
 ## Локальная разработка
 
@@ -93,7 +93,7 @@ make web
 
 Vite слушает порт 3000 и проксирует `/api`, `/auth` и `/healthz` на Go API, порт 8080. Контейнеры `api` и `web` при этом должны быть остановлены. После Docker-варианта выполните `make down`, затем команды выше.
 
-Корневой `.env` читают Compose и команды Go. Vite читает `web/.env.local`; значение по умолчанию для API — `/api/v1`. `make setup` сохраняет существующие настройки и пароли. При переносе старого `.env.local` сверяйте его с `.env.example`; серверные OIDC-переменные нужны только Go.
+Корневой `.env` читают Compose и команды Go. Vite читает `client/.env.local`; значение по умолчанию для API — `/api/v1`. `make setup` сохраняет существующие настройки и пароли. При переносе старого `.env.local` сверяйте его с `.env.example`; серверные OIDC-переменные нужны только Go.
 
 ## Команды
 

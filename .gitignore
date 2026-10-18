@@ -21,7 +21,7 @@ bin/
 
 # Локальные макеты, инструкции, скриншоты и демо
 /design-handoff/
-/web/src/app/preview/
+/client/src/app/preview/
 
 # Локальные данные и резервные копии
 .local/
@@ -29,12 +29,12 @@ e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
 # Бинарники go build в корне сервисов
-/apps/*/gateway
-/apps/*/tasks
-/apps/*/files
-/apps/*/llm
-/apps/*/notifications
-/apps/*/audit
+/server/*/gateway
+/server/*/tasks
+/server/*/files
+/server/*/llm
+/server/*/notifications
+/server/*/audit
 loadtest/result.json
 # Сгенерированный PDF; уберите строку, чтобы приложить презентацию к сдаче
 docs/presentation.pdf

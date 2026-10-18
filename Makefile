@@ -9,7 +9,7 @@ setup:
 	node scripts/setup.mjs
 install: setup
 	npm ci
-	for s in gateway tasks files llm notifications audit; do (cd apps/$$s && go mod download) || exit 1; done
+	for s in gateway tasks files llm notifications audit; do (cd server/$$s && go mod download) || exit 1; done
 infra: setup
 	docker compose up -d --wait --wait-timeout 360 tasks-postgres files-postgres notifications-postgres audit-postgres keycloak-postgres gateway-redis files-s3 rabbitmq mailpit keycloak
 up: setup
@@ -23,7 +23,7 @@ prefetch: setup
 	docker compose --profile app pull --ignore-buildable
 	docker compose --profile app build
 	docker pull $(K6_IMAGE)
-	for s in gateway tasks files llm notifications audit; do (cd apps/$$s && go mod download) || exit 1; done
+	for s in gateway tasks files llm notifications audit; do (cd server/$$s && go mod download) || exit 1; done
 	npm ci
 	cd e2e && npm ci && npx playwright install chromium
 	@if [ "$(SKIP_LLM)" != "1" ]; then $(MAKE) prefetch-llm; else echo "Модель Qwen пропущена (SKIP_LLM=1)"; fi
@@ -56,45 +56,45 @@ down:
 logs:
 	docker compose --profile app logs -f --tail=100
 gateway:
-	set -a; . ./.env; set +a; cd apps/gateway && go run ./cmd/gateway
+	set -a; . ./.env; set +a; cd server/gateway && go run ./cmd/gateway
 tasks:
-	set -a; . ./.env; set +a; export DATABASE_URL=$$TASKS_DATABASE_URL HTTP_ADDR=:8081; cd apps/tasks && go run ./cmd/tasks
+	set -a; . ./.env; set +a; export DATABASE_URL=$$TASKS_DATABASE_URL HTTP_ADDR=:8081; cd server/tasks && go run ./cmd/tasks
 files:
-	set -a; . ./.env; set +a; export DATABASE_URL=$$FILES_DATABASE_URL HTTP_ADDR=:8082; cd apps/files && go run ./cmd/files
+	set -a; . ./.env; set +a; export DATABASE_URL=$$FILES_DATABASE_URL HTTP_ADDR=:8082; cd server/files && go run ./cmd/files
 notifications:
-	set -a; . ./.env; set +a; export DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL HTTP_ADDR=:8084; cd apps/notifications && go run ./cmd/notifications
+	set -a; . ./.env; set +a; export DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL HTTP_ADDR=:8084; cd server/notifications && go run ./cmd/notifications
 audit:
-	set -a; . ./.env; set +a; export DATABASE_URL=$$AUDIT_DATABASE_URL HTTP_ADDR=:8085; cd apps/audit && go run ./cmd/audit
+	set -a; . ./.env; set +a; export DATABASE_URL=$$AUDIT_DATABASE_URL HTTP_ADDR=:8085; cd server/audit && go run ./cmd/audit
 llm-svc:
-	set -a; . ./.env; set +a; export HTTP_ADDR=:8083; cd apps/llm && go run ./cmd/llm
+	set -a; . ./.env; set +a; export HTTP_ADDR=:8083; cd server/llm && go run ./cmd/llm
 web:
 	npm run dev
 migrate:
-	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate up) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate up) && (cd apps/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go run ./cmd/notifications migrate up) && (cd apps/audit && DATABASE_URL=$$AUDIT_DATABASE_URL go run ./cmd/audit migrate up)
+	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate up) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate up) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go run ./cmd/notifications migrate up) && (cd server/audit && DATABASE_URL=$$AUDIT_DATABASE_URL go run ./cmd/audit migrate up)
 migrate-status:
-	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate status) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate status)
+	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate status) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate status)
 test:
-	for s in gateway tasks files llm notifications audit; do (cd apps/$$s && go test -race ./...) || exit 1; done
+	for s in gateway tasks files llm notifications audit; do (cd server/$$s && go test -race ./...) || exit 1; done
 	npm test
 check: test
-	for s in gateway tasks files llm notifications audit; do (cd apps/$$s && test -z "$$(gofmt -l .)" && go vet ./... && go build ./...) || exit 1; done
+	for s in gateway tasks files llm notifications audit; do (cd server/$$s && test -z "$$(gofmt -l .)" && go vet ./... && go build ./...) || exit 1; done
 	npm run typecheck
 	npm run lint
 	npm run format:check
 	npm run build
 fmt:
-	for s in gateway tasks files llm notifications audit; do (cd apps/$$s && gofmt -w .) || exit 1; done
+	for s in gateway tasks files llm notifications audit; do (cd server/$$s && gofmt -w .) || exit 1; done
 	npm run format
 e2e:
 	cd e2e && npm ci && npx playwright install chromium && npx playwright test
 docs-sync:
-	cp packages/contracts/openapi.yaml apps/gateway/internal/apidocs/openapi.yaml
+	cp packages/contracts/openapi.yaml server/gateway/internal/apidocs/openapi.yaml
 seed:
 	node scripts/seed.mjs
 smoke:
 	npm run smoke
 integration: migrate
-	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd apps/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go test -race -tags=integration ./internal/notifications) && (cd apps/gateway && go test -race -tags=integration ./internal/auth)
+	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go test -race -tags=integration ./internal/notifications) && (cd server/gateway && go test -race -tags=integration ./internal/auth)
 backup:
 	@mkdir -p .local/backups
 	for s in tasks files notifications audit; do docker compose exec -T $$s-postgres sh -c 'exec pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > .local/backups/$$s-$$(date +%Y%m%d-%H%M%S).dump || exit 1; done
