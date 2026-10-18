@@ -1,0 +1,433 @@
+# Спецификация API сервиса gateway — источник правды для его маршрутов.
+# После правок: make openapi (соберёт общий packages/contracts/openapi.yaml и TS-типы).
+# Пути указаны так, как их видит клиент через gateway (/api/v1/...).
+openapi: 3.0.3
+info:
+  title: Gateway — вход, пользователь и служебные маршруты
+  version: 0.1.0
+  description: |
+    Gateway — единственная публичная точка входа. Он проверяет пользователя и проксирует
+    `/api/v1/...` во внутренние сервисы (у каждого своя спецификация — выберите её в списке сверху).
+
+    **Как войти в Swagger.** Нажмите **Authorize** → в блоке `keycloak` ещё раз **Authorize** и войдите
+    демо-пользователем (логины и пароли печатает `make demo`). `client_id` уже заполнен, `client_secret`
+    оставьте пустым. После входа «Try it out» отправляет запросы с вашим токеном. Если вы уже вошли в
+    приложении (http://localhost:3000), запросы работают и без Authorize — по cookie сессии.
+    Для внешних клиентов и скриптов — Bearer-токен (как получить — в описании схемы bearerAuth).
+
+    **Общие правила для всех сервисов:**
+    - Ошибки приходят в едином формате `{"error": {"code", "message", "request_id"}}`.
+    - Заголовок ответа `X-Request-ID` — идентификатор запроса для поиска в логах.
+    - Изменяющие запросы: не больше 60 в минуту на пользователя (запросы к ИИ — 10), иначе 429.
+    - Повтор изменяющего запроса с тем же `Idempotency-Key` вернёт сохранённый ответ.
+    - Списки: `limit` (1–100, по умолчанию 20) и `offset`; в ответе `total`.
+servers:
+  - url: /
+    description: Через gateway на том же origin (в Docker — Nginx на :3000)
+security:
+  - keycloak:
+      - openid
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Вход
+    description: Вход через Keycloak (Authorization Code + PKCE). Токены остаются на сервере, браузер получает
+      HttpOnly-cookie.
+  - name: Пользователь
+    description: Текущий пользователь и проверка ролей.
+  - name: Служебное
+    description: Проверки работоспособности для мониторинга и оркестратора.
+paths:
+  /auth/login:
+    get:
+      tags:
+        - Вход
+      operationId: login
+      summary: Начать вход
+      description: Перенаправляет в Keycloak. После успешного входа пользователь вернётся на адрес из `next`.
+      security: []
+      parameters:
+        - name: next
+          in: query
+          description: Внутренний путь приложения, куда вернуться после входа (внешние адреса игнорируются)
+          schema:
+            type: string
+            default: /dashboard/tasks
+          example: /dashboard/tasks
+      responses:
+        "302":
+          description: Перенаправление на страницу входа Keycloak
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /auth/callback:
+    get:
+      tags:
+        - Вход
+      operationId: loginCallback
+      summary: Возврат из Keycloak
+      description: Вызывается Keycloak после входа, вручную не используется. Проверяет одноразовый `state`,
+        обменивает код на токены, сохраняет их в Redis и ставит cookie сессии на 8 часов.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Код авторизации от Keycloak
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Одноразовый state из /auth/login
+      responses:
+        "302":
+          description: Вход выполнен, перенаправление на `next`
+        "400":
+          description: Неверный или устаревший state (например, вход начат слишком давно)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: invalid_state
+                  message: Срок входа истёк или вход отменён. Начните заново
+        "502":
+          description: Keycloak не обменял код на токены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: login_failed
+                  message: Не удалось завершить вход
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /auth/logout:
+    post:
+      tags:
+        - Вход
+      operationId: logout
+      summary: Выйти
+      description: Удаляет сессию на сервере (доступ из браузера пропадает сразу) и возвращает адрес выхода из
+        Keycloak — фронтенд открывает его, чтобы завершить и единый вход. Нужен заголовок `Origin` приложения.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Сессия удалена
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - url
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    description: Адрес выхода из Keycloak
+              example:
+                url: http://localhost:8180/realms/hackathon/protocol/openid-connect/logout?client_id=hackathon-web&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/me:
+    get:
+      tags:
+        - Пользователь
+      operationId: getMe
+      summary: Текущий пользователь
+      description: Кто вошёл и с какими ролями. Для гостя — 401 (фронтенд показывает кнопку «Войти»).
+      responses:
+        "200":
+          description: Пользователь
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+              example:
+                id: 9b2c1f0e-1234-4abc-8def-0123456789ab
+                email: demo@example.test
+                name: Демо Пользователь
+                roles:
+                  - user
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/admin/ping:
+    get:
+      tags:
+        - Пользователь
+      operationId: adminPing
+      summary: Проверка роли admin
+      description: Отвечает 200 только администратору — образец закрытого по роли маршрута.
+      responses:
+        "200":
+          description: Пользователь — администратор
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: ok
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /healthz:
+    get:
+      tags:
+        - Служебное
+      operationId: healthz
+      summary: Процесс жив
+      description: Не обращается к зависимостям — для проверки «жив ли процесс».
+      security: []
+      responses:
+        "200":
+          description: Работает
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: ok
+  /readyz:
+    get:
+      tags:
+        - Служебное
+      operationId: readyz
+      summary: Готов принимать запросы
+      description: Проверяет Redis и готовность всех подключённых сервисов. 503 — что-то из них недоступно.
+      security: []
+      responses:
+        "200":
+          description: Всё готово
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: ready
+        "503":
+          description: Какая-то зависимость недоступна
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: unavailable
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
+      description: Сессия браузера. Ставится после входа через `/auth/login`, хранит только случайный идентификатор
+        (токены Keycloak лежат на сервере). Изменяющие запросы с cookie дополнительно требуют заголовок
+        `Origin`, равный адресу приложения (защита от CSRF).
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Access token Keycloak для внешних клиентов и тестов. Получить локально: `POST
+        http://localhost:8180/realms/hackathon/protocol/openid-connect/token` с `grant_type=password`,
+        `client_id=hackathon-cli`, логином и паролем демо-пользователя."
+    keycloak:
+      type: oauth2
+      description: "Вход через Keycloak прямо из Swagger: нажмите Authorize → keycloak → Authorize и войдите
+        демо-пользователем (логины и пароли печатает make demo). Отдельный клиент hackathon-swagger с PKCE —
+        на вход в приложение не влияет. Адрес Keycloak gateway подставляет из OIDC_ISSUER."
+      flows:
+        authorizationCode:
+          authorizationUrl: "{{OIDC_ISSUER}}/protocol/openid-connect/auth"
+          tokenUrl: "{{OIDC_ISSUER}}/protocol/openid-connect/token"
+          refreshUrl: "{{OIDC_ISSUER}}/protocol/openid-connect/token"
+          scopes:
+            openid: Вход (OpenID Connect)
+            profile: Имя пользователя
+            email: Почта
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор записи (UUID)
+      schema:
+        type: string
+        format: uuid
+      example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+    Limit:
+      name: limit
+      in: query
+      description: Сколько записей вернуть (страница)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Сколько записей пропустить от начала
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100000
+        default: 0
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: "Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор
+        с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`,
+        а не выполнит действие ещё раз."
+      schema:
+        type: string
+        maxLength: 100
+      example: 6f1e2d3c-create-task-1
+  schemas:
+    Error:
+      type: object
+      description: Единый формат ошибки всех сервисов.
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Машинный код ошибки — по нему фронтенд выбирает реакцию
+              example: validation_error
+            message:
+              type: string
+              description: Сообщение для человека, на русском
+              example: Название должно содержать от 1 до 200 символов
+            request_id:
+              type: string
+              description: Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+              example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    User:
+      type: object
+      description: Пользователь из Keycloak
+      required:
+        - id
+        - email
+        - name
+        - roles
+      properties:
+        id:
+          type: string
+          description: Постоянный идентификатор (sub) — владелец записей во всех сервисах
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          description: Роли Keycloak; доступ проверяется на сервере, на клиенте роли только для интерфейса
+          items:
+            type: string
+            enum:
+              - user
+              - admin
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - ready
+            - unavailable
+  responses:
+    BadRequest:
+      description: Некорректные входные данные (код ошибки и понятное сообщение в теле)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: invalid_body
+              message: Ожидается JSON с полем title
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unauthorized:
+      description: Пользователь не вошёл или токен недействителен
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: unauthorized
+              message: Войдите, чтобы продолжить
+    Forbidden:
+      description: Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: forbidden
+              message: Недостаточно прав для этого действия
+    NotFound:
+      description: Запись не найдена или принадлежит другому пользователю (не различаются намеренно)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: not_found
+              message: Задача не найдена
+    TooManyRequests:
+      description: "Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту).
+        Заголовок `Retry-After` подсказывает, через сколько секунд повторить."
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Через сколько секунд можно повторить
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: rate_limit
+              message: Слишком много запросов. Подождите минуту
+    InternalError:
+      description: Внутренняя ошибка; подробности — в логах по request_id
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: internal_error
+              message: Не удалось выполнить операцию
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unavailable:
+      description: Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: cache_unavailable
+              message: Попробуйте ещё раз позже

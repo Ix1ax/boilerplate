@@ -1,3 +1,5 @@
+// Package config читает настройки сервиса из переменных окружения (они описаны в .env.example)
+// и сразу проверяет обязательные, чтобы сервис падал при старте, а не на первом запросе.
 package config
 
 import (
@@ -8,6 +10,7 @@ import (
 	"time"
 )
 
+// Config — настройки llm: адрес Ollama, модель, таймаут и лимиты (переменные LLM_*).
 type Config struct {
 	Addr, InternalToken, OllamaURL, Model string
 	Timeout                               time.Duration

@@ -1,3 +1,7 @@
+// Сервис tasks — задачи: CRUD, статусы с историей, ИИ-проверка, админские отчёты.
+// Запросы принимает только от gateway (общий INTERNAL_TOKEN).
+// Запуск: `tasks` — HTTP-сервер; `tasks migrate [up|down|status]` — миграции его базы
+// (в Docker это контейнер tasks-migrate, он отрабатывает до старта сервиса).
 package main
 
 import (
@@ -11,12 +15,14 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/hackathon/server/tasks/api"
 	"example.com/hackathon/server/tasks/internal/broker"
 	"example.com/hackathon/server/tasks/internal/config"
 	"example.com/hackathon/server/tasks/internal/copilot"
 	"example.com/hackathon/server/tasks/internal/database"
 	"example.com/hackathon/server/tasks/internal/platform"
 	"example.com/hackathon/server/tasks/internal/tasks"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -75,6 +81,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	r := platform.NewEngine(logger, 1<<20, check)
+	// Своя спецификация: её читает Swagger в gateway (список «сервисы»). Маршрут без проверки
+	// пользователя — сервис доступен только во внутренней сети.
+	r.GET("/openapi.yaml", func(c *gin.Context) { c.Data(http.StatusOK, "application/yaml; charset=utf-8", api.Spec) })
 	api := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
 	repo := tasks.NewRepository(db)
 	service := tasks.New(repo)

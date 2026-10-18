@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// Register добавляет маршруты /files: список (фильтр entity_type+entity_id), загрузка multipart
+// (поле file, необязательные entity_type и entity_id), скачивание и удаление по id.
 func Register(group *gin.RouterGroup, s *Service) {
 	group.GET("/files", func(c *gin.Context) {
 		limit, offset, ok := platform.ParsePagination(c.DefaultQuery("limit", "20"), c.DefaultQuery("offset", "0"))

@@ -1,3 +1,6 @@
+// Package tasks — домен «задачи»: CRUD, статусы с историей переходов, событие task.created
+// через outbox (запускает ИИ-проверку) и админские отчёты. Это образец для новых доменов:
+// маршруты → Service (правила) → Store (Postgres, владелец всегда в SQL).
 package tasks
 
 import (
@@ -23,6 +26,8 @@ var statusWorkflow = platform.NewWorkflow(map[string][]string{
 	"archived":    {"todo"},
 }).RequireComment("archived")
 
+// Task — задача пользователя. Status: draft, todo, in_progress, done или archived
+// (допустимые переходы — statusWorkflow).
 type Task struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -31,6 +36,8 @@ type Task struct {
 	// Moderation появляется после асинхронной ИИ-проверки (nil, пока она не выполнена).
 	Moderation *Moderation `json:"moderation"`
 }
+
+// Moderation — итог последней ИИ-проверки; полный результат хранится в task_moderation.result.
 type Moderation struct {
 	Verdict   string    `json:"verdict"`
 	Source    string    `json:"source"`
@@ -42,6 +49,9 @@ type Page struct {
 	Limit  int    `json:"limit"`
 	Offset int    `json:"offset"`
 }
+
+// Store — хранилище задач. Методы с owner ограничивают записи владельцем прямо в SQL;
+// History владельца не проверяет — Service вызывает его только после Get.
 type Store interface {
 	List(context.Context, string, platform.ListQuery) (Page, error)
 	Insert(context.Context, string, Task) error
@@ -50,12 +60,16 @@ type Store interface {
 	Delete(context.Context, string, string) error
 	History(ctx context.Context, id string) ([]platform.Transition, error)
 }
+
+// Service — правила домена поверх Store: проверка названия, переходы статусов, доступ к истории.
 type Service struct{ store Store }
 
 func New(store Store) *Service { return &Service{store: store} }
 func (s *Service) List(ctx context.Context, owner string, q platform.ListQuery) (Page, error) {
 	return s.store.List(ctx, owner, q)
 }
+
+// Create создаёт задачу в статусе draft; в той же транзакции ставится событие task.created.
 func (s *Service) Create(ctx context.Context, owner, title string) (Task, error) {
 	title = strings.TrimSpace(title)
 	if title == "" || !utf8.ValidString(title) || utf8.RuneCountInString(title) > 200 {

@@ -1,3 +1,5 @@
+// Сервис realtime — WebSocket для двусторонней связи с браузером (чаты, «кто онлайн»).
+// Своей базы нет; при нескольких репликах сообщения ходят между ними через RabbitMQ.
 package main
 
 import (
@@ -10,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/hackathon/server/realtime/api"
 	"example.com/hackathon/server/realtime/internal/config"
 	"example.com/hackathon/server/realtime/internal/platform"
 	"example.com/hackathon/server/realtime/internal/realtime"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -39,6 +43,9 @@ func run(logger *slog.Logger) error {
 	}
 	// Готовность не зависит от брокера: без него сообщения доставляются в пределах реплики.
 	r := platform.NewEngine(logger, 1<<20, func(context.Context) error { return nil })
+	// Своя спецификация: её читает Swagger в gateway (список «сервисы»). Маршрут без проверки
+	// пользователя — сервис доступен только во внутренней сети.
+	r.GET("/openapi.yaml", func(c *gin.Context) { c.Data(http.StatusOK, "application/yaml; charset=utf-8", api.Spec) })
 	realtime.Register(r.Group("/api/v1", platform.TrustGateway(c.InternalToken)), hub, pub, logger)
 	// Таймауты чтения/записи не задаём: соединения WebSocket долгие, простой обрывает сам клиент-хендлер.
 	server := &http.Server{Addr: c.Addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}

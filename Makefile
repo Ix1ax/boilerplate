@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 K6_IMAGE := grafana/k6:0.54.0
 .DEFAULT_GOAL := help
-.PHONY: prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit llm-svc llm help setup install infra up down logs api web migrate migrate-status test check fmt smoke integration backup seed e2e docs-sync
+.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit llm-svc llm help setup install infra up down logs api web migrate migrate-status test check fmt smoke integration backup seed e2e docs-sync openapi
 help:
 	@echo "setup: настройки | install: зависимости | infra: инфраструктура | up: весь стек в Docker"
 	@echo "gateway/tasks/files/web: разработка | check: проверки и сборка | smoke: проверка API | backup: дамп базы"
@@ -12,8 +12,11 @@ install: setup
 	for s in gateway tasks files llm notifications audit realtime; do (cd server/$$s && go mod download) || exit 1; done
 infra: setup
 	docker compose up -d --wait --wait-timeout 360 tasks-postgres files-postgres notifications-postgres audit-postgres keycloak-postgres gateway-redis files-s3 rabbitmq mailpit keycloak
-up: setup
-	docker compose --profile app up -d --build --wait --wait-timeout 360
+# Образы собираются по одному: параллельная сборка 8 Go-сервисов не помещается в 8 ГБ памяти Docker.
+build: setup
+	for s in $$(docker compose --profile app config --services); do docker compose --profile app build $$s || exit 1; done
+up: build
+	docker compose --profile app up -d --wait --wait-timeout 360
 # Qwen в Ollama поднимается отдельно: образ и модель весят несколько гигабайт.
 llm: setup
 	docker compose --profile llm up -d --wait --wait-timeout 900 llm-ollama llm-ollama-pull
@@ -21,7 +24,7 @@ llm: setup
 # зависимости Go и npm, Chromium для E2E, k6 и модель Qwen. Без модели: make prefetch SKIP_LLM=1.
 prefetch: setup
 	docker compose --profile app pull --ignore-buildable
-	docker compose --profile app build
+	$(MAKE) build
 	docker pull $(K6_IMAGE)
 	for s in gateway tasks files llm notifications audit realtime; do (cd server/$$s && go mod download) || exit 1; done
 	npm ci
@@ -89,6 +92,12 @@ fmt:
 	npm run format
 e2e:
 	cd e2e && npm ci && npx playwright install chromium && npx playwright test
+# Общий OpenAPI из спецификаций сервисов → TS-типы → копия для Swagger UI в gateway.
+openapi:
+	node scripts/openapi.mjs
+	npx prettier --write packages/contracts/openapi.yaml server/*/api/openapi.yaml > /dev/null
+	npm run gen -w @starter/contracts
+	$(MAKE) docs-sync
 docs-sync:
 	cp packages/contracts/openapi.yaml server/gateway/internal/apidocs/openapi.yaml
 seed:

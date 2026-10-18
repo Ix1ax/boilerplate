@@ -1,520 +1,304 @@
+# СГЕНЕРИРОВАНО scripts/openapi.mjs из server/*/api/openapi.yaml — не редактируйте вручную.
+# Правьте спецификацию нужного сервиса и запускайте make openapi.
 openapi: 3.0.3
 info:
-  title: API стартового проекта
+  title: API проекта — все сервисы
   version: 0.1.0
-  description: >-
-    Контракт Go API. Браузер использует cookie-сессию на том же origin;
-    токены хранятся в Redis. Внешние клиенты используют Bearer JWT.
-    Изменяющие запросы принимают необязательный заголовок Idempotency-Key:
-    повтор с тем же ключом вернёт сохранённый ответ (заголовок Idempotent-Replayed).
+  description: |
+    Gateway — единственная публичная точка входа. Он проверяет пользователя и проксирует
+    `/api/v1/...` во внутренние сервисы (у каждого своя спецификация — выберите её в списке сверху).
+
+    **Как войти в Swagger.** Нажмите **Authorize** → в блоке `keycloak` ещё раз **Authorize** и войдите
+    демо-пользователем (логины и пароли печатает `make demo`). `client_id` уже заполнен, `client_secret`
+    оставьте пустым. После входа «Try it out» отправляет запросы с вашим токеном. Если вы уже вошли в
+    приложении (http://localhost:3000), запросы работают и без Authorize — по cookie сессии.
+    Для внешних клиентов и скриптов — Bearer-токен (как получить — в описании схемы bearerAuth).
+
+    **Общие правила для всех сервисов:**
+    - Ошибки приходят в едином формате `{"error": {"code", "message", "request_id"}}`.
+    - Заголовок ответа `X-Request-ID` — идентификатор запроса для поиска в логах.
+    - Изменяющие запросы: не больше 60 в минуту на пользователя (запросы к ИИ — 10), иначе 429.
+    - Повтор изменяющего запроса с тем же `Idempotency-Key` вернёт сохранённый ответ.
+    - Списки: `limit` (1–100, по умолчанию 20) и `offset`; в ответе `total`.
+
+    **Сервисы** (отдельные спецификации — в списке сверху):
+
+    - `gateway` — server/gateway/api/openapi.yaml
+    - `audit` — server/audit/api/openapi.yaml
+    - `files` — server/files/api/openapi.yaml
+    - `llm` — server/llm/api/openapi.yaml
+    - `notifications` — server/notifications/api/openapi.yaml
+    - `realtime` — server/realtime/api/openapi.yaml
+    - `tasks` — server/tasks/api/openapi.yaml
 servers:
   - url: /
-    description: Тот же origin (в Docker — через Nginx на :3000)
+    description: Через gateway на том же origin (в Docker — Nginx на :3000)
 security:
-  - bearerAuth: []
+  - keycloak:
+      - openid
   - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Вход
+    description:
+      Вход через Keycloak (Authorization Code + PKCE). Токены остаются на сервере, браузер получает
+      HttpOnly-cookie. (сервис gateway)
+  - name: Пользователь
+    description: Текущий пользователь и проверка ролей. (сервис gateway)
+  - name: Служебное
+    description: Проверки работоспособности для мониторинга и оркестратора. (сервис gateway)
+  - name: Журнал (админ)
+    description: Просмотр журнала действий. (сервис audit)
+  - name: Файлы
+    description: Загрузка, список, скачивание и удаление своих файлов. (сервис files)
+  - name: Модель
+    description: Состояние модели и генерация ответов. (сервис llm)
+  - name: Уведомления
+    description: Список, живой поток и отметки прочтения. (сервис notifications)
+  - name: Мессенджер MAX
+    description: Подключение бота MAX. Доступно, только если на сервере задан токен бота. (сервис notifications)
+  - name: Realtime
+    description: Подключение WebSocket. (сервис realtime)
+  - name: Задачи
+    description:
+      Свои задачи пользователя. Чужие задачи не видны и не изменяются — проверка владельца в SQL.
+      (сервис tasks)
+  - name: ИИ-проверка
+    description: Рекомендация по задаче. Флаги ставят правила, модель добавляет совет; решает человек. (сервис tasks)
+  - name: Отчёты (админ)
+    description: Сводки и выгрузки по всем пользователям. Только для роли `admin`. (сервис tasks)
 paths:
   /auth/login:
     get:
-      summary: Начать браузерный вход через Keycloak с PKCE
+      tags:
+        - Вход
+      operationId: login
+      summary: Начать вход
+      description: Перенаправляет в Keycloak. После успешного входа пользователь вернётся на адрес из `next`.
       security: []
       parameters:
         - name: next
           in: query
-          schema: { type: string, default: /dashboard/tasks }
-          description: Внутренний путь возврата после входа
+          description: Внутренний путь приложения, куда вернуться после входа (внешние адреса игнорируются)
+          schema:
+            type: string
+            default: /dashboard/tasks
+          example: /dashboard/tasks
       responses:
         '302':
-          description: Переход в Keycloak; одноразовый state в HttpOnly cookie
+          description: Перенаправление на страницу входа Keycloak
         '503':
-          $ref: '#/components/responses/InternalError'
+          $ref: '#/components/responses/Unavailable'
   /auth/callback:
     get:
-      summary: Обменять OIDC-код и установить HttpOnly cookie сессии
+      tags:
+        - Вход
+      operationId: loginCallback
+      summary: Возврат из Keycloak
+      description:
+        Вызывается Keycloak после входа, вручную не используется. Проверяет одноразовый `state`,
+        обменивает код на токены, сохраняет их в Redis и ставит cookie сессии на 8 часов.
       security: []
       parameters:
         - name: code
           in: query
-          schema: { type: string }
+          required: true
+          schema:
+            type: string
+          description: Код авторизации от Keycloak
         - name: state
           in: query
-          schema: { type: string }
+          required: true
+          schema:
+            type: string
+          description: Одноразовый state из /auth/login
       responses:
         '302':
-          description: Сессия создана, переход на внутренний путь возврата
+          description: Вход выполнен, перенаправление на `next`
         '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: Неверный или устаревший state (например, вход начат слишком давно)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: invalid_state
+                  message: Срок входа истёк или вход отменён. Начните заново
         '502':
-          $ref: '#/components/responses/InternalError'
+          description: Keycloak не обменял код на токены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: login_failed
+                  message: Не удалось завершить вход
         '503':
-          $ref: '#/components/responses/InternalError'
+          $ref: '#/components/responses/Unavailable'
   /auth/logout:
     post:
-      summary: Удалить браузерную сессию и получить URL выхода Keycloak
-      security: []
-      parameters:
-        - name: Origin
-          in: header
-          required: true
-          schema: { type: string }
-          description: Должен точно совпадать с APP_ORIGIN
+      tags:
+        - Вход
+      operationId: logout
+      summary: Выйти
+      description:
+        Удаляет сессию на сервере (доступ из браузера пропадает сразу) и возвращает адрес выхода из
+        Keycloak — фронтенд открывает его, чтобы завершить и единый вход. Нужен заголовок `Origin` приложения.
+      security:
+        - cookieAuth: []
       responses:
         '200':
-          description: Сессия удалена; откройте url для завершения SSO
+          description: Сессия удалена
           content:
             application/json:
               schema:
                 type: object
-                required: [url]
+                required:
+                  - url
                 properties:
-                  url: { type: string, format: uri }
+                  url:
+                    type: string
+                    format: uri
+                    description: Адрес выхода из Keycloak
+              example:
+                url: http://localhost:8180/realms/hackathon/protocol/openid-connect/logout?client_id=hackathon-web&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F
         '403':
-          description: Origin не совпадает с адресом приложения
+          $ref: '#/components/responses/Forbidden'
         '503':
-          $ref: '#/components/responses/InternalError'
-  /healthz:
-    get:
-      summary: Проверить, что процесс работает
-      security: []
-      responses:
-        '200':
-          description: Процесс работает
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Health'
-  /readyz:
-    get:
-      summary: Проверить PostgreSQL, Redis и S3
-      security: []
-      responses:
-        '200':
-          description: Зависимости доступны
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Health'
-        '503':
-          description: Одна из зависимостей недоступна
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Health'
+          $ref: '#/components/responses/Unavailable'
   /api/v1/me:
     get:
-      summary: Получить текущего пользователя
+      tags:
+        - Пользователь
+      operationId: getMe
+      summary: Текущий пользователь
+      description: Кто вошёл и с какими ролями. Для гостя — 401 (фронтенд показывает кнопку «Войти»).
       responses:
         '200':
-          description: Запрос выполнен
+          description: Пользователь
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+              example:
+                id: 9b2c1f0e-1234-4abc-8def-0123456789ab
+                email: demo@example.test
+                name: Демо Пользователь
+                roles:
+                  - user
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/admin/ping:
     get:
-      summary: Проверить роль администратора
+      tags:
+        - Пользователь
+      operationId: adminPing
+      summary: Проверка роли admin
+      description: Отвечает 200 только администратору — образец закрытого по роли маршрута.
       responses:
         '200':
-          description: Запрос выполнен
+          description: Пользователь — администратор
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+              example:
+                status: ok
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Требуется realm-роль admin
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/tasks:
+          $ref: '#/components/responses/Forbidden'
+  /healthz:
     get:
-      summary: Получить свои задачи
+      tags:
+        - Служебное
+      operationId: healthz
+      summary: Процесс жив
+      description: Не обращается к зависимостям — для проверки «жив ли процесс».
+      security: []
       responses:
         '200':
-          description: Запрос выполнен
+          description: Работает
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            minimum: 0
-            maximum: 100000
-            default: 0
-        - name: q
-          in: query
-          description: Поиск по названию
-          schema: { type: string, maxLength: 100 }
-        - name: status
-          in: query
-          description: Фильтр по статусу (можно несколько через запятую)
-          schema: { type: string }
-        - name: sort
-          in: query
-          description: 'created, title или status; «-» перед именем — по убыванию'
-          schema: { type: string, default: '-created' }
-    post:
-      summary: Создать задачу (всегда в статусе draft — черновик визарда)
+                $ref: '#/components/schemas/Health'
+              example:
+                status: ok
+  /readyz:
+    get:
+      tags:
+        - Служебное
+      operationId: readyz
+      summary: Готов принимать запросы
+      description: Проверяет Redis и готовность всех подключённых сервисов. 503 — что-то из них недоступно.
+      security: []
       responses:
-        '201':
-          description: Запрос выполнен
+        '200':
+          description: Всё готово
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          description: Превышен лимит запросов
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: '#/components/schemas/Health'
+              example:
+                status: ready
         '503':
-          description: Зависимость временно недоступна
+          description: Какая-то зависимость недоступна
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateTask'
-  /api/v1/tasks/{id}:
-    parameters:
-      - $ref: '#/components/parameters/ID'
-    patch:
-      summary: Сменить статус своей задачи
-      description: Допустимость перехода и обязательность комментария (для archived) проверяет конечный автомат статусов на сервере.
-      responses:
-        '200':
-          description: Запрос выполнен
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: Запись не найдена или принадлежит другому пользователю
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Недопустимый переход статуса
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Превышен лимит запросов
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-        '503':
-          description: Зависимость временно недоступна
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateTask'
-    delete:
-      summary: Удалить свою задачу
-      responses:
-        '204':
-          description: Запрос выполнен
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: Запись не найдена или принадлежит другому пользователю
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Превышен лимит запросов
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-        '503':
-          description: Зависимость временно недоступна
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/tasks/{id}/analyze:
-    post:
-      summary: ИИ-проверка задачи (рекомендация для человека)
-      description: Правила дают флаги и вердикт, модель (если доступна) добавляет совет. Решение остаётся за человеком. Лимит 10 в минуту на пользователя.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Рекомендация
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskAnalysis'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: Задача не найдена
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Слишком много проверок
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/tasks/{id}/history:
-    get:
-      summary: Лента переходов статуса задачи
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Запрос выполнен
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskHistoryPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: Запись не найдена или принадлежит другому пользователю
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/notifications:
-    get:
-      summary: Мои уведомления
-      parameters:
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
-      responses:
-        '200':
-          description: Страница уведомлений и число непрочитанных
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationPage'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /api/v1/notifications/max:
-    get:
-      summary: Подключение мессенджера MAX
-      responses:
-        '200':
-          description: enabled — настроен ли бот на сервере, linked — привязан ли аккаунт пользователя
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MaxStatus'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-    delete:
-      summary: Отключить уведомления в MAX
-      responses:
-        '204':
-          description: Отключено
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '503':
-          description: Канал MAX не настроен
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/notifications/max/link:
-    post:
-      summary: Ссылка для подключения MAX
-      description: Одноразовая ссылка https://max.ru/<бот>/start/<код> на 10 минут; бот привязывает аккаунт по событию bot_started.
-      responses:
-        '200':
-          description: Ссылка
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [url]
-                properties:
-                  url: { type: string, format: uri }
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '503':
-          description: Канал MAX не настроен
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/notifications/stream:
-    get:
-      summary: Поток новых уведомлений (SSE)
-      description: 'События event: notification с JSON уведомления; комментарии-пинги каждые 25 с; соединение закрывается через 2 минуты, клиент переподключается.'
-      responses:
-        '200':
-          description: text/event-stream
-          content:
-            text/event-stream:
-              schema: { type: string }
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /api/v1/notifications/{id}/read:
-    post:
-      summary: Отметить уведомление прочитанным
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '204':
-          description: Отмечено
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: Не найдено
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/notifications/read-all:
-    post:
-      summary: Отметить все уведомления прочитанными
-      responses:
-        '204':
-          description: Отмечено
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /api/v1/admin/tasks/export.csv:
-    get:
-      summary: Выгрузка всех задач в CSV (только администратор)
-      description: UTF-8 с BOM, разделитель «;» — открывается в Excel с русской локалью.
-      responses:
-        '200':
-          description: CSV-файл
-          content:
-            text/csv:
-              schema: { type: string }
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Нет роли admin
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/admin/tasks/stats:
-    get:
-      summary: Сводка для дашборда (только администратор)
-      responses:
-        '200':
-          description: Итоги, разбивка по ИИ-проверке и создание задач за 14 дней
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskStats'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Нет роли admin
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/Health'
+              example:
+                status: unavailable
   /api/v1/admin/audit:
     get:
-      summary: Журнал изменяющих действий (только администратор)
-      description: Фильтры actor, method, status, request_id; поиск q по пути и email; sort=-occurred|occurred|status|-status.
+      tags:
+        - Журнал (админ)
+      operationId: listAudit
+      summary: Журнал действий
+      description: Фильтры точные (несколько значений — через запятую), поиск `q` — по подстроке в пути и почте.
       parameters:
-        - { name: actor, in: query, schema: { type: string } }
-        - { name: method, in: query, schema: { type: string } }
-        - { name: status, in: query, schema: { type: string } }
-        - { name: request_id, in: query, schema: { type: string } }
-        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
-        - {
-            name: sort,
-            in: query,
-            schema: { type: string, default: '-occurred' },
-          }
-        - {
-            name: limit,
-            in: query,
-            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
-          }
-        - {
-            name: offset,
-            in: query,
-            schema: { type: integer, minimum: 0, default: 0 },
-          }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: actor
+          in: query
+          description: Идентификатор пользователя (sub)
+          schema:
+            type: string
+        - name: method
+          in: query
+          description: HTTP-метод
+          schema:
+            type: string
+          example: POST
+        - name: status
+          in: query
+          description: Код ответа
+          schema:
+            type: string
+          example: '403'
+        - name: request_id
+          in: query
+          description: Найти записи одного запроса
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Поиск по пути и почте
+          schema:
+            type: string
+            maxLength: 100
+          example: /api/v1/tasks
+        - name: sort
+          in: query
+          description: occurred или status; «-» — по убыванию
+          schema:
+            type: string
+            default: -occurred
       responses:
         '200':
           description: Страница журнала
@@ -522,108 +306,98 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuditPage'
+              example:
+                items:
+                  - actor: 9b2c1f0e-1234-4abc-8def-0123456789ab
+                    actor_email: demo@example.test
+                    method: PATCH
+                    route: /api/v1/tasks/*path
+                    path: /api/v1/tasks/3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                    status: 200
+                    request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    ip: 172.18.0.1
+                    occurred_at: 2026-10-18T09:31:00Z
+                total: 1
+                limit: 20
+                offset: 0
         '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Нет роли admin
+          description: Недопустимая сортировка, слишком длинный поиск или неверная пагинация
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /api/v1/ws:
-    get:
-      summary: WebSocket — каналы реального времени
-      description: >-
-        Upgrade до WebSocket (сервис realtime). Для cookie-сессии обязателен Origin приложения.
-        Сообщения {type, payload}. Клиент → сервер: ping, subscribe {channel}, unsubscribe {channel},
-        publish {channel, data}. Сервер → клиент: pong, message {channel, from, data, at}, error {code, message}.
-        Каналы: user:<id> — личный (только чтение, пишет сервер), room:<имя> — читать и писать могут все вошедшие,
-        broadcast — читать все, писать admin. Ограничения: 16 КиБ на сообщение, 20 сообщений в секунду, 50 подписок,
-        соединение закрывается после 70 с без сообщений (клиент шлёт ping каждые 25 с).
-        Сервисы пишут в канал событием realtime.publish {data: {channel, from, data}} в exchange events.
-      responses:
-        '101':
-          description: Протокол переключён на WebSocket
+              example:
+                error:
+                  code: invalid_query
+                  message: Недопустимая сортировка "password"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Origin не совпадает с адресом приложения
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Forbidden'
   /api/v1/files:
     get:
-      summary: Получить свои файлы
+      tags:
+        - Файлы
+      operationId: listFiles
+      summary: Список своих файлов
+      description: Новые сверху. С `entity_type` и `entity_id` — только файлы, приложенные к этой записи.
       parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
         - name: entity_type
           in: query
-          description: Только файлы, приложенные к записи (вместе с entity_id)
-          schema: { type: string }
+          description: Тип записи (латиница и «_»), указывается вместе с entity_id
+          schema:
+            type: string
+            pattern: ^[a-z][a-z_]{0,29}$
+          example: application
         - name: entity_id
           in: query
-          schema: { type: string }
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+          description: Идентификатор записи
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9-]{1,64}$
+          example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
       responses:
         '200':
-          description: Страница файлов текущего пользователя
+          description: Страница файлов
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilePage'
+              example:
+                items:
+                  - id: 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+                    name: устав.pdf
+                    size: 182044
+                    content_type: application/pdf
+                    created_at: 2026-10-18T09:40:00Z
+                    entity:
+                      type: application
+                      id: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                total: 1
+                limit: 20
+                offset: 0
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description:
+            '`invalid_pagination` или `invalid_entity` (заполнена только одна часть привязки или неверный
+            формат)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
     post:
-      summary: Загрузить приватный файл
-      responses:
-        '201':
-          description: Запрос выполнен
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/File'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '413':
-          description: Превышен размер запроса
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '415':
-          description: Недопустимый тип файла
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Превышен лимит запросов
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-        '503':
-          description: Зависимость временно недоступна
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      description: До 10 МиБ. PNG, JPEG, WebP, PDF или текст. Тип определяется по содержимому.
+      tags:
+        - Файлы
+      operationId: uploadFile
+      summary: Загрузить файл
+      description: Отправьте multipart/form-data с полем `file`; для привязки к записи — ещё `entity_type` и `entity_id`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -636,21 +410,68 @@ paths:
                 file:
                   type: string
                   format: binary
+                  description: Файл до 10 МиБ
                 entity_type:
                   type: string
-                  pattern: '^[a-z][a-z_]{0,29}$'
-                  description: Необязательная привязка к записи другого сервиса (вместе с entity_id)
+                  pattern: ^[a-z][a-z_]{0,29}$
+                  description: Тип записи, к которой приложить файл
                 entity_id:
                   type: string
-                  pattern: '^[A-Za-z0-9-]{1,64}$'
+                  pattern: ^[A-Za-z0-9-]{1,64}$
+                  description: Идентификатор записи
+      responses:
+        '201':
+          description: Файл сохранён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          description: '`invalid_body` (нет поля file, пустой файл, недопустимое имя) или `invalid_entity`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: Файл больше 10 МиБ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: payload_too_large
+                  message: Файл превышает 10 МиБ или запрос имеет неверный формат
+        '415':
+          description: Тип содержимого не разрешён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: unsupported_type
+                  message: Можно загрузить PNG, JPEG, WebP, PDF или текстовый файл
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/files/{id}:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
-      summary: Скачать свой файл
+      tags:
+        - Файлы
+      operationId: downloadFile
+      summary: Скачать файл
+      description:
+        'Отдаётся как вложение (`Content-Disposition: attachment`) с исходным именем; браузер не
+        исполняет содержимое.'
       responses:
         '200':
-          description: Содержимое файла; имя передаётся в Content-Disposition
+          description: Содержимое файла
           content:
             application/octet-stream:
               schema:
@@ -661,69 +482,85 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Запись не найдена или принадлежит другому пользователю
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     delete:
-      summary: Удалить свой файл
+      tags:
+        - Файлы
+      operationId: deleteFile
+      summary: Удалить файл
+      description: Удаляет содержимое из S3, затем метаданные. Если S3 недоступно — 503, повтор безопасен.
       responses:
         '204':
-          description: Запрос выполнен
+          description: Файл удалён
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Запись не найдена или принадлежит другому пользователю
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
         '429':
-          description: Превышен лимит запросов
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
+          $ref: '#/components/responses/TooManyRequests'
         '503':
-          description: Зависимость временно недоступна
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unavailable'
   /api/v1/llm/status:
     get:
-      summary: Состояние локальной модели
+      tags:
+        - Модель
+      operationId: getLlmStatus
+      summary: Состояние модели
       responses:
         '200':
-          description: Доступность Ollama и установленной модели
+          description: Доступна ли Ollama и скачана ли модель
           content:
             application/json:
               schema:
                 type: object
-                required: [available, model, model_installed]
+                required:
+                  - available
+                  - model
+                  - model_installed
                 properties:
-                  available: { type: boolean }
-                  model: { type: string }
-                  model_installed: { type: boolean }
+                  available:
+                    type: boolean
+                    description: Ollama отвечает
+                  model:
+                    type: string
+                  model_installed:
+                    type: boolean
+                    description: Нужная модель скачана
+              example:
+                available: true
+                model: qwen2.5:1.5b
+                model_installed: true
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/v1/llm/generate:
     post:
-      summary: Сгенерировать ответ модели целиком
-      description: До 10 запросов в минуту на пользователя; одновременно обрабатывается ограниченное число запросов.
+      tags:
+        - Модель
+      operationId: generate
+      summary: Ответ модели целиком
+      description: Ждёт полный ответ (до нескольких десятков секунд на CPU). Для чата удобнее поток — /llm/stream.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LlmPrompt'
+            examples:
+              text:
+                summary: Обычный ответ
+                value:
+                  prompt: Придумай название для волонтёрского проекта
+              json:
+                summary: Структурированный ответ
+                value:
+                  system: 'Ответь JSON: {"title": string}'
+                  prompt: Придумай название
+                  json: true
+                  temperature: 0.2
       responses:
         '200':
           description: Ответ модели
@@ -731,205 +568,668 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [text, model]
+                required:
+                  - text
+                  - model
                 properties:
-                  text: { type: string }
-                  model: { type: string }
+                  text:
+                    type: string
+                  model:
+                    type: string
+              example:
+                text: «Доброе дело рядом»
+                model: qwen2.5:1.5b
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Пустой запрос, слишком длинный или неверная temperature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: validation_error
+                  message: Запрос должен содержать от 1 до заданного предела символов
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
-          description: Лимит запросов или модель занята
+          description: Лимит запросов (`rate_limit`) или модель занята (`model_busy`, повторите через несколько секунд)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: model_busy
+                  message: Модель занята, повторите через несколько секунд
         '503':
-          description: Модель недоступна (не запущен make llm)
+          description: Модель не запущена
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: model_unavailable
+                  message: Модель недоступна. Запустите её командой make llm
   /api/v1/llm/stream:
     post:
-      summary: Потоковый ответ модели (SSE)
-      description: 'События: data {"t":"фрагмент"}, затем event done; при сбое event error.'
+      tags:
+        - Модель
+      operationId: generateStream
+      summary: Ответ модели потоком (SSE)
+      description: |
+        Текст приходит по частям, пока модель генерирует: события `data: {"t": "фрагмент"}`,
+        в конце `event: done`, при сбое посреди ответа — `event: error`. Ошибки до начала потока
+        (400, 429, 503) приходят обычным JSON, как у /llm/generate.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LlmPrompt'
+            example:
+              prompt: Объясни в двух предложениях, что такое волонтёрство
       responses:
         '200':
-          description: Поток text/event-stream
+          description: Поток фрагментов
           content:
             text/event-stream:
-              schema: { type: string }
+              schema:
+                type: string
+              example: |+
+                data: {"t":"Волонтёрство — "}
+
+                data: {"t":"это добровольная помощь…"}
+
+                event: done
+                data: {}
+
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
-          description: Лимит запросов или модель занята
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/TooManyRequests'
         '503':
-          description: Модель недоступна
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/notifications:
+    get:
+      tags:
+        - Уведомления
+      operationId: listNotifications
+      summary: Мои уведомления
+      description: Новые сверху; `unread` — сколько непрочитанных всего (для значка на колокольчике).
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Страница уведомлений
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+              example:
+                items:
+                  - id: 5d1c0b9a-8e7f-4a6b-9c5d-4e3f2a1b0c9d
+                    title: 'ИИ-проверка: задача требует внимания'
+                    body: Откройте задачу, чтобы посмотреть рекомендацию. Решение остаётся за вами.
+                    link: /dashboard/tasks
+                    created_at: 2026-10-18T09:30:05Z
+                    read_at: null
+                total: 1
+                unread: 1
+                limit: 20
+                offset: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/notifications/stream:
+    get:
+      tags:
+        - Уведомления
+      operationId: streamNotifications
+      summary: Живой поток новых уведомлений (SSE)
+      description: |
+        Server-Sent Events: в браузере — `new EventSource('/api/v1/notifications/stream')`.
+        При новом уведомлении приходит событие `notification` с JSON уведомления. Каждые 25 секунд —
+        комментарий-пинг, чтобы прокси не закрыл соединение. Через 2 минуты сервер закрывает поток,
+        EventSource переподключается сам.
+      responses:
+        '200':
+          description: Поток событий
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: >+
+                event: notification
+
+                data: {"id":"5d1c…","title":"ИИ-проверка: замечаний
+                нет","body":"…","link":"/dashboard/tasks","created_at":"2026-10-18T09:30:05Z","read_at":null}
+
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Уведомления
+      operationId: markNotificationRead
+      summary: Отметить прочитанным
+      responses:
+        '204':
+          description: Отмечено (повторная отметка тоже 204)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/notifications/read-all:
+    post:
+      tags:
+        - Уведомления
+      operationId: markAllNotificationsRead
+      summary: Прочитать все
+      responses:
+        '204':
+          description: Все уведомления отмечены прочитанными
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/max:
+    get:
+      tags:
+        - Мессенджер MAX
+      operationId: getMaxStatus
+      summary: Подключён ли MAX
+      description:
+        '`enabled` — настроен ли бот на сервере (если нет — кнопку подключения не показывают), `linked` —
+        подключил ли его этот пользователь.'
+      responses:
+        '200':
+          description: Статус
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaxStatus'
+              example:
+                enabled: true
+                linked: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Мессенджер MAX
+      operationId: unlinkMax
+      summary: Отключить уведомления в MAX
+      responses:
+        '204':
+          description: Отключено
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Бот MAX не настроен на сервере
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: max_disabled
+                  message: Уведомления в MAX не настроены
+  /api/v1/notifications/max/link:
+    post:
+      tags:
+        - Мессенджер MAX
+      operationId: createMaxLink
+      summary: Получить ссылку подключения MAX
+      description:
+        Одноразовая ссылка `https://max.ru/<бот>?start=<код>` на 10 минут. Пользователь открывает её,
+        нажимает «Начать» в MAX — бот получает код и связывает аккаунты. Отключить — `/stop` в боте.
+      responses:
+        '200':
+          description: Ссылка
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - url
+                properties:
+                  url:
+                    type: string
+                    format: uri
+              example:
+                url: https://max.ru/demo_bot?start=Zk3x9QpL2mN7vR1sT4uW8yB0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Бот MAX не настроен на сервере
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/ws:
+    get:
+      tags:
+        - Realtime
+      operationId: websocket
+      summary: Подключиться по WebSocket
+      description:
+        Upgrade до WebSocket. Для входа по cookie браузер должен прислать `Origin` приложения — это
+        защита от подключения с чужого сайта.
+      responses:
+        '101':
+          description: Протокол переключён на WebSocket
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/tasks:
+    get:
+      tags:
+        - Задачи
+      operationId: listTasks
+      summary: Список своих задач
+      description:
+        Страница задач текущего пользователя с фильтром по статусу, поиском по названию и сортировкой.
+        `total` — сколько всего задач подходит под фильтр (для пагинации).
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: status
+          in: query
+          description: Фильтр по статусу; несколько — через запятую
+          schema:
+            type: string
+          example: todo,in_progress
+        - name: q
+          in: query
+          description: Поиск по подстроке в названии (без учёта регистра)
+          schema:
+            type: string
+            maxLength: 100
+          example: демо
+        - name: sort
+          in: query
+          description: Поле сортировки — `created`, `title` или `status`; минус в начале — по убыванию
+          schema:
+            type: string
+            default: -created
+          example: title
+      responses:
+        '200':
+          description: Страница задач
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskPage'
+              example:
+                items:
+                  - id: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                    title: Подготовить демо для жюри
+                    status: in_progress
+                    created_at: 2026-10-18T09:30:00Z
+                    moderation:
+                      verdict: ok
+                      source: rules+llm
+                      checked_at: 2026-10-18T09:30:04Z
+                total: 1
+                limit: 20
+                offset: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - Задачи
+      operationId: createTask
+      summary: Создать задачу
+      description:
+        Создаёт задачу в статусе `draft`. В той же транзакции ставится событие `task.created` — оно
+        запустит ИИ-проверку и уведомление владельцу.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTask'
+            example:
+              title: Подготовить демо для жюри
+      responses:
+        '201':
+          description: Задача создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+              example:
+                id: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                title: Подготовить демо для жюри
+                status: draft
+                created_at: 2026-10-18T09:30:00Z
+                moderation: null
+        '400':
+          description: '`invalid_body` — нет поля title; `validation_error` — пустое или длиннее 200 символов'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: validation_error
+                  message: Название должно содержать от 1 до 200 символов
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/tasks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    patch:
+      tags:
+        - Задачи
+      operationId: updateTaskStatus
+      summary: Сменить статус задачи
+      description:
+        Переводит задачу в новый статус по правилам переходов (см. описание сервиса) и записывает переход
+        в историю. Проверка и запись идут одной транзакцией с блокировкой строки.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTask'
+            examples:
+              start:
+                summary: Взять в работу
+                value:
+                  status: in_progress
+              archive:
+                summary: Архивировать (нужен комментарий)
+                value:
+                  status: archived
+                  comment: Больше не актуально
+      responses:
+        '200':
+          description: Статус изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: '`invalid_id`, `invalid_body` (нет status) или `comment_required` (архивация без комментария)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: comment_required
+                  message: Укажите комментарий к смене статуса
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Переход из текущего статуса в запрошенный запрещён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: invalid_transition
+                  message: 'Недопустимая смена статуса: draft → done'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Задачи
+      operationId: deleteTask
+      summary: Удалить задачу
+      responses:
+        '204':
+          description: Задача удалена
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/tasks/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Задачи
+      operationId: getTaskHistory
+      summary: История статусов задачи
+      description: Все переходы статуса от старых к новым — с автором и комментарием. Доступна только владельцу.
+      responses:
+        '200':
+          description: История переходов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskHistoryPage'
+              example:
+                items:
+                  - from: draft
+                    to: todo
+                    actor: demo@example.test
+                    comment: ''
+                    created_at: 2026-10-18T09:31:00Z
+                  - from: todo
+                    to: archived
+                    actor: demo@example.test
+                    comment: Больше не актуально
+                    created_at: 2026-10-18T10:05:00Z
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/tasks/{id}/analyze:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - ИИ-проверка
+      operationId: analyzeTask
+      summary: Проверить задачу сейчас
+      description:
+        'Ручная проверка (автоматическая запускается после создания). Правила ищут сбор денег, ссылки,
+        контакты, капслок и слишком короткий текст и задают вердикт; модель Qwen, если доступна, добавляет
+        краткий совет. Если модель недоступна или занята — ответ только по правилам (`source: rules`), это не
+        ошибка. Лимит — 10 проверок в минуту.'
+      responses:
+        '200':
+          description: Рекомендация (решение принимает человек)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskAnalysis'
+              example:
+                task_id: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                verdict: needs_review
+                flags:
+                  - code: money
+                    message: Похоже на сбор или перевод денег
+                advice:
+                  summary: В тексте просьба перевести деньги
+                  risk: high
+                  suggestion: Уточните цель и уберите реквизиты
+                source: rules+llm
+                decision_required: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/tasks/stats:
+    get:
+      tags:
+        - Отчёты (админ)
+      operationId: getTaskStats
+      summary: Сводка для дашборда
+      description:
+        Итоги по всем задачам, разбивка по ИИ-проверке и число созданных задач за последние 14 дней (для
+        графика). Все цифры из одного снимка данных.
+      responses:
+        '200':
+          description: Сводка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStats'
+              example:
+                total: 42
+                completed: 17
+                owners: 9
+                moderation:
+                  ok: 30
+                  needs_review: 4
+                  unchecked: 8
+                by_day:
+                  - date: 2026-10-17
+                    count: 5
+                  - date: 2026-10-18
+                    count: 7
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/tasks/export.csv:
+    get:
+      tags:
+        - Отчёты (админ)
+      operationId: exportTasksCsv
+      summary: Выгрузка всех задач в CSV
+      description:
+        'Файл для Excel: UTF-8 с BOM, разделитель «;», ячейки, похожие на формулы, экранируются. Колонки:
+        ID, Владелец, Название, Статус, Создана, Проверка ИИ, Источник проверки.'
+      responses:
+        '200':
+          description: CSV-файл (скачивается как tasks-ГГГГ-ММ-ДД.csv)
+          content:
+            text/csv:
+              schema:
+                type: string
+              example: |
+                ID;Владелец;Название;Статус;Создана;Проверка ИИ;Источник проверки
+                3f6c…;a1b2…;Подготовить демо;done;2026-10-18T09:30:00Z;замечаний нет;rules+llm
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
       name: starter_session
+      description:
+        Сессия браузера. Ставится после входа через `/auth/login`, хранит только случайный идентификатор
+        (токены Keycloak лежат на сервере). Изменяющие запросы с cookie дополнительно требуют заголовок
+        `Origin`, равный адресу приложения (защита от CSRF).
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description:
+        'Access token Keycloak для внешних клиентов и тестов. Получить локально: `POST
+        http://localhost:8180/realms/hackathon/protocol/openid-connect/token` с `grant_type=password`,
+        `client_id=hackathon-cli`, логином и паролем демо-пользователя.'
+    keycloak:
+      type: oauth2
+      description:
+        'Вход через Keycloak прямо из Swagger: нажмите Authorize → keycloak → Authorize и войдите
+        демо-пользователем (логины и пароли печатает make demo). Отдельный клиент hackathon-swagger с PKCE —
+        на вход в приложение не влияет. Адрес Keycloak gateway подставляет из OIDC_ISSUER.'
+      flows:
+        authorizationCode:
+          authorizationUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/auth'
+          tokenUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          refreshUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          scopes:
+            openid: Вход (OpenID Connect)
+            profile: Имя пользователя
+            email: Почта
   parameters:
     ID:
       name: id
       in: path
       required: true
+      description: Идентификатор записи (UUID)
       schema:
         type: string
         format: uuid
+      example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+    Limit:
+      name: limit
+      in: query
+      description: Сколько записей вернуть (страница)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Сколько записей пропустить от начала
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100000
+        default: 0
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description:
+        'Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор
+        с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`,
+        а не выполнит действие ещё раз.'
+      schema:
+        type: string
+        maxLength: 100
+      example: 6f1e2d3c-create-task-1
   schemas:
-    TaskStats:
-      type: object
-      required: [total, completed, owners, moderation, by_day]
-      properties:
-        total: { type: integer }
-        completed: { type: integer }
-        owners: { type: integer }
-        moderation:
-          type: object
-          required: [ok, needs_review, unchecked]
-          properties:
-            ok: { type: integer }
-            needs_review: { type: integer }
-            unchecked: { type: integer }
-        by_day:
-          type: array
-          items:
-            type: object
-            required: [date, count]
-            properties:
-              date: { type: string, format: date }
-              count: { type: integer }
-    AuditRecord:
-      type: object
-      required:
-        [
-          actor,
-          actor_email,
-          method,
-          route,
-          path,
-          status,
-          request_id,
-          ip,
-          occurred_at,
-        ]
-      properties:
-        actor: { type: string }
-        actor_email: { type: string }
-        method: { type: string }
-        route: { type: string }
-        path: { type: string }
-        status: { type: integer }
-        request_id: { type: string }
-        ip: { type: string }
-        occurred_at: { type: string, format: date-time }
-    AuditPage:
-      type: object
-      required: [items, total, limit, offset]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/AuditRecord'
-        total: { type: integer }
-        limit: { type: integer }
-        offset: { type: integer }
-    MaxStatus:
-      type: object
-      required: [enabled, linked]
-      properties:
-        enabled: { type: boolean }
-        linked: { type: boolean }
-    Notification:
-      type: object
-      required: [id, title, body, link, created_at, read_at]
-      properties:
-        id: { type: string, format: uuid }
-        title: { type: string }
-        body: { type: string }
-        link:
-          {
-            type: string,
-            description: Внутренний путь приложения или пустая строка,
-          }
-        created_at: { type: string, format: date-time }
-        read_at: { type: string, format: date-time, nullable: true }
-    NotificationPage:
-      type: object
-      required: [items, total, unread, limit, offset]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Notification'
-        total: { type: integer }
-        unread: { type: integer }
-        limit: { type: integer }
-        offset: { type: integer }
-    TaskAnalysis:
-      type: object
-      required: [task_id, verdict, flags, advice, source, decision_required]
-      properties:
-        task_id: { type: string, format: uuid }
-        verdict: { type: string, enum: [ok, needs_review] }
-        flags:
-          type: array
-          items:
-            type: object
-            required: [code, message]
-            properties:
-              code:
-                {
-                  type: string,
-                  enum: [money, link, contact, shouting, too_short],
-                }
-              message: { type: string }
-        advice:
-          nullable: true
-          type: object
-          required: [summary, risk, suggestion]
-          properties:
-            summary: { type: string }
-            risk: { type: string, enum: [low, medium, high] }
-            suggestion: { type: string }
-        source: { type: string, enum: [rules, rules+llm] }
-        decision_required: { type: boolean }
-    LlmPrompt:
-      type: object
-      required: [prompt]
-      additionalProperties: false
-      properties:
-        prompt: { type: string, minLength: 1, maxLength: 8000 }
-        system: { type: string, maxLength: 2000 }
-        json: { type: boolean, description: Просить модель вернуть JSON }
-        temperature: { type: number, minimum: 0, maximum: 2 }
     Error:
       type: object
+      description: Единый формат ошибки всех сервисов.
       required:
         - error
       properties:
@@ -941,12 +1241,268 @@ components:
           properties:
             code:
               type: string
+              description: Машинный код ошибки — по нему фронтенд выбирает реакцию
+              example: validation_error
             message:
               type: string
+              description: Сообщение для человека, на русском
+              example: Название должно содержать от 1 до 200 символов
             request_id:
               type: string
+              description: Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+              example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    User:
+      type: object
+      description: Пользователь из Keycloak
+      required:
+        - id
+        - email
+        - name
+        - roles
+      properties:
+        id:
+          type: string
+          description: Постоянный идентификатор (sub) — владелец записей во всех сервисах
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          description: Роли Keycloak; доступ проверяется на сервере, на клиенте роли только для интерфейса
+          items:
+            type: string
+            enum:
+              - user
+              - admin
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - ready
+            - unavailable
+    AuditRecord:
+      type: object
+      required:
+        - actor
+        - actor_email
+        - method
+        - route
+        - path
+        - status
+        - request_id
+        - ip
+        - occurred_at
+      properties:
+        actor:
+          type: string
+          description: Идентификатор пользователя (sub)
+        actor_email:
+          type: string
+        method:
+          type: string
+        route:
+          type: string
+          description: Шаблон маршрута gateway (без значений параметров)
+        path:
+          type: string
+          description: Фактический путь запроса
+        status:
+          type: integer
+          description: Код ответа
+        request_id:
+          type: string
+        ip:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+    AuditPage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    File:
+      type: object
+      description: Метаданные файла
+      required:
+        - id
+        - name
+        - size
+        - content_type
+        - created_at
+        - entity
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+          description: Исходное имя файла
+        size:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+          description: Размер в байтах
+        content_type:
+          type: string
+          description: Тип, определённый по содержимому
+          example: application/pdf
+        created_at:
+          type: string
+          format: date-time
+        entity:
+          nullable: true
+          description: Запись, к которой приложен файл; null — без привязки
+          type: object
+          required:
+            - type
+            - id
+          properties:
+            type:
+              type: string
+              example: application
+            id:
+              type: string
+    FilePage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    LlmPrompt:
+      type: object
+      additionalProperties: false
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Запрос пользователя
+        system:
+          type: string
+          maxLength: 2000
+          description: Системная инструкция (роль, формат ответа)
+        json:
+          type: boolean
+          description: Попросить модель вернуть строго JSON
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          description: 'Творчество: 0 — предсказуемо, 1+ — разнообразнее'
+    Notification:
+      type: object
+      required:
+        - id
+        - title
+        - body
+        - link
+        - created_at
+        - read_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+          maxLength: 1000
+        link:
+          type: string
+          description: Внутренний путь приложения или пустая строка
+          example: /dashboard/tasks
+        created_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: null — не прочитано
+    NotificationPage:
+      type: object
+      required:
+        - items
+        - total
+        - unread
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        total:
+          type: integer
+        unread:
+          type: integer
+          description: Сколько непрочитанных всего
+        limit:
+          type: integer
+        offset:
+          type: integer
+    MaxStatus:
+      type: object
+      required:
+        - enabled
+        - linked
+      properties:
+        enabled:
+          type: boolean
+          description: Бот настроен на сервере
+        linked:
+          type: boolean
+          description: Пользователь подключил MAX
+    TaskStatus:
+      type: string
+      description: Статус задачи (переходы — в описании сервиса)
+      enum:
+        - draft
+        - todo
+        - in_progress
+        - done
+        - archived
+      example: in_progress
     Task:
       type: object
+      description: Задача пользователя
       required:
         - id
         - title
@@ -961,23 +1517,46 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+          example: Подготовить демо для жюри
         status:
           type: string
-          enum: [draft, todo, in_progress, done, archived]
+          enum:
+            - draft
+            - todo
+            - in_progress
+            - done
+            - archived
+          description: Текущий статус
         created_at:
           type: string
           format: date-time
         moderation:
           nullable: true
-          description: Результат асинхронной ИИ-проверки (появляется через несколько секунд после создания)
+          description: Итог ИИ-проверки; null, пока проверка ещё не выполнена (обычно несколько секунд)
           type: object
-          required: [verdict, source, checked_at]
+          required:
+            - verdict
+            - source
+            - checked_at
           properties:
-            verdict: { type: string, enum: [ok, needs_review] }
-            source: { type: string, enum: [rules, rules+llm] }
-            checked_at: { type: string, format: date-time }
+            verdict:
+              type: string
+              enum:
+                - ok
+                - needs_review
+              description: '`needs_review` — правила или модель нашли проблему'
+            source:
+              type: string
+              enum:
+                - rules
+                - rules+llm
+              description: '`rules` — модель была недоступна, решали только правила'
+            checked_at:
+              type: string
+              format: date-time
     TaskPage:
       type: object
+      description: Страница задач
       required:
         - items
         - total
@@ -991,6 +1570,7 @@ components:
         total:
           type: integer
           minimum: 0
+          description: Всего задач под фильтром
         limit:
           type: integer
           minimum: 1
@@ -999,24 +1579,6 @@ components:
           type: integer
           minimum: 0
           maximum: 100000
-    User:
-      type: object
-      required:
-        - id
-        - email
-        - name
-        - roles
-      properties:
-        id:
-          type: string
-        email:
-          type: string
-        name:
-          type: string
-        roles:
-          type: array
-          items:
-            type: string
     CreateTask:
       type: object
       additionalProperties: false
@@ -1036,93 +1598,242 @@ components:
       properties:
         status:
           type: string
-          enum: [draft, todo, in_progress, done, archived]
+          enum:
+            - draft
+            - todo
+            - in_progress
+            - done
+            - archived
+          description: Новый статус
         comment:
           type: string
           maxLength: 2000
-          description: Обязателен для перехода в archived (см. правило перехода статусов)
+          description: Причина смены статуса; обязательна для перехода в archived
     TaskTransition:
       type: object
-      required: [from, to, actor, comment, created_at]
+      description: Один переход статуса
+      required:
+        - from
+        - to
+        - actor
+        - comment
+        - created_at
       properties:
-        from: { type: string }
-        to: { type: string }
-        actor: { type: string }
-        comment: { type: string }
-        created_at: { type: string, format: date-time }
+        from:
+          type: string
+          description: Статус до перехода
+        to:
+          type: string
+          description: Статус после перехода
+        actor:
+          type: string
+          description: Кто сменил статус
+        comment:
+          type: string
+          description: Комментарий (пустой, если не нужен)
+        created_at:
+          type: string
+          format: date-time
     TaskHistoryPage:
       type: object
-      required: [items]
+      required:
+        - items
       properties:
         items:
           type: array
           items:
             $ref: '#/components/schemas/TaskTransition'
-    File:
+    TaskAnalysis:
       type: object
+      description: Рекомендация ИИ-проверки. Флаги и вердикт задают правила; модель только добавляет совет.
       required:
-        - id
-        - name
-        - size
-        - content_type
-        - created_at
+        - task_id
+        - verdict
+        - flags
+        - advice
+        - source
+        - decision_required
       properties:
-        id:
+        task_id:
           type: string
           format: uuid
-        name:
+        verdict:
           type: string
-          maxLength: 255
-        size:
-          type: integer
-          minimum: 1
-          maximum: 10485760
-        content_type:
-          type: string
-        entity:
-          nullable: true
-          type: object
-          required: [type, id]
-          properties:
-            type: { type: string }
-            id: { type: string }
-        created_at:
-          type: string
-          format: date-time
-    FilePage:
-      type: object
-      required: [items, total, limit, offset]
-      properties:
-        items:
+          enum:
+            - ok
+            - needs_review
+        flags:
           type: array
+          description: Что нашли правила
           items:
-            $ref: '#/components/schemas/File'
-        total: { type: integer, minimum: 0 }
-        limit: { type: integer, minimum: 1, maximum: 100 }
-        offset: { type: integer, minimum: 0, maximum: 100000 }
-    Health:
-      type: object
-      required:
-        - status
-      properties:
-        status:
+            type: object
+            required:
+              - code
+              - message
+            properties:
+              code:
+                type: string
+                enum:
+                  - money
+                  - link
+                  - contact
+                  - shouting
+                  - too_short
+              message:
+                type: string
+        advice:
+          nullable: true
+          description: Совет модели; null — модель недоступна или ответила некорректно
+          type: object
+          required:
+            - summary
+            - risk
+            - suggestion
+          properties:
+            summary:
+              type: string
+              description: Вывод одним предложением
+            risk:
+              type: string
+              enum:
+                - low
+                - medium
+                - high
+            suggestion:
+              type: string
+              description: Что улучшить или проверить
+        source:
           type: string
+          enum:
+            - rules
+            - rules+llm
+        decision_required:
+          type: boolean
+          description: Всегда true — система советует, решает человек
+    TaskStats:
+      type: object
+      description: Сводка для админского дашборда
+      required:
+        - total
+        - completed
+        - owners
+        - moderation
+        - by_day
+      properties:
+        total:
+          type: integer
+          description: Всего задач
+        completed:
+          type: integer
+          description: В статусе done
+        owners:
+          type: integer
+          description: Сколько пользователей создавали задачи
+        moderation:
+          type: object
+          required:
+            - ok
+            - needs_review
+            - unchecked
+          properties:
+            ok:
+              type: integer
+            needs_review:
+              type: integer
+            unchecked:
+              type: integer
+              description: Ещё не проверены
+        by_day:
+          type: array
+          description: Создано задач по дням, последние 14 дней
+          items:
+            type: object
+            required:
+              - date
+              - count
+            properties:
+              date:
+                type: string
+                format: date
+              count:
+                type: integer
   responses:
     BadRequest:
-      description: Некорректные входные данные
+      description: Некорректные входные данные (код ошибки и понятное сообщение в теле)
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: invalid_body
+              message: Ожидается JSON с полем title
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
     Unauthorized:
-      description: Нужен действующий токен доступа
+      description: Пользователь не вошёл или токен недействителен
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Войдите, чтобы продолжить
+    Forbidden:
+      description: Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: Недостаточно прав для этого действия
+    NotFound:
+      description: Запись не найдена или принадлежит другому пользователю (не различаются намеренно)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Задача не найдена
+    TooManyRequests:
+      description:
+        'Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту).
+        Заголовок `Retry-After` подсказывает, через сколько секунд повторить.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Через сколько секунд можно повторить
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limit
+              message: Слишком много запросов. Подождите минуту
     InternalError:
-      description: Не удалось выполнить операцию
+      description: Внутренняя ошибка; подробности — в логах по request_id
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Не удалось выполнить операцию
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unavailable:
+      description: Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: cache_unavailable
+              message: Попробуйте ещё раз позже

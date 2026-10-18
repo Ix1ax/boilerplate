@@ -47,6 +47,8 @@ type Message struct {
 }
 type Handler func(ctx context.Context, m Message) error
 
+// Broker держит соединение с RabbitMQ: если задан Outbox — публикует из него события,
+// и всегда обрабатывает собственную очередь сервиса. Соединение восстанавливается само (Run).
 type Broker struct {
 	url     string
 	outbox  Outbox

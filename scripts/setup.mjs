@@ -41,6 +41,7 @@ for (const name of [
   'DEMO_PASSWORD',
   'ADMIN_DEMO_PASSWORD',
   'SECOND_DEMO_PASSWORD',
+  'MAILPIT_PASSWORD',
 ]) {
   if (!values[name]) {
     values[name] = randomBytes(24).toString('hex');
@@ -65,6 +66,17 @@ for (const client of realm.clients) {
     client.redirectUris = [`${origin}/auth/callback`];
     client.webOrigins = [origin];
     client.attributes['post.logout.redirect.uris'] = `${origin}/`;
+  }
+  // Отдельный клиент для входа в Swagger UI: не влияет на вход приложения.
+  // Локально Swagger открывают и через фронтенд (:3000), и прямо на gateway (:8080).
+  if (client.clientId === 'hackathon-swagger') {
+    const origins = [origin];
+    if (['localhost', '127.0.0.1'].includes(new URL(origin).hostname))
+      origins.push('http://localhost:8080');
+    client.redirectUris = origins.map(
+      (o) => `${o}/api/docs/oauth2-redirect.html`,
+    );
+    client.webOrigins = origins;
   }
 }
 realm.users = [

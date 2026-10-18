@@ -1,7 +1,14 @@
 # Пример маршрутизации. Нужны серверная сеть Compose и реальные домены приложения и Keycloak.
 {$APP_DOMAIN} {
   encode zstd gzip
-  reverse_proxy web:8080
+  # Тестовая почта для жюри: пароль проверяет сам Mailpit (MAILPIT_USER / MAILPIT_PASSWORD).
+  redir /mail /mail/
+  handle /mail/* {
+    reverse_proxy mailpit:8025
+  }
+  handle {
+    reverse_proxy web-service:8080
+  }
 }
 {$AUTH_DOMAIN} {
   reverse_proxy keycloak:8080

@@ -13,7 +13,7 @@
 | `server/realtime`              | WebSocket `GET /api/v1/ws`: каналы `user:<id>`, `room:<имя>`, `broadcast`; реплики связаны через RabbitMQ               |
 | `server/llm`                   | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                 |
 | `client`                       | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
-| `packages/contracts`           | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                   |
+| `packages/contracts`           | Общий OpenAPI (собирается `make openapi` из `server/*/api/openapi.yaml`), TS-типы, Zod-схемы                            |
 | `compose.yaml`, `Makefile`     | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                         |
 | `docs/`                        | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)         |
 
@@ -24,7 +24,7 @@
 - Документацию, поясняющие комментарии и сообщения интерфейса пишем по-русски. Комментарии объясняют причины и ограничения, а не пересказывают код.
 - Не переносим сюда предметную область прошлых проектов, реальные адреса и секреты: используем `.env.example`, локальные значения создаёт `make setup`.
 - Во фронтенде зависимости направлены вниз: `app → pages → widgets → features → entities → shared`. `packages/ui` не зависит от приложения.
-- API, OpenAPI, TypeScript-типы и входные схемы меняем согласованно. Не публикуем, не разворачиваем и не отправляем изменения в remote без прямого поручения пользователя.
+- API, OpenAPI, TypeScript-типы и входные схемы меняем согласованно: маршрут описывается в `server/<сервис>/api/openapi.yaml` того же сервиса — понятно, с примерами и всеми кодами ошибок. Не публикуем, не разворачиваем и не отправляем изменения в remote без прямого поручения пользователя.
 
 ## Команды
 
@@ -41,9 +41,9 @@ make seed         # демо-данные для двух демопользов
 make demo         # up + seed + ссылки: показать проект с нуля
 make prefetch     # скачать всё заранее (SKIP_LLM=1 — без Qwen); делать до хакатона на хорошем интернете
 make reset        # стереть данные и поднять чистое демо (YES=1 — без вопроса); модель сохраняется
-make slides       # docs/presentation.md (Marp) → docs/presentation.pdf
+make slides       # презентация из docs/presentation/ (Marp) → PDF
 make loadtest     # k6: RPS и задержки → loadtest/result.json (LOAD_VUS, LOAD_DURATION)
-npm run gen -w @starter/contracts   # типы API из openapi.yaml (не править api.gen.ts вручную)
+make openapi      # общий OpenAPI из server/*/api/openapi.yaml + TS-типы + копия для Swagger
 make e2e          # Playwright против живого стека (UI + ИИ-проверка)
 ```
 
@@ -93,7 +93,7 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 2. `compose.yaml`: контейнеры `<имя>-postgres`, `<имя>-migrate` (`command: [migrate, up]`), `<имя>-service` (имя контейнера = имя сервиса) с `INTERNAL_TOKEN` и `DATABASE_URL`; пароль БД — `<ИМЯ>_DB_PASSWORD` в `.env.example` и `scripts/setup.mjs`.
 3. `.env.example`, `scripts/setup.mjs` (если новые секреты), `go.work`, цели `Makefile`.
 4. Gateway: адрес в `config` (`<ИМЯ>_URL`), поле в `httpapi.Upstreams`, маршрут `api.Any("/<имя>", …)` + `/*path`.
-5. Контракт в `packages/contracts/openapi.yaml` + `npm run gen -w @starter/contracts`, затем `entities` → `features` → `pages` во фронтенде.
+5. Опишите маршруты в `server/<имя>/api/openapi.yaml` (тест `api/spec_test.go` сверит их с кодом), выполните `make openapi`, затем `entities` → `features` → `pages` во фронтенде.
 6. Тесты: сервис на фейках `Store`, интеграционный тест репозитория, строка в `scripts/smoke.mjs`.
 
 ## Как работать агенту

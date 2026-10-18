@@ -97,7 +97,7 @@ func (m *fakeMax) Send(_ context.Context, id int64, text string) error {
 	m.sent = append(m.sent, fmt.Sprintf("%d:%s", id, text))
 	return nil
 }
-func (m *fakeMax) LinkURL(code string) string { return "https://max.ru/bot/start/" + code }
+func (m *fakeMax) LinkURL(code string) string { return "https://max.ru/bot?start=" + code }
 
 type fakeMaxStore struct {
 	linked map[string]int64
@@ -130,7 +130,7 @@ func TestMaxChannel(t *testing.T) {
 		t.Fatalf("%v", ch.sent)
 	}
 	url, err := s.MaxLinkURL(ctx, "u")
-	if err != nil || len(store.codes) != 1 || url != "https://max.ru/bot/start/"+store.codes[0] || len(store.codes[0]) > 128 {
+	if err != nil || len(store.codes) != 1 || url != "https://max.ru/bot?start="+store.codes[0] || len(store.codes[0]) > 128 {
 		t.Fatalf("%q %v %v", url, err, store.codes)
 	}
 }

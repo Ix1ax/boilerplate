@@ -7,7 +7,7 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
-  "verifyEmail": false,
+  "verifyEmail": true,
   "sslRequired": "none",
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
@@ -30,6 +30,7 @@
     "host": "mailpit",
     "port": "1025",
     "from": "no-reply@example.test",
+    "fromDisplayName": "Hackathon starter",
     "auth": "false"
   },
   "clients": [
@@ -64,6 +65,32 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "hackathon-swagger",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/api/docs/oauth2-redirect.html"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "hackathon-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "name": "Swagger UI",
+      "description": "Вход в Swagger UI (/api/docs) для запросов «Try it out»; отдельно от входа приложения."
     },
     {
       "clientId": "hackathon-cli",

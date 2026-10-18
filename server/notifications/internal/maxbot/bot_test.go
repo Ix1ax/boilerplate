@@ -2,7 +2,11 @@ package maxbot
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"log/slog"
 	"net/http"
@@ -103,7 +107,7 @@ func TestSendUsesTokenAndUser(t *testing.T) {
 	if got := f.messages(); len(got) != 1 || got[0] != "42:Привет" || f.auth != "secret-token" {
 		t.Fatalf("%v auth=%q", got, f.auth)
 	}
-	if bot.LinkURL("abc") != "https://max.ru/demo_bot/start/abc" {
+	if bot.LinkURL("abc") != "https://max.ru/demo_bot?start=abc" {
 		t.Fatal(bot.LinkURL("abc"))
 	}
 }
@@ -146,4 +150,39 @@ func TestRunReadsUpdates(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("bot_started из /updates не привязал аккаунт: %v", links.linked)
+}
+
+func TestLinkURLWithoutAt(t *testing.T) {
+	for _, name := range []string{"@demo_bot", " demo_bot ", "demo_bot"} {
+		bot, err := New("t", name, "http://127.0.0.1:1", &fakeLinks{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := bot.LinkURL("code"); got != "https://max.ru/demo_bot?start=code" {
+			t.Errorf("%q: %s", name, got)
+		}
+	}
+}
+
+// Корневой сертификат Минцифры встроен и попадает в пул клиента: без него API MAX недоступен.
+func TestHTTPClientTrustsRussianRootCA(t *testing.T) {
+	block, _ := pem.Decode(russianRootCA)
+	if block == nil {
+		t.Fatal("встроенный сертификат не в формате PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || cert.Subject.CommonName != "Russian Trusted Root CA" || !cert.IsCA {
+		t.Fatalf("неожиданный сертификат: %v %v", cert.Subject, err)
+	}
+	if sum := sha256.Sum256(block.Bytes); hex.EncodeToString(sum[:]) != "d26d2d0231b7c39f92cc738512ba54103519e4405d68b5bd703e9788ca8ecf31" {
+		t.Fatalf("отпечаток не совпадает с сертификатом Госуслуг: %x", sum)
+	}
+	client, err := httpClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := client.Transport.(*http.Transport).TLSClientConfig.RootCAs
+	if _, err := cert.Verify(x509.VerifyOptions{Roots: pool}); err != nil {
+		t.Fatalf("корневой сертификат не добавлен в пул клиента: %v", err)
+	}
 }

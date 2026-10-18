@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 )
 
+// Flag — найденное правилом нарушение: Code — для интерфейса и фильтров, Message — для человека.
 type Flag struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

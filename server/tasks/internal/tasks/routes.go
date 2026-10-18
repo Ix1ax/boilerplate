@@ -14,6 +14,9 @@ var taskListSpec = platform.ListSpec{
 	Search:      []string{"t.title"},
 }
 
+// Register добавляет маршруты задач: GET /tasks (фильтр status, поиск q, сортировка sort,
+// limit/offset), POST /tasks, PATCH /tasks/:id {status, comment}, GET /tasks/:id/history,
+// DELETE /tasks/:id. Владелец берётся из X-User-ID, а не из тела запроса.
 func Register(group *gin.RouterGroup, s *Service) {
 	group.GET("/tasks", func(c *gin.Context) {
 		q, err := platform.ParseList(c, taskListSpec, 2)

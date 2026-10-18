@@ -20,6 +20,7 @@ var (
 	ErrMaxDisabled = errors.New("Уведомления в MAX не настроены")
 )
 
+// Notification — уведомление пользователя; ReadAt == nil — ещё не прочитано.
 type Notification struct {
 	ID        string     `json:"id"`
 	Title     string     `json:"title"`
@@ -36,6 +37,7 @@ type Page struct {
 	Offset int            `json:"offset"`
 }
 
+// Store — хранилище уведомлений. Чтение и отметки ограничены получателем прямо в SQL.
 type Store interface {
 	List(ctx context.Context, user string, limit, offset int) (Page, error)
 	// Insert возвращает false, если событие уже обработано (повторная доставка).
@@ -44,6 +46,8 @@ type Store interface {
 	MarkAllRead(ctx context.Context, user string) error
 }
 
+// Service сохраняет уведомления из событий и рассылает их по каналам: колокольчик (SSE),
+// почта и MAX. Сбой канала не мешает остальным и не повторяет событие.
 type Service struct {
 	store    Store
 	hub      *Hub

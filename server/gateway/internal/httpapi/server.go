@@ -1,3 +1,5 @@
+// Package httpapi собирает HTTP-роутер gateway: служебные маршруты, вход, проверку пользователя,
+// лимиты, идемпотентность, журнал действий и прокси во внутренние сервисы.
 package httpapi
 
 import (
@@ -35,8 +37,14 @@ type Options struct {
 	Audit audit.Recorder
 	// AppOrigin — origin приложения; нужен для проверки WebSocket-подключений по cookie.
 	AppOrigin string
+	// OIDCIssuer — публичный адрес realm Keycloak; подставляется в Swagger для входа.
+	OIDCIssuer string
 }
 
+// NewGateway собирает роутер. Порядок обработки запроса:
+// request-id и лимит тела → метрики и Swagger → /auth (вход) → /api/v1: проверка пользователя →
+// лимит изменений, Idempotency-Key, журнал → прокси в сервис. Пустой адрес в Upstreams
+// отключает маршруты сервиса.
 func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, up Upstreams, opts Options, sessions ...*auth.Sessions) *gin.Engine {
 	internalToken := opts.InternalToken
 	gin.SetMode(gin.ReleaseMode)
@@ -62,7 +70,10 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	if opts.Metrics {
 		registerMetrics(r, opts.MetricsToken)
 	}
-	apidocs.Register(r)
+	apidocs.Register(r, map[string]*url.URL{
+		"tasks": up.Tasks, "files": up.Files, "notifications": up.Notifications,
+		"audit": up.Audit, "realtime": up.Realtime, "llm": up.LLM,
+	}, opts.OIDCIssuer)
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/readyz", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)

@@ -20,6 +20,8 @@ type Stats struct {
 	} `json:"moderation"`
 	ByDay []DayCount `json:"by_day"`
 }
+
+// DayCount — сколько задач создано за день (точка графика).
 type DayCount struct {
 	Date  string `json:"date"`
 	Count int    `json:"count"`

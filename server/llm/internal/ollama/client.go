@@ -16,11 +16,15 @@ import (
 
 var ErrUnavailable = errors.New("Модель временно недоступна")
 
+// Request — запрос к модели. JSON включает строгий JSON-ответ Ollama;
+// Temperature == nil — значение модели по умолчанию.
 type Request struct {
 	System, Prompt string
 	JSON           bool
 	Temperature    *float64
 }
+
+// Client — HTTP-клиент Ollama; таймаут общий на весь запрос, включая генерацию.
 type Client struct {
 	base, model string
 	http        *http.Client

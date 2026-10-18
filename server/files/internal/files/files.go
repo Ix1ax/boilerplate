@@ -1,3 +1,5 @@
+// Package files — приватные файлы: метаданные в Postgres, содержимое в S3. Скачать и удалить файл
+// может только владелец; файл можно привязать к записи другого сервиса (Entity).
 package files
 
 import (
@@ -32,6 +34,7 @@ var (
 	ErrInvalidEntity      = errors.New("entity_type — латиница и «_» до 30 символов, entity_id — до 64 символов из букв, цифр и «-»")
 )
 
+// File — метаданные файла. Само содержимое лежит в S3 под ключом <владелец>/<id>.
 type File struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -90,6 +93,7 @@ type Blobs interface {
 	Delete(ctx context.Context, key string) error
 }
 
+// Service — операции с файлами владельца. Доступ сначала проверяется в Postgres, затем идёт работа с S3.
 type Service struct {
 	store Store
 	blobs Blobs
@@ -101,6 +105,7 @@ func (s *Service) List(ctx context.Context, owner string, entity *Entity, limit,
 	return s.store.List(ctx, owner, entity, limit, offset)
 }
 
+// Upload загружает файл без привязки к записи (см. UploadFor).
 func (s *Service) Upload(ctx context.Context, owner, name string, data []byte) (File, error) {
 	return s.UploadFor(ctx, owner, name, data, nil)
 }

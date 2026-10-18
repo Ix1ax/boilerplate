@@ -21,7 +21,10 @@ test('задача: визард создания, ИИ-проверка и ре
   await expect(row).toBeVisible();
 
   await row.getByRole('button', { name: 'Проверить задачу ИИ' }).click();
-  await expect(page.getByText('Решение остаётся за вами.')).toBeVisible();
+  // Локальная модель на CPU отвечает за 10–40 с; без Ollama сразу срабатывают правила.
+  await expect(page.getByText('Решение остаётся за вами.')).toBeVisible({
+    timeout: 50_000,
+  });
 
   await row.getByRole('button', { name: 'Удалить задачу' }).click();
   await page

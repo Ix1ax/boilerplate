@@ -22,6 +22,8 @@ var listSpec = platform.ListSpec{
 	Search:      []string{"path", "actor_email"},
 }
 
+// Register добавляет GET /admin/audit (только admin): фильтры actor, method, status, request_id,
+// поиск q по пути и почте, сортировка sort, limit/offset.
 func Register(group *gin.RouterGroup, l Lister) {
 	group.GET("/admin/audit", platform.RequireRole("admin"), func(c *gin.Context) {
 		q, err := platform.ParseList(c, listSpec, 1)

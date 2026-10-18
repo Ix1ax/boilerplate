@@ -5,18 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>API — документация</title>
     <link rel="stylesheet" href="/api/docs/assets/swagger-ui.css" />
+    <style>
+      /* Убираем логотип Swagger в шапке: остаётся только выбор спецификации. */
+      .swagger-ui .topbar .link { display: none; }
+    </style>
   </head>
   <body>
     <div id="swagger-ui"></div>
     <script src="/api/docs/assets/swagger-ui-bundle.js"></script>
+    <script src="/api/docs/assets/swagger-ui-standalone-preset.js"></script>
     <script>
-      SwaggerUIBundle({
-        url: '/api/openapi.yaml',
-        dom_id: '#swagger-ui',
-        persistAuthorization: true,
-        // Запросы идут с cookie сессии: сначала войдите в приложении.
-        requestInterceptor: (req) => ({ ...req, credentials: 'same-origin' }),
-      });
+      // Список спецификаций отдаёт gateway: общая, gateway и каждый подключённый сервис.
+      fetch('/api/docs/specs.json')
+        .then((response) => response.json())
+        .then((urls) => {
+          const ui = SwaggerUIBundle({
+            urls,
+            'urls.primaryName': 'Все сервисы',
+            dom_id: '#swagger-ui',
+            presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+            layout: 'StandaloneLayout',
+            deepLinking: true,
+            persistAuthorization: true,
+            displayRequestDuration: true,
+            filter: true,
+            tryItOutEnabled: false,
+            docExpansion: 'list',
+            defaultModelsExpandDepth: 0,
+            oauth2RedirectUrl: `${window.location.origin}/api/docs/oauth2-redirect.html`,
+            // Без входа через Authorize запросы идут с cookie сессии приложения (если вы вошли там).
+            requestInterceptor: (req) => ({ ...req, credentials: 'same-origin' }),
+          });
+          // Вход через Keycloak: отдельный публичный клиент с PKCE, секрет не нужен.
+          ui.initOAuth({
+            clientId: 'hackathon-swagger',
+            usePkceWithAuthorizationCodeGrant: true,
+            scopes: 'openid profile email',
+          });
+        });
     </script>
   </body>
 </html>

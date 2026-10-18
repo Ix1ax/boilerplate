@@ -1,3 +1,7 @@
+// Сервис audit — журнал действий: сохраняет записи, которые публикует gateway.
+// Запросы принимает только от gateway (общий INTERNAL_TOKEN).
+// Запуск: `audit` — HTTP-сервер; `audit migrate [up|down|status]` — миграции его базы
+// (в Docker это контейнер audit-migrate, он отрабатывает до старта сервиса).
 package main
 
 import (
@@ -11,11 +15,13 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/hackathon/server/audit/api"
 	"example.com/hackathon/server/audit/internal/audit"
 	"example.com/hackathon/server/audit/internal/broker"
 	"example.com/hackathon/server/audit/internal/config"
 	"example.com/hackathon/server/audit/internal/database"
 	"example.com/hackathon/server/audit/internal/platform"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -74,6 +80,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	r := platform.NewEngine(logger, 1<<20, check)
+	// Своя спецификация: её читает Swagger в gateway (список «сервисы»). Маршрут без проверки
+	// пользователя — сервис доступен только во внутренней сети.
+	r.GET("/openapi.yaml", func(c *gin.Context) { c.Data(http.StatusOK, "application/yaml; charset=utf-8", api.Spec) })
 	api := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
 	repo := audit.NewRepository(db)
 	audit.Register(api, repo)

@@ -1,3 +1,5 @@
+// Package config читает настройки gateway из переменных окружения (см. .env.example)
+// и проверяет их при старте, включая правила для production (HTTPS, защищённые cookie, токен метрик).
 package config
 
 import (
@@ -6,6 +8,8 @@ import (
 	"os"
 )
 
+// Config — настройки gateway. Адреса LLM, уведомлений, журнала и realtime необязательны:
+// пустой адрес просто отключает соответствующие маршруты.
 type Config struct {
 	Env, Addr, RedisAddr, RedisPassword       string
 	OIDCIssuer, OIDCClientID, OIDCInternalURL string

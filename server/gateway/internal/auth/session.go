@@ -46,6 +46,8 @@ type Sessions struct {
 	refresh  singleflight.Group
 }
 
+// NewSessions настраивает вход через Keycloak (Authorization Code + PKCE) с возвратом
+// на <origin>/auth/callback. secure=true выставляет cookie только для HTTPS.
 func NewSessions(cache *redis.Client, verifier Verifier, issuer, internalURL, clientID, origin string, secure bool) *Sessions {
 	client := &http.Client{Timeout: 10 * time.Second}
 	if internalURL != "" {
@@ -81,6 +83,7 @@ func safeNext(value string) string {
 	return value
 }
 
+// Register добавляет /auth/login, /auth/callback и /auth/logout.
 func (s *Sessions) Register(r *gin.Engine) {
 	r.GET("/auth/login", func(c *gin.Context) {
 		state := randomID()

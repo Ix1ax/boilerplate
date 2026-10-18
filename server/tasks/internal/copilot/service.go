@@ -22,6 +22,7 @@ type Saver interface {
 	SaveModeration(ctx context.Context, owner, taskID string, m tasks.Moderation, result []byte) error
 }
 
+// Result — рекомендация по задаче. Флаги и вердикт задают правила; модель только добавляет совет.
 type Result struct {
 	TaskID  string  `json:"task_id"`
 	Verdict string  `json:"verdict"` // ok | needs_review
@@ -33,6 +34,7 @@ type Result struct {
 	DecisionRequired bool `json:"decision_required"`
 }
 
+// Service проверяет задачу: правила → совет модели (если доступна) → сохранение результата.
 type Service struct {
 	tasks   Getter
 	advisor Advisor // nil — только правила
@@ -63,6 +65,7 @@ func (s *Service) HandleEvent(ctx context.Context, eventType, userID string, dat
 	return nil
 }
 
+// Analyze проверяет задачу владельца. Недоступность модели не ошибка: остаётся результат правил.
 func (s *Service) Analyze(ctx context.Context, owner, id string) (Result, error) {
 	task, err := s.tasks.Get(ctx, owner, id)
 	if err != nil {
@@ -93,6 +96,7 @@ func (s *Service) Analyze(ctx context.Context, owner, id string) (Result, error)
 	return res, nil
 }
 
+// Register добавляет POST /tasks/:id/analyze — ручную проверку (автоматическую запускает очередь).
 func Register(group *gin.RouterGroup, s *Service) {
 	group.POST("/tasks/:id/analyze", func(c *gin.Context) {
 		id := c.Param("id")

@@ -47,10 +47,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Типы API актуальны (генерация из OpenAPI)
+      - name: OpenAPI и типы актуальны (make openapi ничего не меняет)
         run: |
-          npm run gen -w @starter/contracts
-          git diff --exit-code packages/contracts/src/api.gen.ts
+          make openapi
+          git diff --exit-code packages/contracts server/gateway/internal/apidocs/openapi.yaml
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check

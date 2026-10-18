@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Record — запись журнала. Формат совпадает с gateway/internal/audit.Record.
 type Record struct {
 	ActorID    string    `json:"actor"`
 	ActorEmail string    `json:"actor_email"`

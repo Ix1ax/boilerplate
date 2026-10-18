@@ -1,3 +1,5 @@
+// Package database применяет SQL-миграции сервиса. Файлы migrations/*.sql встроены в бинарник,
+// поэтому мигратор — это тот же образ сервиса с командой `migrate up`.
 package database
 
 import (
@@ -39,6 +41,7 @@ func EnsureDatabase(ctx context.Context, dsn string) error {
 	return err
 }
 
+// Migrate выполняет команду goose (up, down, status). Перед up создаёт базу, если её ещё нет.
 func Migrate(ctx context.Context, dsn, command string) error {
 	if command == "up" {
 		if err := EnsureDatabase(ctx, dsn); err != nil {

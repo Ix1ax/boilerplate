@@ -1,3 +1,5 @@
+// Package config читает настройки сервиса из переменных окружения (они описаны в .env.example)
+// и сразу проверяет обязательные, чтобы сервис падал при старте, а не на первом запросе.
 package config
 
 import (
@@ -5,11 +7,13 @@ import (
 	"os"
 )
 
+// Config — настройки сервиса. Обязательны DATABASE_URL и INTERNAL_TOKEN.
 type Config struct {
 	Addr, DatabaseURL, InternalToken string
 	S3                               S3Config
 }
 
+// S3Config — доступ к хранилищу файлов (переменные S3_*).
 type S3Config struct{ Endpoint, Region, AccessKey, SecretKey, Bucket string }
 
 func Load() (Config, error) {

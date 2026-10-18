@@ -1,0 +1,338 @@
+# Спецификация API сервиса audit — источник правды для его маршрутов.
+# После правок: make openapi (соберёт общий packages/contracts/openapi.yaml и TS-типы).
+# Пути указаны так, как их видит клиент через gateway (/api/v1/...).
+openapi: 3.0.3
+info:
+  title: Журнал действий (audit)
+  version: 0.1.0
+  description: |
+    Кто, когда и что изменил. После каждого изменяющего запроса gateway публикует событие
+    `audit.recorded` (пользователь, шаблон маршрута, путь, статус ответа, request_id, IP), сервис
+    сохраняет его. Чтение — только для администратора.
+
+    Доставка «по возможности»: если брокер недоступен, часть записей может не попасть в журнал —
+    это осознанный компромисс, чтобы журнал не замедлял пользователей.
+servers:
+  - url: /
+    description: Через gateway на том же origin (в Docker — Nginx на :3000)
+security:
+  - keycloak:
+      - openid
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Журнал (админ)
+    description: Просмотр журнала действий.
+paths:
+  /api/v1/admin/audit:
+    get:
+      tags:
+        - Журнал (админ)
+      operationId: listAudit
+      summary: Журнал действий
+      description: Фильтры точные (несколько значений — через запятую), поиск `q` — по подстроке в пути и почте.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: actor
+          in: query
+          description: Идентификатор пользователя (sub)
+          schema:
+            type: string
+        - name: method
+          in: query
+          description: HTTP-метод
+          schema:
+            type: string
+          example: POST
+        - name: status
+          in: query
+          description: Код ответа
+          schema:
+            type: string
+          example: '403'
+        - name: request_id
+          in: query
+          description: Найти записи одного запроса
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Поиск по пути и почте
+          schema:
+            type: string
+            maxLength: 100
+          example: /api/v1/tasks
+        - name: sort
+          in: query
+          description: occurred или status; «-» — по убыванию
+          schema:
+            type: string
+            default: -occurred
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+              example:
+                items:
+                  - actor: 9b2c1f0e-1234-4abc-8def-0123456789ab
+                    actor_email: demo@example.test
+                    method: PATCH
+                    route: /api/v1/tasks/*path
+                    path: /api/v1/tasks/3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                    status: 200
+                    request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    ip: 172.18.0.1
+                    occurred_at: 2026-10-18T09:31:00Z
+                total: 1
+                limit: 20
+                offset: 0
+        '400':
+          description: Недопустимая сортировка, слишком длинный поиск или неверная пагинация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: invalid_query
+                  message: Недопустимая сортировка "password"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
+      description:
+        Сессия браузера. Ставится после входа через `/auth/login`, хранит только случайный идентификатор
+        (токены Keycloak лежат на сервере). Изменяющие запросы с cookie дополнительно требуют заголовок
+        `Origin`, равный адресу приложения (защита от CSRF).
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description:
+        'Access token Keycloak для внешних клиентов и тестов. Получить локально: `POST
+        http://localhost:8180/realms/hackathon/protocol/openid-connect/token` с `grant_type=password`,
+        `client_id=hackathon-cli`, логином и паролем демо-пользователя.'
+    keycloak:
+      type: oauth2
+      description:
+        'Вход через Keycloak прямо из Swagger: нажмите Authorize → keycloak → Authorize и войдите
+        демо-пользователем (логины и пароли печатает make demo). Отдельный клиент hackathon-swagger с PKCE —
+        на вход в приложение не влияет. Адрес Keycloak gateway подставляет из OIDC_ISSUER.'
+      flows:
+        authorizationCode:
+          authorizationUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/auth'
+          tokenUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          refreshUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          scopes:
+            openid: Вход (OpenID Connect)
+            profile: Имя пользователя
+            email: Почта
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор записи (UUID)
+      schema:
+        type: string
+        format: uuid
+      example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+    Limit:
+      name: limit
+      in: query
+      description: Сколько записей вернуть (страница)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Сколько записей пропустить от начала
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100000
+        default: 0
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description:
+        'Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор
+        с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`,
+        а не выполнит действие ещё раз.'
+      schema:
+        type: string
+        maxLength: 100
+      example: 6f1e2d3c-create-task-1
+  schemas:
+    Error:
+      type: object
+      description: Единый формат ошибки всех сервисов.
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Машинный код ошибки — по нему фронтенд выбирает реакцию
+              example: validation_error
+            message:
+              type: string
+              description: Сообщение для человека, на русском
+              example: Название должно содержать от 1 до 200 символов
+            request_id:
+              type: string
+              description: Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+              example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    AuditRecord:
+      type: object
+      required:
+        - actor
+        - actor_email
+        - method
+        - route
+        - path
+        - status
+        - request_id
+        - ip
+        - occurred_at
+      properties:
+        actor:
+          type: string
+          description: Идентификатор пользователя (sub)
+        actor_email:
+          type: string
+        method:
+          type: string
+        route:
+          type: string
+          description: Шаблон маршрута gateway (без значений параметров)
+        path:
+          type: string
+          description: Фактический путь запроса
+        status:
+          type: integer
+          description: Код ответа
+        request_id:
+          type: string
+        ip:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+    AuditPage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+  responses:
+    BadRequest:
+      description: Некорректные входные данные (код ошибки и понятное сообщение в теле)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: invalid_body
+              message: Ожидается JSON с полем title
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unauthorized:
+      description: Пользователь не вошёл или токен недействителен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Войдите, чтобы продолжить
+    Forbidden:
+      description: Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: Недостаточно прав для этого действия
+    NotFound:
+      description: Запись не найдена или принадлежит другому пользователю (не различаются намеренно)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Задача не найдена
+    TooManyRequests:
+      description:
+        'Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту).
+        Заголовок `Retry-After` подсказывает, через сколько секунд повторить.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Через сколько секунд можно повторить
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limit
+              message: Слишком много запросов. Подождите минуту
+    InternalError:
+      description: Внутренняя ошибка; подробности — в логах по request_id
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Не удалось выполнить операцию
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unavailable:
+      description: Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: cache_unavailable
+              message: Попробуйте ещё раз позже

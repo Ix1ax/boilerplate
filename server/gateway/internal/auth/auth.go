@@ -1,3 +1,5 @@
+// Package auth — вход и проверка пользователя: серверные сессии по cookie (токены Keycloak
+// хранятся в Redis, браузеру отдаётся только случайный идентификатор), проверка JWT и роли.
 package auth
 
 import (
@@ -7,6 +9,8 @@ import (
 	"strings"
 )
 
+// Identity — пользователь из проверенного токена. Subject (sub в Keycloak) — постоянный
+// идентификатор: именно он уходит в сервисы как X-User-ID и служит владельцем записей.
 type Identity struct {
 	Subject     string `json:"sub"`
 	Email       string `json:"email"`
@@ -16,6 +20,9 @@ type Identity struct {
 	} `json:"realm_access"`
 }
 
+// Middleware пускает дальше только вошедшего пользователя. Токен берётся из заголовка
+// Authorization (внешние клиенты, тесты) или из серверной сессии по cookie (браузер).
+// После проверки Identity лежит в контексте запроса — см. Current.
 func Middleware(verifier Verifier, sessions ...*Sessions) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Явный Bearer принадлежит внешнему клиенту: не подменяем его браузерной сессией.
@@ -50,7 +57,11 @@ func Middleware(verifier Verifier, sessions ...*Sessions) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// Current — пользователь текущего запроса. Работает только на маршрутах за Middleware.
 func Current(c *gin.Context) Identity { return c.MustGet("identity").(Identity) }
+
+// RequireRole пропускает только пользователей с указанной ролью Keycloak (например admin), иначе 403.
 func RequireRole(role string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		for _, r := range Current(c).RealmAccess.Roles {

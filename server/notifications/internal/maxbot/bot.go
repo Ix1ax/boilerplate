@@ -1,15 +1,19 @@
 // Package maxbot — канал уведомлений в мессенджер MAX через официальный клиент
 // github.com/max-messenger/max-bot-api-client-go (Apache 2.0).
 //
-// Привязка: приложение выдаёт ссылку https://max.ru/<бот>/start/<код>; MAX открывает диалог
+// Привязка: приложение выдаёт ссылку https://max.ru/<бот>?start=<код>; MAX открывает диалог
 // с ботом и присылает код в событии bot_started. Команда /stop отвязывает аккаунт.
 // Обновления читаются long polling'ом, поэтому публичный адрес сервису не нужен.
 package maxbot
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	_ "embed"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -25,6 +29,7 @@ type Links interface {
 	UnlinkMax(ctx context.Context, maxUserID int64) (bool, error)
 }
 
+// Bot — бот MAX: отправляет уведомления и обрабатывает /start с кодом привязки и /stop.
 type Bot struct {
 	api      *maxbot.Api
 	links    Links
@@ -32,9 +37,36 @@ type Bot struct {
 	username string
 }
 
+// Сертификат API MAX выпущен удостоверяющим центром Минцифры (Russian Trusted Root CA),
+// которого нет в стандартных хранилищах (Alpine, macOS) — без него запросы падают с
+// «certificate signed by unknown authority». Доверяем ему только в клиенте бота, а не во всём
+// контейнере. Файл — с Госуслуг; SHA-256 D2:6D:2D:02:31:B7:C3:9F:…:CA:8E:CF:31, действует до 2032 года.
+//
+//go:embed certs/russian_trusted_root_ca.pem
+var russianRootCA []byte
+
+// httpClient — системные корневые сертификаты плюс корневой сертификат Минцифры.
+// Таймаут больше 30 с: long polling /updates держит запрос открытым до 30 секунд.
+func httpClient() (*http.Client, error) {
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM(russianRootCA) {
+		return nil, errors.New("maxbot: не удалось прочитать корневой сертификат Минцифры")
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	return &http.Client{Timeout: 45 * time.Second, Transport: transport}, nil
+}
+
 // New: baseURL пустой — официальный сервер MAX; в тестах — адрес фейкового сервера.
 func New(token, username, baseURL string, links Links, log *slog.Logger) (*Bot, error) {
-	var opts []maxbot.Opt
+	client, err := httpClient()
+	if err != nil {
+		return nil, err
+	}
+	opts := []maxbot.Opt{maxbot.WithHTTPClient(client)}
 	if baseURL != "" {
 		opts = append(opts, maxbot.WithBaseURL(baseURL))
 	}
@@ -42,12 +74,14 @@ func New(token, username, baseURL string, links Links, log *slog.Logger) (*Bot, 
 	if err != nil {
 		return nil, err
 	}
+	// Имя бота часто копируют как «@имя», а в ссылке MAX символ @ не нужен.
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
 	return &Bot{api: api, links: links, log: log, username: username}, nil
 }
 
 // LinkURL — deep link для привязки (код до 128 символов, ограничение MAX).
 func (b *Bot) LinkURL(code string) string {
-	return "https://max.ru/" + b.username + "/start/" + code
+	return "https://max.ru/" + b.username + "?start=" + code
 }
 
 // Send отправляет текст пользователю MAX.

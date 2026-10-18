@@ -1,3 +1,7 @@
+// Gateway — единственная публичная точка входа в бэкенд (порт 8080).
+// Отвечает за вход через Keycloak и серверные сессии, проверку пользователя и ролей,
+// лимиты запросов, журнал действий и проксирует /api/v1/... во внутренние сервисы.
+// Настройки — переменные окружения (см. .env.example); вне Docker: make gateway.
 package main
 
 import (
@@ -61,7 +65,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	sessions := auth.NewSessions(deps.Cache, verifier, c.OIDCIssuer, c.OIDCInternalURL, c.OIDCWebClientID, c.AppOrigin, c.SessionCookieSecure)
-	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL, Realtime: realtimeURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder, AppOrigin: c.AppOrigin}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL, Realtime: realtimeURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder, AppOrigin: c.AppOrigin, OIDCIssuer: c.OIDCIssuer}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		log.Info("API принимает запросы", "addr", c.Addr)

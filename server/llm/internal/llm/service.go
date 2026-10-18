@@ -23,6 +23,8 @@ type Completer interface {
 	Status(ctx context.Context) ollama.Status
 }
 
+// Service защищает модель от перегрузки: проверяет длину запроса и параметры и не запускает
+// больше maxConcurrent генераций сразу — лишние сразу получают ErrBusy, а не ждут в очереди.
 type Service struct {
 	model     Completer
 	slots     chan struct{}

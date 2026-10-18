@@ -1,3 +1,7 @@
+// Package platform — общая обвязка внутреннего сервиса: роутер с request-id, логом и проверками
+// готовности, приём запросов только от gateway, пользователь и его роли из заголовков.
+// Этот код намеренно скопирован в каждый сервис (общего Go-модуля нет, чтобы сервисы
+// собирались независимо) — исправление переносите во все копии.
 package platform
 
 import (
@@ -92,6 +96,7 @@ func NewEngine(log *slog.Logger, maxBody int64, check func(context.Context) erro
 	return r
 }
 
+// OpenObjects создаёт S3-клиент. Адресация path-style нужна SeaweedFS и MinIO.
 func OpenObjects(c config.S3Config) *s3.Client {
 	return s3.New(s3.Options{Region: c.Region, BaseEndpoint: aws.String(c.Endpoint), UsePathStyle: true, Credentials: credentials.NewStaticCredentialsProvider(c.AccessKey, c.SecretKey, ""), RetryMaxAttempts: 2})
 }

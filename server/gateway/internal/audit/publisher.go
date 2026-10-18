@@ -14,6 +14,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// Record — одна запись журнала: кто, какой маршрут (шаблон, без значений параметров) и с каким итогом.
 type Record struct {
 	ActorID    string    `json:"actor"`
 	ActorEmail string    `json:"actor_email"`
@@ -29,6 +30,7 @@ type Record struct {
 // Recorder — то, что нужно middleware; в тестах подменяется фейком.
 type Recorder interface{ Record(Record) }
 
+// Publisher копит записи в буфере и публикует их в фоне (Run), не задерживая ответы пользователю.
 type Publisher struct {
 	url     string
 	queue   chan Record

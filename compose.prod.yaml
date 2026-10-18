@@ -1,6 +1,7 @@
 # Production-наложение: docker compose -f compose.yaml -f compose.prod.yaml --profile app up -d
 # Закрывает порты хранилищ и служебных сервисов на хосте: к ним ходят только контейнеры по внутренней сети.
-# Снаружи остаются web-service (за reverse proxy, см. deploy/Caddyfile.example) и keycloak.
+# Снаружи остаются web-service (за reverse proxy, см. deploy/Caddyfile.example) и keycloak,
+# Mailpit — только через reverse proxy по пути /mail и с паролем.
 services:
   tasks-postgres: { ports: !reset [] }
   files-postgres: { ports: !reset [] }
@@ -9,7 +10,12 @@ services:
   gateway-redis: { ports: !reset [] }
   files-s3: { ports: !reset [] }
   rabbitmq: { ports: !reset [] }
-  mailpit: { ports: !reset [] }
+  mailpit:
+    ports: !reset []
+    environment:
+      # Интерфейс живёт под /mail (так его проксирует Caddy) и требует basic-auth.
+      MP_WEBROOT: mail
+      MP_UI_AUTH: ${MAILPIT_USER:?задайте MAILPIT_USER}:${MAILPIT_PASSWORD:?запустите make setup}
   llm-ollama: { ports: !reset [] }
   gateway-service:
     ports: !reset []

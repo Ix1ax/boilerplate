@@ -10,12 +10,14 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// В браузере issuer публичный, а контейнер API получает discovery и JWKS по внутренней сети.
-// Проверка issuer токена при этом остаётся включённой.
+// Verifier проверяет access token: подпись, issuer, audience (OIDC_CLIENT_ID) и срок действия.
+// Issuer проверяется всегда, даже когда ключи загружаются по внутреннему адресу Keycloak.
 type Verifier interface {
 	Verify(context.Context, string) (*oidc.IDToken, error)
 }
 
+// internalTransport подменяет адрес Keycloak при запросах из контейнера: браузер видит публичный
+// issuer (localhost:8180), а gateway ходит к Keycloak по внутренней сети Docker.
 type internalTransport struct {
 	public, internal *url.URL
 	base             http.RoundTripper
@@ -35,6 +37,9 @@ func (t internalTransport) RoundTrip(request *http.Request) (*http.Response, err
 	cloned.Host = u.Host
 	return t.base.RoundTrip(cloned)
 }
+
+// NewVerifier загружает настройки и ключи Keycloak (discovery, JWKS) для проверки токенов.
+// internalURL — адрес Keycloak внутри Docker; пустой — ходим по публичному issuer.
 func NewVerifier(ctx context.Context, issuer, clientID, internalURL string) (Verifier, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	if internalURL != "" {

@@ -1,0 +1,430 @@
+# Спецификация API сервиса files — источник правды для его маршрутов.
+# После правок: make openapi (соберёт общий packages/contracts/openapi.yaml и TS-типы).
+# Пути указаны так, как их видит клиент через gateway (/api/v1/...).
+openapi: 3.0.3
+info:
+  title: Сервис файлов (files)
+  version: 0.1.0
+  description: |
+    Приватные файлы пользователя: метаданные в Postgres, содержимое в S3. Скачать и удалить файл
+    может только владелец.
+
+    **Ограничения:** до 10 МиБ; типы PNG, JPEG, WebP, PDF и текст. Тип определяется по содержимому,
+    а не по расширению или заголовку от клиента.
+
+    **Вложения.** Файл можно привязать к записи другого сервиса (например, документы к заявке),
+    передав `entity_type` и `entity_id` при загрузке, и потом получить только файлы этой записи.
+servers:
+  - url: /
+    description: Через gateway на том же origin (в Docker — Nginx на :3000)
+security:
+  - keycloak:
+      - openid
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Файлы
+    description: Загрузка, список, скачивание и удаление своих файлов.
+paths:
+  /api/v1/files:
+    get:
+      tags:
+        - Файлы
+      operationId: listFiles
+      summary: Список своих файлов
+      description: Новые сверху. С `entity_type` и `entity_id` — только файлы, приложенные к этой записи.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: entity_type
+          in: query
+          description: Тип записи (латиница и «_»), указывается вместе с entity_id
+          schema:
+            type: string
+            pattern: ^[a-z][a-z_]{0,29}$
+          example: application
+        - name: entity_id
+          in: query
+          description: Идентификатор записи
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9-]{1,64}$
+          example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+      responses:
+        "200":
+          description: Страница файлов
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilePage"
+              example:
+                items:
+                  - id: 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+                    name: устав.pdf
+                    size: 182044
+                    content_type: application/pdf
+                    created_at: 2026-10-18T09:40:00Z
+                    entity:
+                      type: application
+                      id: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+                total: 1
+                limit: 20
+                offset: 0
+        "400":
+          description: "`invalid_pagination` или `invalid_entity` (заполнена только одна часть привязки или неверный
+            формат)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - Файлы
+      operationId: uploadFile
+      summary: Загрузить файл
+      description: Отправьте multipart/form-data с полем `file`; для привязки к записи — ещё `entity_type` и `entity_id`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Файл до 10 МиБ
+                entity_type:
+                  type: string
+                  pattern: ^[a-z][a-z_]{0,29}$
+                  description: Тип записи, к которой приложить файл
+                entity_id:
+                  type: string
+                  pattern: ^[A-Za-z0-9-]{1,64}$
+                  description: Идентификатор записи
+      responses:
+        "201":
+          description: Файл сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+        "400":
+          description: "`invalid_body` (нет поля file, пустой файл, недопустимое имя) или `invalid_entity`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: Файл больше 10 МиБ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: payload_too_large
+                  message: Файл превышает 10 МиБ или запрос имеет неверный формат
+        "415":
+          description: Тип содержимого не разрешён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: unsupported_type
+                  message: Можно загрузить PNG, JPEG, WebP, PDF или текстовый файл
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/files/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags:
+        - Файлы
+      operationId: downloadFile
+      summary: Скачать файл
+      description: "Отдаётся как вложение (`Content-Disposition: attachment`) с исходным именем; браузер не
+        исполняет содержимое."
+      responses:
+        "200":
+          description: Содержимое файла
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      tags:
+        - Файлы
+      operationId: deleteFile
+      summary: Удалить файл
+      description: Удаляет содержимое из S3, затем метаданные. Если S3 недоступно — 503, повтор безопасен.
+      responses:
+        "204":
+          description: Файл удалён
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
+      description: Сессия браузера. Ставится после входа через `/auth/login`, хранит только случайный идентификатор
+        (токены Keycloak лежат на сервере). Изменяющие запросы с cookie дополнительно требуют заголовок
+        `Origin`, равный адресу приложения (защита от CSRF).
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Access token Keycloak для внешних клиентов и тестов. Получить локально: `POST
+        http://localhost:8180/realms/hackathon/protocol/openid-connect/token` с `grant_type=password`,
+        `client_id=hackathon-cli`, логином и паролем демо-пользователя."
+    keycloak:
+      type: oauth2
+      description: "Вход через Keycloak прямо из Swagger: нажмите Authorize → keycloak → Authorize и войдите
+        демо-пользователем (логины и пароли печатает make demo). Отдельный клиент hackathon-swagger с PKCE —
+        на вход в приложение не влияет. Адрес Keycloak gateway подставляет из OIDC_ISSUER."
+      flows:
+        authorizationCode:
+          authorizationUrl: "{{OIDC_ISSUER}}/protocol/openid-connect/auth"
+          tokenUrl: "{{OIDC_ISSUER}}/protocol/openid-connect/token"
+          refreshUrl: "{{OIDC_ISSUER}}/protocol/openid-connect/token"
+          scopes:
+            openid: Вход (OpenID Connect)
+            profile: Имя пользователя
+            email: Почта
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор записи (UUID)
+      schema:
+        type: string
+        format: uuid
+      example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+    Limit:
+      name: limit
+      in: query
+      description: Сколько записей вернуть (страница)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Сколько записей пропустить от начала
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100000
+        default: 0
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: "Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор
+        с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`,
+        а не выполнит действие ещё раз."
+      schema:
+        type: string
+        maxLength: 100
+      example: 6f1e2d3c-create-task-1
+  schemas:
+    Error:
+      type: object
+      description: Единый формат ошибки всех сервисов.
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Машинный код ошибки — по нему фронтенд выбирает реакцию
+              example: validation_error
+            message:
+              type: string
+              description: Сообщение для человека, на русском
+              example: Название должно содержать от 1 до 200 символов
+            request_id:
+              type: string
+              description: Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+              example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    File:
+      type: object
+      description: Метаданные файла
+      required:
+        - id
+        - name
+        - size
+        - content_type
+        - created_at
+        - entity
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+          description: Исходное имя файла
+        size:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+          description: Размер в байтах
+        content_type:
+          type: string
+          description: Тип, определённый по содержимому
+          example: application/pdf
+        created_at:
+          type: string
+          format: date-time
+        entity:
+          nullable: true
+          description: Запись, к которой приложен файл; null — без привязки
+          type: object
+          required:
+            - type
+            - id
+          properties:
+            type:
+              type: string
+              example: application
+            id:
+              type: string
+    FilePage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/File"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+  responses:
+    BadRequest:
+      description: Некорректные входные данные (код ошибки и понятное сообщение в теле)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: invalid_body
+              message: Ожидается JSON с полем title
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unauthorized:
+      description: Пользователь не вошёл или токен недействителен
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: unauthorized
+              message: Войдите, чтобы продолжить
+    Forbidden:
+      description: Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: forbidden
+              message: Недостаточно прав для этого действия
+    NotFound:
+      description: Запись не найдена или принадлежит другому пользователю (не различаются намеренно)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: not_found
+              message: Задача не найдена
+    TooManyRequests:
+      description: "Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту).
+        Заголовок `Retry-After` подсказывает, через сколько секунд повторить."
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Через сколько секунд можно повторить
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: rate_limit
+              message: Слишком много запросов. Подождите минуту
+    InternalError:
+      description: Внутренняя ошибка; подробности — в логах по request_id
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: internal_error
+              message: Не удалось выполнить операцию
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unavailable:
+      description: Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: cache_unavailable
+              message: Попробуйте ещё раз позже

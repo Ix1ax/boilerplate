@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// Repository — реализация Store на Postgres.
 type Repository struct{ db *pgxpool.Pool }
 
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }

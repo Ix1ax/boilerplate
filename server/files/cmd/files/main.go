@@ -1,3 +1,7 @@
+// Сервис files — файлы: загрузка в S3, скачивание и удаление только владельцем, вложения к записям.
+// Запросы принимает только от gateway (общий INTERNAL_TOKEN).
+// Запуск: `files` — HTTP-сервер; `files migrate [up|down|status]` — миграции его базы
+// (в Docker это контейнер files-migrate, он отрабатывает до старта сервиса).
 package main
 
 import (
@@ -11,12 +15,14 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/hackathon/server/files/api"
 	"example.com/hackathon/server/files/internal/config"
 	"example.com/hackathon/server/files/internal/database"
 	"example.com/hackathon/server/files/internal/files"
 	"example.com/hackathon/server/files/internal/platform"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -79,6 +85,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	r := platform.NewEngine(logger, files.MaxSize+(1<<20), check)
+	// Своя спецификация: её читает Swagger в gateway (список «сервисы»). Маршрут без проверки
+	// пользователя — сервис доступен только во внутренней сети.
+	r.GET("/openapi.yaml", func(c *gin.Context) { c.Data(http.StatusOK, "application/yaml; charset=utf-8", api.Spec) })
 	api := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
 	files.Register(api, files.New(files.NewRepository(db), files.NewS3Blobs(objects, c.S3.Bucket)))
 	server := &http.Server{Addr: c.Addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}

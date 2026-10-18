@@ -11,29 +11,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Начать браузерный вход через Keycloak с PKCE */
-    get: {
-      parameters: {
-        query?: {
-          /** @description Внутренний путь возврата после входа */
-          next?: string;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Переход в Keycloak; одноразовый state в HttpOnly cookie */
-        302: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        503: components['responses']['InternalError'];
-      };
-    };
+    /**
+     * Начать вход
+     * @description Перенаправляет в Keycloak. После успешного входа пользователь вернётся на адрес из `next`.
+     */
+    get: operations['login'];
     put?: never;
     post?: never;
     delete?: never;
@@ -49,32 +31,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Обменять OIDC-код и установить HttpOnly cookie сессии */
-    get: {
-      parameters: {
-        query?: {
-          code?: string;
-          state?: string;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Сессия создана, переход на внутренний путь возврата */
-        302: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        502: components['responses']['InternalError'];
-        503: components['responses']['InternalError'];
-      };
-    };
+    /**
+     * Возврат из Keycloak
+     * @description Вызывается Keycloak после входа, вручную не используется. Проверяет одноразовый `state`, обменивает код на токены, сохраняет их в Redis и ставит cookie сессии на 8 часов.
+     */
+    get: operations['loginCallback'];
     put?: never;
     post?: never;
     delete?: never;
@@ -92,122 +53,11 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Удалить браузерную сессию и получить URL выхода Keycloak */
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          /** @description Должен точно совпадать с APP_ORIGIN */
-          Origin: string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Сессия удалена; откройте url для завершения SSO */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              /** Format: uri */
-              url: string;
-            };
-          };
-        };
-        /** @description Origin не совпадает с адресом приложения */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        503: components['responses']['InternalError'];
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/healthz': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Проверить, что процесс работает */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Процесс работает */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Health'];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/readyz': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Проверить PostgreSQL, Redis и S3 */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Зависимости доступны */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Health'];
-          };
-        };
-        /** @description Одна из зависимостей недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Health'];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
+    /**
+     * Выйти
+     * @description Удаляет сессию на сервере (доступ из браузера пропадает сразу) и возвращает адрес выхода из Keycloak — фронтенд открывает его, чтобы завершить и единый вход. Нужен заголовок `Origin` приложения.
+     */
+    post: operations['logout'];
     delete?: never;
     options?: never;
     head?: never;
@@ -221,30 +71,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Получить текущего пользователя */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Запрос выполнен */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['User'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        500: components['responses']['InternalError'];
-      };
-    };
+    /**
+     * Текущий пользователь
+     * @description Кто вошёл и с какими ролями. Для гостя — 401 (фронтенд показывает кнопку «Войти»).
+     */
+    get: operations['getMe'];
     put?: never;
     post?: never;
     delete?: never;
@@ -260,377 +91,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Проверить роль администратора */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Запрос выполнен */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Health'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Требуется realm-роль admin */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/tasks': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Получить свои задачи */
-    get: {
-      parameters: {
-        query?: {
-          limit?: number;
-          offset?: number;
-          /** @description Поиск по названию */
-          q?: string;
-          /** @description Фильтр по статусу (можно несколько через запятую) */
-          status?: string;
-          /** @description created, title или status; «-» перед именем — по убыванию */
-          sort?: string;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Запрос выполнен */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['TaskPage'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        500: components['responses']['InternalError'];
-      };
-    };
-    put?: never;
-    /** Создать задачу (всегда в статусе draft — черновик визарда) */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['CreateTask'];
-        };
-      };
-      responses: {
-        /** @description Запрос выполнен */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Task'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Превышен лимит запросов */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-        /** @description Зависимость временно недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/tasks/{id}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: components['parameters']['ID'];
-      };
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    /** Удалить свою задачу */
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: components['parameters']['ID'];
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Запрос выполнен */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Запись не найдена или принадлежит другому пользователю */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Превышен лимит запросов */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-        /** @description Зависимость временно недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
     /**
-     * Сменить статус своей задачи
-     * @description Допустимость перехода и обязательность комментария (для archived) проверяет конечный автомат статусов на сервере.
+     * Проверка роли admin
+     * @description Отвечает 200 только администратору — образец закрытого по роли маршрута.
      */
-    patch: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: components['parameters']['ID'];
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['UpdateTask'];
-        };
-      };
-      responses: {
-        /** @description Запрос выполнен */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Task'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Запись не найдена или принадлежит другому пользователю */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Недопустимый переход статуса */
-        409: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Превышен лимит запросов */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-        /** @description Зависимость временно недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    trace?: never;
-  };
-  '/api/v1/tasks/{id}/analyze': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * ИИ-проверка задачи (рекомендация для человека)
-     * @description Правила дают флаги и вердикт, модель (если доступна) добавляет совет. Решение остаётся за человеком. Лимит 10 в минуту на пользователя.
-     */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Рекомендация */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['TaskAnalysis'];
-          };
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Задача не найдена */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Слишком много проверок */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/tasks/{id}/history': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Лента переходов статуса задачи */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Запрос выполнен */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['TaskHistoryPage'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Запись не найдена или принадлежит другому пользователю */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
+    get: operations['adminPing'];
     put?: never;
     post?: never;
     delete?: never;
@@ -639,164 +104,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/notifications': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Мои уведомления */
-    get: {
-      parameters: {
-        query?: {
-          limit?: number;
-          offset?: number;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Страница уведомлений и число непрочитанных */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['NotificationPage'];
-          };
-        };
-        401: components['responses']['Unauthorized'];
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/notifications/max': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Подключение мессенджера MAX */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description enabled — настроен ли бот на сервере, linked — привязан ли аккаунт пользователя */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['MaxStatus'];
-          };
-        };
-        401: components['responses']['Unauthorized'];
-      };
-    };
-    put?: never;
-    post?: never;
-    /** Отключить уведомления в MAX */
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Отключено */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Канал MAX не настроен */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/notifications/max/link': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Ссылка для подключения MAX
-     * @description Одноразовая ссылка https://max.ru/<бот>/start/<код> на 10 минут; бот привязывает аккаунт по событию bot_started.
-     */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Ссылка */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              /** Format: uri */
-              url: string;
-            };
-          };
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Канал MAX не настроен */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/notifications/stream': {
+  '/healthz': {
     parameters: {
       query?: never;
       header?: never;
@@ -804,30 +112,10 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Поток новых уведомлений (SSE)
-     * @description События event: notification с JSON уведомления; комментарии-пинги каждые 25 с; соединение закрывается через 2 минуты, клиент переподключается.
+     * Процесс жив
+     * @description Не обращается к зависимостям — для проверки «жив ли процесс».
      */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description text/event-stream */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'text/event-stream': string;
-          };
-        };
-        401: components['responses']['Unauthorized'];
-      };
-    };
+    get: operations['healthz'];
     put?: never;
     post?: never;
     delete?: never;
@@ -836,88 +124,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/notifications/{id}/read': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Отметить уведомление прочитанным */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Отмечено */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Не найдено */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/notifications/read-all': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Отметить все уведомления прочитанными */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Отмечено */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        401: components['responses']['Unauthorized'];
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/admin/tasks/export.csv': {
+  '/readyz': {
     parameters: {
       query?: never;
       header?: never;
@@ -925,85 +132,10 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Выгрузка всех задач в CSV (только администратор)
-     * @description UTF-8 с BOM, разделитель «;» — открывается в Excel с русской локалью.
+     * Готов принимать запросы
+     * @description Проверяет Redis и готовность всех подключённых сервисов. 503 — что-то из них недоступно.
      */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description CSV-файл */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'text/csv': string;
-          };
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Нет роли admin */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/admin/tasks/stats': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Сводка для дашборда (только администратор) */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Итоги, разбивка по ИИ-проверке и создание задач за 14 дней */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['TaskStats'];
-          };
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Нет роли admin */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
+    get: operations['readyz'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1020,96 +152,10 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Журнал изменяющих действий (только администратор)
-     * @description Фильтры actor, method, status, request_id; поиск q по пути и email; sort=-occurred|occurred|status|-status.
+     * Журнал действий
+     * @description Фильтры точные (несколько значений — через запятую), поиск `q` — по подстроке в пути и почте.
      */
-    get: {
-      parameters: {
-        query?: {
-          actor?: string;
-          method?: string;
-          status?: string;
-          request_id?: string;
-          q?: string;
-          sort?: string;
-          limit?: number;
-          offset?: number;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Страница журнала */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['AuditPage'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Нет роли admin */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/ws': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * WebSocket — каналы реального времени
-     * @description Upgrade до WebSocket (сервис realtime). Для cookie-сессии обязателен Origin приложения. Сообщения {type, payload}. Клиент → сервер: ping, subscribe {channel}, unsubscribe {channel}, publish {channel, data}. Сервер → клиент: pong, message {channel, from, data, at}, error {code, message}. Каналы: user:<id> — личный (только чтение, пишет сервер), room:<имя> — читать и писать могут все вошедшие, broadcast — читать все, писать admin. Ограничения: 16 КиБ на сообщение, 20 сообщений в секунду, 50 подписок, соединение закрывается после 70 с без сообщений (клиент шлёт ping каждые 25 с). Сервисы пишут в канал событием realtime.publish {data: {channel, from, data}} в exchange events.
-     */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Протокол переключён на WebSocket */
-        101: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        401: components['responses']['Unauthorized'];
-        /** @description Origin не совпадает с адресом приложения */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
+    get: operations['listAudit'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1125,110 +171,17 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Получить свои файлы */
-    get: {
-      parameters: {
-        query?: {
-          /** @description Только файлы, приложенные к записи (вместе с entity_id) */
-          entity_type?: string;
-          entity_id?: string;
-          limit?: number;
-          offset?: number;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Страница файлов текущего пользователя */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['FilePage'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        500: components['responses']['InternalError'];
-      };
-    };
+    /**
+     * Список своих файлов
+     * @description Новые сверху. С `entity_type` и `entity_id` — только файлы, приложенные к этой записи.
+     */
+    get: operations['listFiles'];
     put?: never;
     /**
-     * Загрузить приватный файл
-     * @description До 10 МиБ. PNG, JPEG, WebP, PDF или текст. Тип определяется по содержимому.
+     * Загрузить файл
+     * @description Отправьте multipart/form-data с полем `file`; для привязки к записи — ещё `entity_type` и `entity_id`.
      */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          'multipart/form-data': {
-            /** Format: binary */
-            file: string;
-            /** @description Необязательная привязка к записи другого сервиса (вместе с entity_id) */
-            entity_type?: string;
-            entity_id?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Запрос выполнен */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['File'];
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Превышен размер запроса */
-        413: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Недопустимый тип файла */
-        415: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Превышен лимит запросов */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-        /** @description Зависимость временно недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
+    post: operations['uploadFile'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1240,98 +193,26 @@ export interface paths {
       query?: never;
       header?: never;
       path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
         id: components['parameters']['ID'];
       };
       cookie?: never;
     };
-    /** Скачать свой файл */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: components['parameters']['ID'];
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Содержимое файла; имя передаётся в Content-Disposition */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/octet-stream': string;
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Запись не найдена или принадлежит другому пользователю */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-      };
-    };
+    /**
+     * Скачать файл
+     * @description Отдаётся как вложение (`Content-Disposition: attachment`) с исходным именем; браузер не исполняет содержимое.
+     */
+    get: operations['downloadFile'];
     put?: never;
     post?: never;
-    /** Удалить свой файл */
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: components['parameters']['ID'];
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Запрос выполнен */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Запись не найдена или принадлежит другому пользователю */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Превышен лимит запросов */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        500: components['responses']['InternalError'];
-        /** @description Зависимость временно недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
+    /**
+     * Удалить файл
+     * @description Удаляет содержимое из S3, затем метаданные. Если S3 недоступно — 503, повтор безопасен.
+     */
+    delete: operations['deleteFile'];
     options?: never;
     head?: never;
     patch?: never;
@@ -1344,32 +225,8 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Состояние локальной модели */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Доступность Ollama и установленной модели */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              available: boolean;
-              model: string;
-              model_installed: boolean;
-            };
-          };
-        };
-        401: components['responses']['Unauthorized'];
-      };
-    };
+    /** Состояние модели */
+    get: operations['getLlmStatus'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1388,56 +245,10 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Сгенерировать ответ модели целиком
-     * @description До 10 запросов в минуту на пользователя; одновременно обрабатывается ограниченное число запросов.
+     * Ответ модели целиком
+     * @description Ждёт полный ответ (до нескольких десятков секунд на CPU). Для чата удобнее поток — /llm/stream.
      */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['LlmPrompt'];
-        };
-      };
-      responses: {
-        /** @description Ответ модели */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              text: string;
-              model: string;
-            };
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Лимит запросов или модель занята */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Модель недоступна (не запущен make llm) */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
-    };
+    post: operations['generate'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1454,53 +265,299 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Потоковый ответ модели (SSE)
-     * @description События: data {"t":"фрагмент"}, затем event done; при сбое event error.
+     * Ответ модели потоком (SSE)
+     * @description Текст приходит по частям, пока модель генерирует: события `data: {"t": "фрагмент"}`,
+     *     в конце `event: done`, при сбое посреди ответа — `event: error`. Ошибки до начала потока
+     *     (400, 429, 503) приходят обычным JSON, как у /llm/generate.
      */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['LlmPrompt'];
-        };
-      };
-      responses: {
-        /** @description Поток text/event-stream */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'text/event-stream': string;
-          };
-        };
-        400: components['responses']['BadRequest'];
-        401: components['responses']['Unauthorized'];
-        /** @description Лимит запросов или модель занята */
-        429: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-        /** @description Модель недоступна */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': components['schemas']['Error'];
-          };
-        };
-      };
+    post: operations['generateStream'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /**
+     * Мои уведомления
+     * @description Новые сверху; `unread` — сколько непрочитанных всего (для значка на колокольчике).
+     */
+    get: operations['listNotifications'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/stream': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Живой поток новых уведомлений (SSE)
+     * @description Server-Sent Events: в браузере — `new EventSource('/api/v1/notifications/stream')`.
+     *     При новом уведомлении приходит событие `notification` с JSON уведомления. Каждые 25 секунд —
+     *     комментарий-пинг, чтобы прокси не закрыл соединение. Через 2 минуты сервер закрывает поток,
+     *     EventSource переподключается сам.
+     */
+    get: operations['streamNotifications'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/{id}/read': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Отметить прочитанным */
+    post: operations['markNotificationRead'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/read-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Прочитать все */
+    post: operations['markAllNotificationsRead'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/max': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Подключён ли MAX
+     * @description `enabled` — настроен ли бот на сервере (если нет — кнопку подключения не показывают), `linked` — подключил ли его этот пользователь.
+     */
+    get: operations['getMaxStatus'];
+    put?: never;
+    post?: never;
+    /** Отключить уведомления в MAX */
+    delete: operations['unlinkMax'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/max/link': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Получить ссылку подключения MAX
+     * @description Одноразовая ссылка `https://max.ru/<бот>?start=<код>` на 10 минут. Пользователь открывает её, нажимает «Начать» в MAX — бот получает код и связывает аккаунты. Отключить — `/stop` в боте.
+     */
+    post: operations['createMaxLink'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/ws': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Подключиться по WebSocket
+     * @description Upgrade до WebSocket. Для входа по cookie браузер должен прислать `Origin` приложения — это защита от подключения с чужого сайта.
+     */
+    get: operations['websocket'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/tasks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Список своих задач
+     * @description Страница задач текущего пользователя с фильтром по статусу, поиском по названию и сортировкой. `total` — сколько всего задач подходит под фильтр (для пагинации).
+     */
+    get: operations['listTasks'];
+    put?: never;
+    /**
+     * Создать задачу
+     * @description Создаёт задачу в статусе `draft`. В той же транзакции ставится событие `task.created` — оно запустит ИИ-проверку и уведомление владельцу.
+     */
+    post: operations['createTask'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/tasks/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Удалить задачу */
+    delete: operations['deleteTask'];
+    options?: never;
+    head?: never;
+    /**
+     * Сменить статус задачи
+     * @description Переводит задачу в новый статус по правилам переходов (см. описание сервиса) и записывает переход в историю. Проверка и запись идут одной транзакцией с блокировкой строки.
+     */
+    patch: operations['updateTaskStatus'];
+    trace?: never;
+  };
+  '/api/v1/tasks/{id}/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * История статусов задачи
+     * @description Все переходы статуса от старых к новым — с автором и комментарием. Доступна только владельцу.
+     */
+    get: operations['getTaskHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/tasks/{id}/analyze': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Проверить задачу сейчас
+     * @description Ручная проверка (автоматическая запускается после создания). Правила ищут сбор денег, ссылки, контакты, капслок и слишком короткий текст и задают вердикт; модель Qwen, если доступна, добавляет краткий совет. Если модель недоступна или занята — ответ только по правилам (`source: rules`), это не ошибка. Лимит — 10 проверок в минуту.
+     */
+    post: operations['analyzeTask'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/tasks/stats': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Сводка для дашборда
+     * @description Итоги по всем задачам, разбивка по ИИ-проверке и число созданных задач за последние 14 дней (для графика). Все цифры из одного снимка данных.
+     */
+    get: operations['getTaskStats'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/tasks/export.csv': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Выгрузка всех задач в CSV
+     * @description Файл для Excel: UTF-8 с BOM, разделитель «;», ячейки, похожие на формулы, экранируются. Колонки: ID, Владелец, Название, Статус, Создана, Проверка ИИ, Источник проверки.
+     */
+    get: operations['exportTasksCsv'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1511,27 +568,50 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    TaskStats: {
-      total: number;
-      completed: number;
-      owners: number;
-      moderation: {
-        ok: number;
-        needs_review: number;
-        unchecked: number;
+    /** @description Единый формат ошибки всех сервисов. */
+    Error: {
+      error: {
+        /**
+         * @description Машинный код ошибки — по нему фронтенд выбирает реакцию
+         * @example validation_error
+         */
+        code: string;
+        /**
+         * @description Сообщение для человека, на русском
+         * @example Название должно содержать от 1 до 200 символов
+         */
+        message: string;
+        /**
+         * @description Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+         * @example 7c9e6679-7425-40de-944b-e07fc1f90ae7
+         */
+        request_id?: string;
       };
-      by_day: {
-        /** Format: date */
-        date: string;
-        count: number;
-      }[];
+    };
+    /** @description Пользователь из Keycloak */
+    User: {
+      /** @description Постоянный идентификатор (sub) — владелец записей во всех сервисах */
+      id: string;
+      /** Format: email */
+      email: string;
+      name: string;
+      /** @description Роли Keycloak; доступ проверяется на сервере, на клиенте роли только для интерфейса */
+      roles: ('user' | 'admin')[];
+    };
+    Health: {
+      /** @enum {string} */
+      status: 'ok' | 'ready' | 'unavailable';
     };
     AuditRecord: {
+      /** @description Идентификатор пользователя (sub) */
       actor: string;
       actor_email: string;
       method: string;
+      /** @description Шаблон маршрута gateway (без значений параметров) */
       route: string;
+      /** @description Фактический путь запроса */
       path: string;
+      /** @description Код ответа */
       status: number;
       request_id: string;
       ip: string;
@@ -1544,126 +624,27 @@ export interface components {
       limit: number;
       offset: number;
     };
-    MaxStatus: {
-      enabled: boolean;
-      linked: boolean;
-    };
-    Notification: {
-      /** Format: uuid */
-      id: string;
-      title: string;
-      body: string;
-      /** @description Внутренний путь приложения или пустая строка */
-      link: string;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      read_at: string | null;
-    };
-    NotificationPage: {
-      items: components['schemas']['Notification'][];
-      total: number;
-      unread: number;
-      limit: number;
-      offset: number;
-    };
-    TaskAnalysis: {
-      /** Format: uuid */
-      task_id: string;
-      /** @enum {string} */
-      verdict: 'ok' | 'needs_review';
-      flags: {
-        /** @enum {string} */
-        code: 'money' | 'link' | 'contact' | 'shouting' | 'too_short';
-        message: string;
-      }[];
-      advice: {
-        summary: string;
-        /** @enum {string} */
-        risk: 'low' | 'medium' | 'high';
-        suggestion: string;
-      } | null;
-      /** @enum {string} */
-      source: 'rules' | 'rules+llm';
-      decision_required: boolean;
-    };
-    LlmPrompt: {
-      prompt: string;
-      system?: string;
-      /** @description Просить модель вернуть JSON */
-      json?: boolean;
-      temperature?: number;
-    };
-    Error: {
-      error: {
-        code: string;
-        message: string;
-        request_id?: string;
-      };
-    };
-    Task: {
-      /** Format: uuid */
-      id: string;
-      title: string;
-      /** @enum {string} */
-      status: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
-      /** Format: date-time */
-      created_at: string;
-      /** @description Результат асинхронной ИИ-проверки (появляется через несколько секунд после создания) */
-      moderation: {
-        /** @enum {string} */
-        verdict: 'ok' | 'needs_review';
-        /** @enum {string} */
-        source: 'rules' | 'rules+llm';
-        /** Format: date-time */
-        checked_at: string;
-      } | null;
-    };
-    TaskPage: {
-      items: components['schemas']['Task'][];
-      total: number;
-      limit: number;
-      offset: number;
-    };
-    User: {
-      id: string;
-      email: string;
-      name: string;
-      roles: string[];
-    };
-    CreateTask: {
-      /** @description Пробелы по краям обрезаются перед сохранением */
-      title: string;
-    };
-    UpdateTask: {
-      /** @enum {string} */
-      status: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
-      /** @description Обязателен для перехода в archived (см. правило перехода статусов) */
-      comment?: string;
-    };
-    TaskTransition: {
-      from: string;
-      to: string;
-      actor: string;
-      comment: string;
-      /** Format: date-time */
-      created_at: string;
-    };
-    TaskHistoryPage: {
-      items: components['schemas']['TaskTransition'][];
-    };
+    /** @description Метаданные файла */
     File: {
       /** Format: uuid */
       id: string;
+      /** @description Исходное имя файла */
       name: string;
+      /** @description Размер в байтах */
       size: number;
+      /**
+       * @description Тип, определённый по содержимому
+       * @example application/pdf
+       */
       content_type: string;
-      entity?: {
+      /** Format: date-time */
+      created_at: string;
+      /** @description Запись, к которой приложен файл; null — без привязки */
+      entity: {
+        /** @example application */
         type: string;
         id: string;
       } | null;
-      /** Format: date-time */
-      created_at: string;
     };
     FilePage: {
       items: components['schemas']['File'][];
@@ -1671,45 +652,1647 @@ export interface components {
       limit: number;
       offset: number;
     };
-    Health: {
-      status: string;
+    LlmPrompt: {
+      /** @description Запрос пользователя */
+      prompt: string;
+      /** @description Системная инструкция (роль, формат ответа) */
+      system?: string;
+      /** @description Попросить модель вернуть строго JSON */
+      json?: boolean;
+      /** @description Творчество: 0 — предсказуемо, 1+ — разнообразнее */
+      temperature?: number;
+    };
+    Notification: {
+      /** Format: uuid */
+      id: string;
+      title: string;
+      body: string;
+      /**
+       * @description Внутренний путь приложения или пустая строка
+       * @example /dashboard/tasks
+       */
+      link: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description null — не прочитано
+       */
+      read_at: string | null;
+    };
+    NotificationPage: {
+      items: components['schemas']['Notification'][];
+      total: number;
+      /** @description Сколько непрочитанных всего */
+      unread: number;
+      limit: number;
+      offset: number;
+    };
+    MaxStatus: {
+      /** @description Бот настроен на сервере */
+      enabled: boolean;
+      /** @description Пользователь подключил MAX */
+      linked: boolean;
+    };
+    /**
+     * @description Статус задачи (переходы — в описании сервиса)
+     * @example in_progress
+     * @enum {string}
+     */
+    TaskStatus: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
+    /** @description Задача пользователя */
+    Task: {
+      /** Format: uuid */
+      id: string;
+      /** @example Подготовить демо для жюри */
+      title: string;
+      /**
+       * @description Текущий статус
+       * @enum {string}
+       */
+      status: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
+      /** Format: date-time */
+      created_at: string;
+      /** @description Итог ИИ-проверки; null, пока проверка ещё не выполнена (обычно несколько секунд) */
+      moderation: {
+        /**
+         * @description `needs_review` — правила или модель нашли проблему
+         * @enum {string}
+         */
+        verdict: 'ok' | 'needs_review';
+        /**
+         * @description `rules` — модель была недоступна, решали только правила
+         * @enum {string}
+         */
+        source: 'rules' | 'rules+llm';
+        /** Format: date-time */
+        checked_at: string;
+      } | null;
+    };
+    /** @description Страница задач */
+    TaskPage: {
+      items: components['schemas']['Task'][];
+      /** @description Всего задач под фильтром */
+      total: number;
+      limit: number;
+      offset: number;
+    };
+    CreateTask: {
+      /** @description Пробелы по краям обрезаются перед сохранением */
+      title: string;
+    };
+    UpdateTask: {
+      /**
+       * @description Новый статус
+       * @enum {string}
+       */
+      status: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
+      /** @description Причина смены статуса; обязательна для перехода в archived */
+      comment?: string;
+    };
+    /** @description Один переход статуса */
+    TaskTransition: {
+      /** @description Статус до перехода */
+      from: string;
+      /** @description Статус после перехода */
+      to: string;
+      /** @description Кто сменил статус */
+      actor: string;
+      /** @description Комментарий (пустой, если не нужен) */
+      comment: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    TaskHistoryPage: {
+      items: components['schemas']['TaskTransition'][];
+    };
+    /** @description Рекомендация ИИ-проверки. Флаги и вердикт задают правила; модель только добавляет совет. */
+    TaskAnalysis: {
+      /** Format: uuid */
+      task_id: string;
+      /** @enum {string} */
+      verdict: 'ok' | 'needs_review';
+      /** @description Что нашли правила */
+      flags: {
+        /** @enum {string} */
+        code: 'money' | 'link' | 'contact' | 'shouting' | 'too_short';
+        message: string;
+      }[];
+      /** @description Совет модели; null — модель недоступна или ответила некорректно */
+      advice: {
+        /** @description Вывод одним предложением */
+        summary: string;
+        /** @enum {string} */
+        risk: 'low' | 'medium' | 'high';
+        /** @description Что улучшить или проверить */
+        suggestion: string;
+      } | null;
+      /** @enum {string} */
+      source: 'rules' | 'rules+llm';
+      /** @description Всегда true — система советует, решает человек */
+      decision_required: boolean;
+    };
+    /** @description Сводка для админского дашборда */
+    TaskStats: {
+      /** @description Всего задач */
+      total: number;
+      /** @description В статусе done */
+      completed: number;
+      /** @description Сколько пользователей создавали задачи */
+      owners: number;
+      moderation: {
+        ok: number;
+        needs_review: number;
+        /** @description Ещё не проверены */
+        unchecked: number;
+      };
+      /** @description Создано задач по дням, последние 14 дней */
+      by_day: {
+        /** Format: date */
+        date: string;
+        count: number;
+      }[];
     };
   };
   responses: {
-    /** @description Некорректные входные данные */
+    /** @description Некорректные входные данные (код ошибки и понятное сообщение в теле) */
     BadRequest: {
       headers: {
         [name: string]: unknown;
       };
       content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "invalid_body",
+         *         "message": "Ожидается JSON с полем title",
+         *         "request_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+         *       }
+         *     }
+         */
         'application/json': components['schemas']['Error'];
       };
     };
-    /** @description Нужен действующий токен доступа */
+    /** @description Пользователь не вошёл или токен недействителен */
     Unauthorized: {
       headers: {
         [name: string]: unknown;
       };
       content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "unauthorized",
+         *         "message": "Войдите, чтобы продолжить"
+         *       }
+         *     }
+         */
         'application/json': components['schemas']['Error'];
       };
     };
-    /** @description Не удалось выполнить операцию */
+    /** @description Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin) */
+    Forbidden: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "forbidden",
+         *         "message": "Недостаточно прав для этого действия"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description Запись не найдена или принадлежит другому пользователю (не различаются намеренно) */
+    NotFound: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "not_found",
+         *         "message": "Задача не найдена"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту). Заголовок `Retry-After` подсказывает, через сколько секунд повторить. */
+    TooManyRequests: {
+      headers: {
+        /** @description Через сколько секунд можно повторить */
+        'Retry-After'?: number;
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "rate_limit",
+         *         "message": "Слишком много запросов. Подождите минуту"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description Внутренняя ошибка; подробности — в логах по request_id */
     InternalError: {
       headers: {
         [name: string]: unknown;
       };
       content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "internal_error",
+         *         "message": "Не удалось выполнить операцию",
+         *         "request_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже */
+    Unavailable: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "cache_unavailable",
+         *         "message": "Попробуйте ещё раз позже"
+         *       }
+         *     }
+         */
         'application/json': components['schemas']['Error'];
       };
     };
   };
   parameters: {
+    /**
+     * @description Идентификатор записи (UUID)
+     * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+     */
     ID: string;
+    /** @description Сколько записей вернуть (страница) */
+    Limit: number;
+    /** @description Сколько записей пропустить от начала */
+    Offset: number;
+    /**
+     * @description Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`, а не выполнит действие ещё раз.
+     * @example 6f1e2d3c-create-task-1
+     */
+    IdempotencyKey: string;
   };
   requestBodies: never;
   headers: never;
   pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+  login: {
+    parameters: {
+      query?: {
+        /**
+         * @description Внутренний путь приложения, куда вернуться после входа (внешние адреса игнорируются)
+         * @example /dashboard/tasks
+         */
+        next?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Перенаправление на страницу входа Keycloak */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      503: components['responses']['Unavailable'];
+    };
+  };
+  loginCallback: {
+    parameters: {
+      query: {
+        /** @description Код авторизации от Keycloak */
+        code: string;
+        /** @description Одноразовый state из /auth/login */
+        state: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Вход выполнен, перенаправление на `next` */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный или устаревший state (например, вход начат слишком давно) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "invalid_state",
+           *         "message": "Срок входа истёк или вход отменён. Начните заново"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Keycloak не обменял код на токены */
+      502: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "login_failed",
+           *         "message": "Не удалось завершить вход"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      503: components['responses']['Unavailable'];
+    };
+  };
+  logout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сессия удалена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "url": "http://localhost:8180/realms/hackathon/protocol/openid-connect/logout?client_id=hackathon-web&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F"
+           *     }
+           */
+          'application/json': {
+            /**
+             * Format: uri
+             * @description Адрес выхода из Keycloak
+             */
+            url: string;
+          };
+        };
+      };
+      403: components['responses']['Forbidden'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  getMe: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Пользователь */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "id": "9b2c1f0e-1234-4abc-8def-0123456789ab",
+           *       "email": "demo@example.test",
+           *       "name": "Демо Пользователь",
+           *       "roles": [
+           *         "user"
+           *       ]
+           *     }
+           */
+          'application/json': components['schemas']['User'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  adminPing: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Пользователь — администратор */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "status": "ok"
+           *     }
+           */
+          'application/json': components['schemas']['Health'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  healthz: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Работает */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "status": "ok"
+           *     }
+           */
+          'application/json': components['schemas']['Health'];
+        };
+      };
+    };
+  };
+  readyz: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Всё готово */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "status": "ready"
+           *     }
+           */
+          'application/json': components['schemas']['Health'];
+        };
+      };
+      /** @description Какая-то зависимость недоступна */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "status": "unavailable"
+           *     }
+           */
+          'application/json': components['schemas']['Health'];
+        };
+      };
+    };
+  };
+  listAudit: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /** @description Идентификатор пользователя (sub) */
+        actor?: string;
+        /**
+         * @description HTTP-метод
+         * @example POST
+         */
+        method?: string;
+        /**
+         * @description Код ответа
+         * @example 403
+         */
+        status?: string;
+        /** @description Найти записи одного запроса */
+        request_id?: string;
+        /**
+         * @description Поиск по пути и почте
+         * @example /api/v1/tasks
+         */
+        q?: string;
+        /** @description occurred или status; «-» — по убыванию */
+        sort?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница журнала */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "actor": "9b2c1f0e-1234-4abc-8def-0123456789ab",
+           *           "actor_email": "demo@example.test",
+           *           "method": "PATCH",
+           *           "route": "/api/v1/tasks/*path",
+           *           "path": "/api/v1/tasks/3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f",
+           *           "status": 200,
+           *           "request_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+           *           "ip": "172.18.0.1",
+           *           "occurred_at": "2026-10-18T09:31:00Z"
+           *         }
+           *       ],
+           *       "total": 1,
+           *       "limit": 20,
+           *       "offset": 0
+           *     }
+           */
+          'application/json': components['schemas']['AuditPage'];
+        };
+      };
+      /** @description Недопустимая сортировка, слишком длинный поиск или неверная пагинация */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "invalid_query",
+           *         "message": "Недопустимая сортировка \"password\""
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listFiles: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /**
+         * @description Тип записи (латиница и «_»), указывается вместе с entity_id
+         * @example application
+         */
+        entity_type?: string;
+        /**
+         * @description Идентификатор записи
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        entity_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница файлов */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "id": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+           *           "name": "устав.pdf",
+           *           "size": 182044,
+           *           "content_type": "application/pdf",
+           *           "created_at": "2026-10-18T09:40:00Z",
+           *           "entity": {
+           *             "type": "application",
+           *             "id": "3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f"
+           *           }
+           *         }
+           *       ],
+           *       "total": 1,
+           *       "limit": 20,
+           *       "offset": 0
+           *     }
+           */
+          'application/json': components['schemas']['FilePage'];
+        };
+      };
+      /** @description `invalid_pagination` или `invalid_entity` (заполнена только одна часть привязки или неверный формат) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  uploadFile: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`, а не выполнит действие ещё раз.
+         * @example 6f1e2d3c-create-task-1
+         */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': {
+          /**
+           * Format: binary
+           * @description Файл до 10 МиБ
+           */
+          file: string;
+          /** @description Тип записи, к которой приложить файл */
+          entity_type?: string;
+          /** @description Идентификатор записи */
+          entity_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Файл сохранён */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['File'];
+        };
+      };
+      /** @description `invalid_body` (нет поля file, пустой файл, недопустимое имя) или `invalid_entity` */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      /** @description Файл больше 10 МиБ */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "payload_too_large",
+           *         "message": "Файл превышает 10 МиБ или запрос имеет неверный формат"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Тип содержимого не разрешён */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "unsupported_type",
+           *         "message": "Можно загрузить PNG, JPEG, WebP, PDF или текстовый файл"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  downloadFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Содержимое файла */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  deleteFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Файл удалён */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  getLlmStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Доступна ли Ollama и скачана ли модель */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "available": true,
+           *       "model": "qwen2.5:1.5b",
+           *       "model_installed": true
+           *     }
+           */
+          'application/json': {
+            /** @description Ollama отвечает */
+            available: boolean;
+            model: string;
+            /** @description Нужная модель скачана */
+            model_installed: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+    };
+  };
+  generate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LlmPrompt'];
+      };
+    };
+    responses: {
+      /** @description Ответ модели */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "text": "«Доброе дело рядом»",
+           *       "model": "qwen2.5:1.5b"
+           *     }
+           */
+          'application/json': {
+            text: string;
+            model: string;
+          };
+        };
+      };
+      /** @description Пустой запрос, слишком длинный или неверная temperature */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "validation_error",
+           *         "message": "Запрос должен содержать от 1 до заданного предела символов"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      /** @description Лимит запросов (`rate_limit`) или модель занята (`model_busy`, повторите через несколько секунд) */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "model_busy",
+           *         "message": "Модель занята, повторите через несколько секунд"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Модель не запущена */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "model_unavailable",
+           *         "message": "Модель недоступна. Запустите её командой make llm"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  generateStream: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "prompt": "Объясни в двух предложениях, что такое волонтёрство"
+         *     }
+         */
+        'application/json': components['schemas']['LlmPrompt'];
+      };
+    };
+    responses: {
+      /** @description Поток фрагментов */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example data: {"t":"Волонтёрство — "}
+           *
+           *     data: {"t":"это добровольная помощь…"}
+           *
+           *     event: done
+           *     data: {}
+           */
+          'text/event-stream': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  listNotifications: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница уведомлений */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "id": "5d1c0b9a-8e7f-4a6b-9c5d-4e3f2a1b0c9d",
+           *           "title": "ИИ-проверка: задача требует внимания",
+           *           "body": "Откройте задачу, чтобы посмотреть рекомендацию. Решение остаётся за вами.",
+           *           "link": "/dashboard/tasks",
+           *           "created_at": "2026-10-18T09:30:05Z",
+           *           "read_at": null
+           *         }
+           *       ],
+           *       "total": 1,
+           *       "unread": 1,
+           *       "limit": 20,
+           *       "offset": 0
+           *     }
+           */
+          'application/json': components['schemas']['NotificationPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  streamNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Поток событий */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example event: notification
+           *     data: {"id":"5d1c…","title":"ИИ-проверка: замечаний нет","body":"…","link":"/dashboard/tasks","created_at":"2026-10-18T09:30:05Z","read_at":null}
+           */
+          'text/event-stream': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+    };
+  };
+  markNotificationRead: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Отмечено (повторная отметка тоже 204) */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  markAllNotificationsRead: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Все уведомления отмечены прочитанными */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+    };
+  };
+  getMaxStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Статус */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "enabled": true,
+           *       "linked": false
+           *     }
+           */
+          'application/json': components['schemas']['MaxStatus'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+    };
+  };
+  unlinkMax: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Отключено */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      /** @description Бот MAX не настроен на сервере */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "max_disabled",
+           *         "message": "Уведомления в MAX не настроены"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  createMaxLink: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Ссылка */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "url": "https://max.ru/demo_bot?start=Zk3x9QpL2mN7vR1sT4uW8yB0"
+           *     }
+           */
+          'application/json': {
+            /** Format: uri */
+            url: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      /** @description Бот MAX не настроен на сервере */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  websocket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Протокол переключён на WebSocket */
+      101: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listTasks: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /**
+         * @description Фильтр по статусу; несколько — через запятую
+         * @example todo,in_progress
+         */
+        status?: string;
+        /**
+         * @description Поиск по подстроке в названии (без учёта регистра)
+         * @example демо
+         */
+        q?: string;
+        /**
+         * @description Поле сортировки — `created`, `title` или `status`; минус в начале — по убыванию
+         * @example title
+         */
+        sort?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница задач */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "id": "3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f",
+           *           "title": "Подготовить демо для жюри",
+           *           "status": "in_progress",
+           *           "created_at": "2026-10-18T09:30:00Z",
+           *           "moderation": {
+           *             "verdict": "ok",
+           *             "source": "rules+llm",
+           *             "checked_at": "2026-10-18T09:30:04Z"
+           *           }
+           *         }
+           *       ],
+           *       "total": 1,
+           *       "limit": 20,
+           *       "offset": 0
+           *     }
+           */
+          'application/json': components['schemas']['TaskPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  createTask: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`, а не выполнит действие ещё раз.
+         * @example 6f1e2d3c-create-task-1
+         */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "title": "Подготовить демо для жюри"
+         *     }
+         */
+        'application/json': components['schemas']['CreateTask'];
+      };
+    };
+    responses: {
+      /** @description Задача создана */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "id": "3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f",
+           *       "title": "Подготовить демо для жюри",
+           *       "status": "draft",
+           *       "created_at": "2026-10-18T09:30:00Z",
+           *       "moderation": null
+           *     }
+           */
+          'application/json': components['schemas']['Task'];
+        };
+      };
+      /** @description `invalid_body` — нет поля title; `validation_error` — пустое или длиннее 200 символов */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "validation_error",
+           *         "message": "Название должно содержать от 1 до 200 символов"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  deleteTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Задача удалена */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  updateTaskStatus: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`, а не выполнит действие ещё раз.
+         * @example 6f1e2d3c-create-task-1
+         */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateTask'];
+      };
+    };
+    responses: {
+      /** @description Статус изменён */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Task'];
+        };
+      };
+      /** @description `invalid_id`, `invalid_body` (нет status) или `comment_required` (архивация без комментария) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "comment_required",
+           *         "message": "Укажите комментарий к смене статуса"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      /** @description Переход из текущего статуса в запрошенный запрещён */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "invalid_transition",
+           *         "message": "Недопустимая смена статуса: draft → done"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getTaskHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description История переходов */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "from": "draft",
+           *           "to": "todo",
+           *           "actor": "demo@example.test",
+           *           "comment": "",
+           *           "created_at": "2026-10-18T09:31:00Z"
+           *         },
+           *         {
+           *           "from": "todo",
+           *           "to": "archived",
+           *           "actor": "demo@example.test",
+           *           "comment": "Больше не актуально",
+           *           "created_at": "2026-10-18T10:05:00Z"
+           *         }
+           *       ]
+           *     }
+           */
+          'application/json': components['schemas']['TaskHistoryPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  analyzeTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Рекомендация (решение принимает человек) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "task_id": "3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f",
+           *       "verdict": "needs_review",
+           *       "flags": [
+           *         {
+           *           "code": "money",
+           *           "message": "Похоже на сбор или перевод денег"
+           *         }
+           *       ],
+           *       "advice": {
+           *         "summary": "В тексте просьба перевести деньги",
+           *         "risk": "high",
+           *         "suggestion": "Уточните цель и уберите реквизиты"
+           *       },
+           *       "source": "rules+llm",
+           *       "decision_required": true
+           *     }
+           */
+          'application/json': components['schemas']['TaskAnalysis'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getTaskStats: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сводка */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "total": 42,
+           *       "completed": 17,
+           *       "owners": 9,
+           *       "moderation": {
+           *         "ok": 30,
+           *         "needs_review": 4,
+           *         "unchecked": 8
+           *       },
+           *       "by_day": [
+           *         {
+           *           "date": "2026-10-17",
+           *           "count": 5
+           *         },
+           *         {
+           *           "date": "2026-10-18",
+           *           "count": 7
+           *         }
+           *       ]
+           *     }
+           */
+          'application/json': components['schemas']['TaskStats'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  exportTasksCsv: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV-файл (скачивается как tasks-ГГГГ-ММ-ДД.csv) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example ID;Владелец;Название;Статус;Создана;Проверка ИИ;Источник проверки
+           *     3f6c…;a1b2…;Подготовить демо;done;2026-10-18T09:30:00Z;замечаний нет;rules+llm
+           */
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+}
