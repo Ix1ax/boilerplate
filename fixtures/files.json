@@ -1,0 +1,11 @@
+{
+  "_comment": "Файлы из fixtures/files; entity — необязательная привязка к записи другого сервиса.",
+  "items": [
+    { "user": "demo", "file": "regulations.txt" },
+    {
+      "user": "demo",
+      "file": "application-documents.txt",
+      "entity": { "type": "application", "id": "demo-application-1" }
+    }
+  ]
+}

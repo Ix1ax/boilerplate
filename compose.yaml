@@ -1,21 +1,91 @@
+# Имена контейнеров совпадают с именами сервисов: <домен>-<роль> (tasks-service, tasks-postgres, files-s3 …).
+# У каждого сервиса свои хранилище и учётные данные; общаются сервисы через gateway (HTTP) и RabbitMQ (события).
+x-pg-healthcheck: &pg-health
+  interval: 3s
+  timeout: 3s
+  retries: 30
+x-service-health: &svc-health
+  test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/readyz']
+  interval: 5s
+  timeout: 5s
+  retries: 30
+
 services:
-  postgres:
+  # ── Хранилища: по одному на сервис ────────────────────────────────────────
+  tasks-postgres:
+    container_name: tasks-postgres
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?run make setup}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make setup}
-      POSTGRES_DB: ${POSTGRES_DB:?required}
-    ports: ['127.0.0.1:5432:5432']
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./infra/postgres:/docker-entrypoint-initdb.d:ro
+      POSTGRES_USER: ${TASKS_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${TASKS_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${TASKS_DB_NAME:?required}
+    ports: ['127.0.0.1:${TASKS_DB_PORT:-5433}:5432']
+    volumes: [tasks-postgres-data:/var/lib/postgresql/data]
     healthcheck:
+      <<: *pg-health
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
-      interval: 3s
-      timeout: 3s
-      retries: 30
-  redis:
-    image: redis:7.4-alpine
+  files-postgres:
+    container_name: files-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${FILES_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${FILES_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${FILES_DB_NAME:?required}
+    ports: ['127.0.0.1:${FILES_DB_PORT:-5434}:5432']
+    volumes: [files-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  notifications-postgres:
+    container_name: notifications-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${NOTIFICATIONS_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${NOTIFICATIONS_DB_NAME:?required}
+    ports: ['127.0.0.1:${NOTIFICATIONS_DB_PORT:-5435}:5432']
+    volumes: [notifications-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  audit-postgres:
+    container_name: audit-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${AUDIT_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${AUDIT_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${AUDIT_DB_NAME:?required}
+    ports: ['127.0.0.1:${AUDIT_DB_PORT:-5436}:5432']
+    volumes: [audit-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  keycloak-postgres:
+    container_name: keycloak-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME:?required}
+    volumes: [keycloak-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  files-s3:
+    container_name: files-s3
+    image: chrislusf/seaweedfs:4.37
+    command: [mini, '-dir=/data']
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?required}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?required}
+      S3_BUCKET: ${S3_BUCKET:?required}
+    ports: ['127.0.0.1:8333:8333']
+    volumes: [files-s3-data:/data]
+  # Сессии и счётчики лимитов gateway; доменные сервисы Redis не используют.
+  gateway-redis:
+    container_name: gateway-redis
+    # Redis 7.2 — последняя ветка под BSD-лицензией (с 7.4 лицензия несвободная). Не обновлять выше 7.2.
+    image: redis:7.2-alpine
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
     command:
@@ -26,37 +96,46 @@ services:
       ]
     ports: ['127.0.0.1:6379:6379']
     healthcheck:
+      <<: *pg-health
       test:
         [
           CMD-SHELL,
           'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG',
         ]
-      interval: 3s
-      timeout: 3s
-      retries: 30
-  s3:
-    image: chrislusf/seaweedfs:4.37
-    command: [mini, '-dir=/data']
+  # Шина событий между сервисами. Консоль управления: http://localhost:15672.
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:4.1-management-alpine
     environment:
-      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?required}
-      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?required}
-      S3_BUCKET: ${S3_BUCKET:?required}
-    ports: ['127.0.0.1:8333:8333']
-    volumes: [s3-data:/data]
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?run make setup}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?run make setup}
+    ports:
+      - '127.0.0.1:${RABBITMQ_PORT:-5672}:5672'
+      - '127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672'
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
   mailpit:
+    container_name: mailpit
     image: axllent/mailpit:v1.27.8
     ports: ['127.0.0.1:8025:8025']
   keycloak:
+    container_name: keycloak
     image: quay.io/keycloak/keycloak:26.8.0
     command: [start-dev, --import-realm]
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: ${POSTGRES_USER}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/${KEYCLOAK_DB_NAME}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?required}
       DEMO_PASSWORD: ${DEMO_PASSWORD:?required}
+      ADMIN_DEMO_PASSWORD: ${ADMIN_DEMO_PASSWORD:?required}
       SECOND_DEMO_PASSWORD: ${SECOND_DEMO_PASSWORD:?required}
       KC_HOSTNAME: http://localhost:8180
       KC_HEALTH_ENABLED: 'true'
@@ -64,7 +143,7 @@ services:
     ports: ['127.0.0.1:8180:8080']
     volumes: [./.local/keycloak:/opt/keycloak/data/import:ro]
     depends_on:
-      postgres: { condition: service_healthy }
+      keycloak-postgres: { condition: service_healthy }
       mailpit: { condition: service_started }
     healthcheck:
       test:
@@ -75,59 +154,197 @@ services:
       timeout: 4s
       retries: 60
       start_period: 30s
-  migrate:
-    profiles: [app]
-    build: ./apps/api
-    entrypoint: [migrate]
+
+  # ── Локальная модель (профиль llm: make llm) ──────────────────────────────
+  llm-ollama:
+    container_name: llm-ollama
+    profiles: [llm]
+    image: ollama/ollama:latest
+    ports: ['127.0.0.1:11434:11434']
+    volumes: [llm-ollama-data:/root/.ollama]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  llm-ollama-pull:
+    container_name: llm-ollama-pull
+    profiles: [llm]
+    image: ollama/ollama:latest
+    entrypoint: [ollama, pull, '${LLM_MODEL:-qwen2.5:1.5b}']
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      OLLAMA_HOST: http://llm-ollama:11434
     depends_on:
-      postgres: { condition: service_healthy }
-  api:
+      llm-ollama: { condition: service_healthy }
+
+  # ── Сервисы приложения (профиль app: make up) ─────────────────────────────
+  # Миграции входят в бинарник сервиса и применяются к его собственной базе.
+  tasks-migrate:
+    container_name: tasks-migrate
     profiles: [app]
-    build: ./apps/api
+    build: ./apps/tasks
+    command: [migrate, up]
     environment:
-      APP_ENV: development
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-      REDIS_ADDR: redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      S3_ENDPOINT: http://s3:8333
+      DATABASE_URL: postgres://${TASKS_DB_USER}:${TASKS_DB_PASSWORD}@tasks-postgres:5432/${TASKS_DB_NAME}?sslmode=disable
+    depends_on:
+      tasks-postgres: { condition: service_healthy }
+  files-migrate:
+    container_name: files-migrate
+    profiles: [app]
+    build: ./apps/files
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${FILES_DB_USER}:${FILES_DB_PASSWORD}@files-postgres:5432/${FILES_DB_NAME}?sslmode=disable
+    depends_on:
+      files-postgres: { condition: service_healthy }
+  notifications-migrate:
+    container_name: notifications-migrate
+    profiles: [app]
+    build: ./apps/notifications
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-postgres:5432/${NOTIFICATIONS_DB_NAME}?sslmode=disable
+    depends_on:
+      notifications-postgres: { condition: service_healthy }
+  audit-migrate:
+    container_name: audit-migrate
+    profiles: [app]
+    build: ./apps/audit
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
+    depends_on:
+      audit-postgres: { condition: service_healthy }
+  tasks-service:
+    container_name: tasks-service
+    profiles: [app]
+    build: ./apps/tasks
+    environment:
+      DATABASE_URL: postgres://${TASKS_DB_USER}:${TASKS_DB_PASSWORD}@tasks-postgres:5432/${TASKS_DB_NAME}?sslmode=disable
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      LLM_SERVICE_URL: http://llm-service:8080
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      tasks-migrate: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
+  files-service:
+    container_name: files-service
+    profiles: [app]
+    build: ./apps/files
+    environment:
+      DATABASE_URL: postgres://${FILES_DB_USER}:${FILES_DB_PASSWORD}@files-postgres:5432/${FILES_DB_NAME}?sslmode=disable
+      S3_ENDPOINT: http://files-s3:8333
       S3_REGION: us-east-1
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      files-s3: { condition: service_started }
+      files-migrate: { condition: service_completed_successfully }
+    healthcheck: *svc-health
+  # Уведомления: подписан на notification.requested в RabbitMQ, не знает чужих доменов.
+  notifications-service:
+    container_name: notifications-service
+    profiles: [app]
+    build: ./apps/notifications
+    environment:
+      DATABASE_URL: postgres://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-postgres:5432/${NOTIFICATIONS_DB_NAME}?sslmode=disable
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      # Письма уходят в Mailpit (http://localhost:8025); в production — свой SMTP.
+      SMTP_ADDR: mailpit:1025
+      MAIL_FROM: noreply@example.test
+    restart: on-failure:3
+    depends_on:
+      mailpit: { condition: service_started }
+      notifications-migrate: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
+  # Журнал действий: сохраняет audit.recorded, которые публикует gateway; читает только admin.
+  audit-service:
+    container_name: audit-service
+    profiles: [app]
+    build: ./apps/audit
+    environment:
+      DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      audit-migrate: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
+  # Шлюз к Ollama. Готов и без модели: генерация вернёт 503, пока не запущен make llm.
+  llm-service:
+    container_name: llm-service
+    profiles: [app]
+    build: ./apps/llm
+    environment:
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      LLM_URL: http://llm-ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:1.5b}
+    restart: on-failure:3
+    healthcheck: *svc-health
+  # Gateway: единственный публичный вход. Проверяет сессию/JWT и проксирует в сервисы.
+  gateway-service:
+    container_name: gateway-service
+    profiles: [app]
+    build: ./apps/gateway
+    environment:
+      APP_ENV: development
+      REDIS_ADDR: gateway-redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       OIDC_ISSUER: ${OIDC_ISSUER}
       OIDC_INTERNAL_URL: http://keycloak:8080/realms/hackathon
       OIDC_CLIENT_ID: hackathon-api
       OIDC_WEB_CLIENT_ID: hackathon-web
       APP_ORIGIN: ${APP_ORIGIN}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      TASKS_URL: http://tasks-service:8080
+      FILES_URL: http://files-service:8080
+      LLM_SERVICE_URL: http://llm-service:8080
+      NOTIFICATIONS_URL: http://notifications-service:8080
+      AUDIT_URL: http://audit-service:8080
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     ports: ['127.0.0.1:8080:8080']
     restart: on-failure:3
     depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      gateway-redis: { condition: service_healthy }
       keycloak: { condition: service_healthy }
-      s3: { condition: service_started }
-      migrate: { condition: service_completed_successfully }
-    healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-  web:
+      tasks-service: { condition: service_healthy }
+      files-service: { condition: service_healthy }
+      llm-service: { condition: service_healthy }
+      notifications-service: { condition: service_healthy }
+      audit-service: { condition: service_healthy }
+    healthcheck: *svc-health
+  web-service:
+    container_name: web-service
     profiles: [app]
     build:
       context: .
       dockerfile: apps/web/Dockerfile
     ports: ['127.0.0.1:3000:8080']
     depends_on:
-      api: { condition: service_healthy }
+      gateway-service: { condition: service_healthy }
     healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/healthz']
       interval: 5s
       timeout: 3s
       retries: 30
+
 volumes:
-  postgres-data:
-  s3-data:
+  tasks-postgres-data:
+  files-postgres-data:
+  notifications-postgres-data:
+  audit-postgres-data:
+  keycloak-postgres-data:
+  files-s3-data:
+  rabbitmq-data:
+  llm-ollama-data:

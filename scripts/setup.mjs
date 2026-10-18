@@ -28,11 +28,18 @@ const values = Object.fromEntries(
     }),
 );
 for (const name of [
-  'POSTGRES_PASSWORD',
+  'TASKS_DB_PASSWORD',
+  'FILES_DB_PASSWORD',
+  'NOTIFICATIONS_DB_PASSWORD',
+  'AUDIT_DB_PASSWORD',
+  'KEYCLOAK_DB_PASSWORD',
+  'RABBITMQ_PASSWORD',
   'REDIS_PASSWORD',
+  'INTERNAL_TOKEN',
   'S3_SECRET_KEY',
   'KEYCLOAK_ADMIN_PASSWORD',
   'DEMO_PASSWORD',
+  'ADMIN_DEMO_PASSWORD',
   'SECOND_DEMO_PASSWORD',
 ]) {
   if (!values[name]) {
@@ -43,11 +50,9 @@ for (const name of [
     );
   }
 }
-if (text.includes('REPLACE_WITH_POSTGRES_PASSWORD'))
-  text = text.replace(
-    'REPLACE_WITH_POSTGRES_PASSWORD',
-    values.POSTGRES_PASSWORD,
-  );
+// Подставляем сгенерированные пароли в строки подключения (REPLACE_WITH_<ИМЯ_ПАРОЛЯ>).
+for (const [name, value] of Object.entries(values))
+  text = text.replaceAll(`REPLACE_WITH_${name}`, value);
 await writeFile(path.join(root, '.env'), text, { mode: 0o600 });
 await chmod(path.join(root, '.env'), 0o600);
 await mkdir(path.join(root, '.local/keycloak'), { recursive: true });
@@ -63,16 +68,17 @@ for (const client of realm.clients) {
   }
 }
 realm.users = [
-  ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Демо'],
-  ['SECOND_DEMO_EMAIL', 'SECOND_DEMO_PASSWORD', 'Второй'],
-].map(([email, password, name]) => ({
+  ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Демо', ['user']],
+  ['SECOND_DEMO_EMAIL', 'SECOND_DEMO_PASSWORD', 'Второй', ['user']],
+  ['ADMIN_DEMO_EMAIL', 'ADMIN_DEMO_PASSWORD', 'Админ', ['user', 'admin']],
+].map(([email, password, name, realmRoles]) => ({
   username: values[email],
   email: values[email],
   enabled: true,
   emailVerified: true,
   firstName: name,
   lastName: 'Пользователь',
-  realmRoles: ['user'],
+  realmRoles,
   credentials: [
     { type: 'password', value: '${' + password + '}', temporary: false },
   ],

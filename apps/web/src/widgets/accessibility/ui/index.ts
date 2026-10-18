@@ -1,1 +1,1 @@
-export { Accessibility } from "./Accessibility"
+export { Accessibility } from './Accessibility';

@@ -1,27 +1,31 @@
 # Стартовая монорепа для хакатонов
 
-Самостоятельный шаблон: Vite + React + TypeScript, Go API, PostgreSQL, Redis, приватные файлы S3 и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
+Самостоятельный шаблон: Vite + React + TypeScript, Go-микросервисы (gateway, tasks, files), отдельный PostgreSQL на каждый сервис, RabbitMQ, Redis, приватные файлы S3, локальная LLM (Qwen) и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
 
 ## Быстрый старт
 
-Нужны Docker Desktop с Compose v2 и Node.js 24 из `.nvmrc`. Для разработки API на компьютере нужен Go версии из `apps/api/go.mod`.
+Нужны Docker Desktop с Compose v2 и Node.js 24 из `.nvmrc`. Для разработки API на компьютере нужен Go версии из `apps/gateway/go.mod`.
 
 ```sh
-make up
+make demo
 ```
 
-Команда создаёт `.env` и локальный realm, собирает приложения, применяет миграции и ждёт готовности сервисов. Откройте [приложение](http://localhost:3000), нажмите «Войти» и зарегистрируйтесь либо используйте `DEMO_EMAIL` и `DEMO_PASSWORD` из `.env`. Пароли генерируются отдельно для каждой копии.
+Одна команда создаёт `.env` и realm Keycloak, собирает образы, применяет миграции, заполняет демо-данные и **печатает ссылки и тестовых пользователей** (роли пользователь и администратор, пароли генерируются для каждой копии и лежат в локальном `.env`). Первый запуск занимает несколько минут. Только поднять стек без данных: `make up`. Локальная модель Qwen ставится отдельно: `make llm`.
 
-| Сервис         | Адрес                        |
-| -------------- | ---------------------------- |
-| Приложение     | http://localhost:3000        |
-| Go API         | http://localhost:8080        |
-| Готовность API | http://localhost:8080/readyz |
-| Keycloak       | http://localhost:8180        |
-| Mailpit        | http://localhost:8025        |
-| PostgreSQL     | localhost:5432               |
-| Redis          | localhost:6379               |
-| S3 API         | http://localhost:8333        |
+| Сервис                 | Адрес                                    |
+| ---------------------- | ---------------------------------------- |
+| Приложение             | http://localhost:3000                    |
+| Swagger UI (API)       | http://localhost:3000/api/docs           |
+| OpenAPI-описание       | http://localhost:3000/api/openapi.yaml   |
+| Проверка состояния API | http://localhost:8080/healthz, `/readyz` |
+| Метрики Prometheus     | http://localhost:8080/metrics            |
+| Keycloak               | http://localhost:8180                    |
+| RabbitMQ (консоль)     | http://localhost:15672                   |
+| Mailpit                | http://localhost:8025                    |
+
+## Лицензии
+
+Решение не использует платное или проприетарное ПО: Postgres (PostgreSQL License), Redis 7.2 (BSD), RabbitMQ (MPL 2.0), Keycloak, SeaweedFS, Ollama и Swagger UI (Apache 2.0 / MIT), модель Qwen2.5-1.5B (Apache 2.0). Redis зафиксирован на 7.2: начиная с 7.4 его лицензия несвободна.
 
 Данные PostgreSQL и S3 сохраняются в Docker volumes. Redis хранит временные браузерные сессии: после его перезапуска потребуется войти снова. `make down` останавливает сервисы, сохраняя тома. Для двух копий шаблона одновременно поменяйте имя проекта **и** порты.
 
@@ -38,14 +42,12 @@ make up
 ## Структура
 
 ```text
-apps/api/
-  cmd/api/                    # Запуск API
-  cmd/migrate/                # Миграции
-  internal/auth/              # JWT, OIDC и серверные сессии
-  internal/tasks/             # Пример предметного модуля
-  internal/files/             # Приватные файлы и список метаданных
-  internal/database/          # Встроенные SQL-миграции
-  internal/platform/          # PostgreSQL, Redis и S3
+apps/gateway/                 # Публичный вход: JWT, OIDC, сессии, проксирование (свой go.mod)
+  cmd/gateway/  internal/auth/  internal/httpapi/  internal/config/  internal/platform/
+apps/tasks/                   # Сервис задач (свой go.mod, своя база tasks)
+  cmd/tasks/  internal/tasks/  internal/database/  internal/platform/  internal/config/
+apps/files/                   # Сервис файлов (свой go.mod, своя база files, S3)
+  cmd/files/  internal/files/  internal/database/  internal/platform/  internal/config/
 apps/web/src/
   app/                        # Провайдеры, маршруты, layouts
   pages/                      # Страницы

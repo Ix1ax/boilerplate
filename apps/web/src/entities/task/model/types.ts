@@ -3,6 +3,8 @@ export type Task = {
   title: string;
   completed: boolean;
   createdAt: string;
+  /** null, пока асинхронная проверка не выполнена. */
+  moderation: { verdict: 'ok' | 'needs_review'; source: string } | null;
 };
 
 export type TaskPage = {

@@ -1,0 +1,986 @@
+openapi: 3.0.3
+info:
+  title: API стартового проекта
+  version: 0.1.0
+  description: >-
+    Контракт Go API. Браузер использует cookie-сессию на том же origin;
+    токены хранятся в Redis. Внешние клиенты используют Bearer JWT.
+    Изменяющие запросы принимают необязательный заголовок Idempotency-Key:
+    повтор с тем же ключом вернёт сохранённый ответ (заголовок Idempotent-Replayed).
+servers:
+  - url: /
+    description: Тот же origin (в Docker — через Nginx на :3000)
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+paths:
+  /auth/login:
+    get:
+      summary: Начать браузерный вход через Keycloak с PKCE
+      security: []
+      parameters:
+        - name: next
+          in: query
+          schema: { type: string, default: /dashboard/tasks }
+          description: Внутренний путь возврата после входа
+      responses:
+        '302':
+          description: Переход в Keycloak; одноразовый state в HttpOnly cookie
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /auth/callback:
+    get:
+      summary: Обменять OIDC-код и установить HttpOnly cookie сессии
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: Сессия создана, переход на внутренний путь возврата
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /auth/logout:
+    post:
+      summary: Удалить браузерную сессию и получить URL выхода Keycloak
+      security: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema: { type: string }
+          description: Должен точно совпадать с APP_ORIGIN
+      responses:
+        '200':
+          description: Сессия удалена; откройте url для завершения SSO
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, format: uri }
+        '403':
+          description: Origin не совпадает с адресом приложения
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /healthz:
+    get:
+      summary: Проверить, что процесс работает
+      security: []
+      responses:
+        '200':
+          description: Процесс работает
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /readyz:
+    get:
+      summary: Проверить PostgreSQL, Redis и S3
+      security: []
+      responses:
+        '200':
+          description: Зависимости доступны
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Одна из зависимостей недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/v1/me:
+    get:
+      summary: Получить текущего пользователя
+      responses:
+        '200':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/ping:
+    get:
+      summary: Проверить роль администратора
+      responses:
+        '200':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Требуется realm-роль admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/tasks:
+    get:
+      summary: Получить свои задачи
+      responses:
+        '200':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100000
+            default: 0
+    post:
+      summary: Создать задачу
+      responses:
+        '201':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Зависимость временно недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTask'
+  /api/v1/tasks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    patch:
+      summary: Отметить свою задачу
+      responses:
+        '200':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Запись не найдена или принадлежит другому пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Зависимость временно недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTask'
+    delete:
+      summary: Удалить свою задачу
+      responses:
+        '204':
+          description: Запрос выполнен
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Запись не найдена или принадлежит другому пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Зависимость временно недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/tasks/{id}/analyze:
+    post:
+      summary: ИИ-проверка задачи (рекомендация для человека)
+      description: Правила дают флаги и вердикт, модель (если доступна) добавляет совет. Решение остаётся за человеком. Лимит 10 в минуту на пользователя.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Рекомендация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskAnalysis'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Задача не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много проверок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/notifications:
+    get:
+      summary: Мои уведомления
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+      responses:
+        '200':
+          description: Страница уведомлений и число непрочитанных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/stream:
+    get:
+      summary: Поток новых уведомлений (SSE)
+      description: 'События event: notification с JSON уведомления; комментарии-пинги каждые 25 с; соединение закрывается через 2 минуты, клиент переподключается.'
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/{id}/read:
+    post:
+      summary: Отметить уведомление прочитанным
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Отмечено
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/notifications/read-all:
+    post:
+      summary: Отметить все уведомления прочитанными
+      responses:
+        '204':
+          description: Отмечено
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/admin/tasks/export.csv:
+    get:
+      summary: Выгрузка всех задач в CSV (только администратор)
+      description: UTF-8 с BOM, разделитель «;» — открывается в Excel с русской локалью.
+      responses:
+        '200':
+          description: CSV-файл
+          content:
+            text/csv:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/tasks/stats:
+    get:
+      summary: Сводка для дашборда (только администратор)
+      responses:
+        '200':
+          description: Итоги, разбивка по ИИ-проверке и создание задач за 14 дней
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/audit:
+    get:
+      summary: Журнал изменяющих действий (только администратор)
+      description: Фильтры actor, method, status, request_id; поиск q по пути и email; sort=-occurred|occurred|status|-status.
+      parameters:
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: method, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: request_id, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - {
+            name: sort,
+            in: query,
+            schema: { type: string, default: '-occurred' },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+        - {
+            name: offset,
+            in: query,
+            schema: { type: integer, minimum: 0, default: 0 },
+          }
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/files:
+    get:
+      summary: Получить свои файлы
+      parameters:
+        - name: entity_type
+          in: query
+          description: Только файлы, приложенные к записи (вместе с entity_id)
+          schema: { type: string }
+        - name: entity_id
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+      responses:
+        '200':
+          description: Страница файлов текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      summary: Загрузить приватный файл
+      responses:
+        '201':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: Превышен размер запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Недопустимый тип файла
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Зависимость временно недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: До 10 МиБ. PNG, JPEG, WebP, PDF или текст. Тип определяется по содержимому.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                entity_type:
+                  type: string
+                  pattern: '^[a-z][a-z_]{0,29}$'
+                  description: Необязательная привязка к записи другого сервиса (вместе с entity_id)
+                entity_id:
+                  type: string
+                  pattern: '^[A-Za-z0-9-]{1,64}$'
+  /api/v1/files/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      summary: Скачать свой файл
+      responses:
+        '200':
+          description: Содержимое файла; имя передаётся в Content-Disposition
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Запись не найдена или принадлежит другому пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      summary: Удалить свой файл
+      responses:
+        '204':
+          description: Запрос выполнен
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Запись не найдена или принадлежит другому пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Зависимость временно недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/llm/status:
+    get:
+      summary: Состояние локальной модели
+      responses:
+        '200':
+          description: Доступность Ollama и установленной модели
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available, model, model_installed]
+                properties:
+                  available: { type: boolean }
+                  model: { type: string }
+                  model_installed: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/llm/generate:
+    post:
+      summary: Сгенерировать ответ модели целиком
+      description: До 10 запросов в минуту на пользователя; одновременно обрабатывается ограниченное число запросов.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmPrompt'
+      responses:
+        '200':
+          description: Ответ модели
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [text, model]
+                properties:
+                  text: { type: string }
+                  model: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Лимит запросов или модель занята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Модель недоступна (не запущен make llm)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/llm/stream:
+    post:
+      summary: Потоковый ответ модели (SSE)
+      description: 'События: data {"t":"фрагмент"}, затем event done; при сбое event error.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmPrompt'
+      responses:
+        '200':
+          description: Поток text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Лимит запросов или модель занята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Модель недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    TaskStats:
+      type: object
+      required: [total, completed, owners, moderation, by_day]
+      properties:
+        total: { type: integer }
+        completed: { type: integer }
+        owners: { type: integer }
+        moderation:
+          type: object
+          required: [ok, needs_review, unchecked]
+          properties:
+            ok: { type: integer }
+            needs_review: { type: integer }
+            unchecked: { type: integer }
+        by_day:
+          type: array
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer }
+    AuditRecord:
+      type: object
+      required:
+        [
+          actor,
+          actor_email,
+          method,
+          route,
+          path,
+          status,
+          request_id,
+          ip,
+          occurred_at,
+        ]
+      properties:
+        actor: { type: string }
+        actor_email: { type: string }
+        method: { type: string }
+        route: { type: string }
+        path: { type: string }
+        status: { type: integer }
+        request_id: { type: string }
+        ip: { type: string }
+        occurred_at: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Notification:
+      type: object
+      required: [id, title, body, link, created_at, read_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string }
+        link:
+          {
+            type: string,
+            description: Внутренний путь приложения или пустая строка,
+          }
+        created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true }
+    NotificationPage:
+      type: object
+      required: [items, total, unread, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        total: { type: integer }
+        unread: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    TaskAnalysis:
+      type: object
+      required: [task_id, verdict, flags, advice, source, decision_required]
+      properties:
+        task_id: { type: string, format: uuid }
+        verdict: { type: string, enum: [ok, needs_review] }
+        flags:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                {
+                  type: string,
+                  enum: [money, link, contact, shouting, too_short],
+                }
+              message: { type: string }
+        advice:
+          nullable: true
+          type: object
+          required: [summary, risk, suggestion]
+          properties:
+            summary: { type: string }
+            risk: { type: string, enum: [low, medium, high] }
+            suggestion: { type: string }
+        source: { type: string, enum: [rules, rules+llm] }
+        decision_required: { type: boolean }
+    LlmPrompt:
+      type: object
+      required: [prompt]
+      additionalProperties: false
+      properties:
+        prompt: { type: string, minLength: 1, maxLength: 8000 }
+        system: { type: string, maxLength: 2000 }
+        json: { type: boolean, description: Просить модель вернуть JSON }
+        temperature: { type: number, minimum: 0, maximum: 2 }
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - completed
+        - created_at
+        - moderation
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        completed:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        moderation:
+          nullable: true
+          description: Результат асинхронной ИИ-проверки (появляется через несколько секунд после создания)
+          type: object
+          required: [verdict, source, checked_at]
+          properties:
+            verdict: { type: string, enum: [ok, needs_review] }
+            source: { type: string, enum: [rules, rules+llm] }
+            checked_at: { type: string, format: date-time }
+    TaskPage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+          maximum: 100000
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - roles
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+    CreateTask:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Пробелы по краям обрезаются перед сохранением
+    UpdateTask:
+      type: object
+      additionalProperties: false
+      required:
+        - completed
+      properties:
+        completed:
+          type: boolean
+    File:
+      type: object
+      required:
+        - id
+        - name
+        - size
+        - content_type
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+        size:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+        content_type:
+          type: string
+        entity:
+          nullable: true
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string }
+            id: { type: string }
+        created_at:
+          type: string
+          format: date-time
+    FilePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 100000 }
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+  responses:
+    BadRequest:
+      description: Некорректные входные данные
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Нужен действующий токен доступа
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Не удалось выполнить операцию
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

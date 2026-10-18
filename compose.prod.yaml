@@ -1,0 +1,19 @@
+# Production-наложение: docker compose -f compose.yaml -f compose.prod.yaml --profile app up -d
+# Закрывает порты хранилищ и служебных сервисов на хосте: к ним ходят только контейнеры по внутренней сети.
+# Снаружи остаются web-service (за reverse proxy, см. deploy/Caddyfile.example) и keycloak.
+services:
+  tasks-postgres: { ports: !reset [] }
+  files-postgres: { ports: !reset [] }
+  notifications-postgres: { ports: !reset [] }
+  audit-postgres: { ports: !reset [] }
+  gateway-redis: { ports: !reset [] }
+  files-s3: { ports: !reset [] }
+  rabbitmq: { ports: !reset [] }
+  mailpit: { ports: !reset [] }
+  llm-ollama: { ports: !reset [] }
+  gateway-service:
+    ports: !reset []
+    environment:
+      APP_ENV: production
+      SESSION_COOKIE_SECURE: 'true'
+      METRICS_TOKEN: ${METRICS_TOKEN:?задайте METRICS_TOKEN для /metrics}

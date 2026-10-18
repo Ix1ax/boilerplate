@@ -71,6 +71,172 @@ assert.equal((await request('/readyz')).status, 200);
 assert.equal((await request('/api/v1/me')).status, 401);
 assert.equal((await request('/api/v1/me', owner)).status, 200);
 assert.equal((await request('/api/v1/files?limit=0', owner)).status, 400);
+// LLM-шлюз: статус доступен всегда, генерация без модели даёт 503, но не 5xx-падение.
+assert.equal((await request('/api/v1/llm/status', owner)).status, 200);
+assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
+// Асинхронная проверка через RabbitMQ: outbox → брокер → потребитель → результат в списке задач.
+{
+  const created = await request('/api/v1/tasks', owner, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Переведите 500 руб на карту 2202 2000 0000 0000',
+    }),
+  });
+  assert.equal(created.status, 201);
+  const risky = await created.json();
+  let moderation = null;
+  for (let i = 0; i < 30 && !moderation; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const page = await (await request('/api/v1/tasks?limit=100', owner)).json();
+    moderation = page.items.find((item) => item.id === risky.id)?.moderation;
+  }
+  await request(`/api/v1/tasks/${risky.id}`, owner, { method: 'DELETE' });
+  assert.ok(moderation, 'Проверка через RabbitMQ не выполнена за 30 секунд');
+  assert.equal(moderation.verdict, 'needs_review');
+}
+// Межсервисное событие: tasks → notification.requested → notifications-service → колокольчик.
+{
+  let found = false;
+  for (let i = 0; i < 20 && !found; i++) {
+    const page = await (await request('/api/v1/notifications', owner)).json();
+    found = page.items.some((item) => item.title.startsWith('ИИ-проверка'));
+    if (!found) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(found, 'Уведомление через RabbitMQ не пришло за 20 секунд');
+  assert.equal(
+    (await request('/api/v1/notifications/read-all', owner, { method: 'POST' }))
+      .status,
+    204,
+  );
+  assert.equal(
+    (await (await request('/api/v1/notifications', owner)).json()).unread,
+    0,
+  );
+}
+// Live-уведомление по SSE и письмо в Mailpit для новой задачи.
+{
+  const before = await (
+    await fetch('http://localhost:8025/api/v1/messages')
+  ).json();
+  const stream = await fetch(`${base}/api/v1/notifications/stream`, {
+    headers: { Authorization: `Bearer ${owner}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(stream.status, 200);
+  const reader = stream.body.pipeThrough(new TextDecoderStream()).getReader();
+  await reader.read(); // «: connected» — подписка активна до создания задачи
+  const created = await request('/api/v1/tasks', owner, {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Звони +7 999 123-45-67 срочно' }),
+  });
+  const live = await created.json();
+  let text = '';
+  while (!text.includes('event: notification')) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += value;
+  }
+  await reader.cancel();
+  await request(`/api/v1/tasks/${live.id}`, owner, { method: 'DELETE' });
+  assert.ok(
+    text.includes('event: notification'),
+    'Нет live-уведомления по SSE',
+  );
+  const after = await (
+    await fetch('http://localhost:8025/api/v1/messages')
+  ).json();
+  assert.ok(
+    after.messages_count > before.messages_count,
+    'Письмо не дошло до Mailpit',
+  );
+}
+// Idempotency-Key: повтор того же создания не создаёт дубль и помечается заголовком.
+{
+  const key = `smoke-${Date.now()}`;
+  const send = () =>
+    request('/api/v1/tasks', owner, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: JSON.stringify({ title: 'Проверка идемпотентности' }),
+    });
+  const first = await send();
+  const second = await send();
+  const [a, b] = [await first.json(), await second.json()];
+  assert.equal(second.headers.get('idempotent-replayed'), 'true');
+  assert.equal(a.id, b.id, 'Повтор с тем же ключом создал вторую задачу');
+  await request(`/api/v1/tasks/${a.id}`, owner, { method: 'DELETE' });
+}
+// Админская выгрузка: обычному пользователю запрещена, администратору отдаёт CSV для Excel.
+{
+  assert.equal(
+    (await request('/api/v1/admin/tasks/export.csv', owner)).status,
+    403,
+  );
+  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+  const csv = await request('/api/v1/admin/tasks/export.csv', admin);
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type') ?? '', /text\/csv/);
+  // text() отбрасывает BOM, поэтому проверяем байты.
+  const bytes = Buffer.from(await csv.arrayBuffer());
+  assert.ok(
+    bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])) &&
+      bytes.subarray(3, 6).toString() === 'ID;',
+    'CSV должен начинаться с BOM и заголовка',
+  );
+}
+// Статистика, журнал аудита и вложения к записи.
+{
+  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+  assert.equal((await request('/api/v1/admin/tasks/stats', owner)).status, 403);
+  const stats = await (
+    await request('/api/v1/admin/tasks/stats', admin)
+  ).json();
+  assert.equal(stats.by_day.length, 14);
+  assert.ok(stats.total >= 1);
+  assert.equal((await request('/api/v1/admin/audit', owner)).status, 403);
+  let audited = 0;
+  for (let i = 0; i < 15 && !audited; i++) {
+    const page = await (
+      await request('/api/v1/admin/audit?method=POST&limit=1', admin)
+    ).json();
+    audited = page.total;
+    if (!audited) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(audited > 0, 'Журнал аудита пуст: события audit.recorded не дошли');
+  assert.equal(
+    (await request('/api/v1/admin/audit?sort=password', admin)).status,
+    400,
+  );
+
+  const entity = `smoke-${Date.now()}`;
+  const form = new FormData();
+  form.append(
+    'file',
+    new Blob(['вложение'], { type: 'text/plain' }),
+    'doc.txt',
+  );
+  form.append('entity_type', 'application');
+  form.append('entity_id', entity);
+  const uploaded = await request('/api/v1/files', owner, {
+    method: 'POST',
+    body: form,
+  });
+  assert.equal(uploaded.status, 201);
+  const attachment = await uploaded.json();
+  assert.equal(attachment.entity?.id, entity);
+  const attached = await (
+    await request(
+      `/api/v1/files?entity_type=application&entity_id=${entity}`,
+      owner,
+    )
+  ).json();
+  assert.equal(attached.total, 1);
+  assert.equal(
+    (await request(`/api/v1/files?entity_type=Bad`, owner)).status,
+    400,
+  );
+  await request(`/api/v1/files/${attachment.id}`, owner, { method: 'DELETE' });
+}
 assert.equal((await request('/api/v1/admin/ping', owner)).status, 403);
 assert.equal(
   (
@@ -152,7 +318,7 @@ try {
   });
   assert.equal(csrf.status, 403);
   console.log(
-    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3 и CSRF.',
+    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления (SSE и почта), идемпотентность, выгрузка CSV, статистика, журнал аудита и вложения.',
   );
 } finally {
   if (file)
