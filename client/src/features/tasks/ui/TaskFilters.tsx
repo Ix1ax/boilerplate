@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router';
 
-import { STATUS_META, STATUS_ORDER, type TaskStatus } from '@/entities/task';
+import { STATUS_META, STATUS_ORDER } from '@/entities/task';
 
 import {
   Input,
@@ -17,6 +17,11 @@ const SORTS = [
   { value: 'title', label: 'По названию А→Я' },
   { value: 'status', label: 'По статусу' },
 ] as const;
+
+const STATUS_FILTER_ITEMS = [
+  { value: 'all', label: 'Все статусы' },
+  ...STATUS_ORDER.map((value) => ({ value, label: STATUS_META[value].label })),
+];
 
 export const TaskFilters = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,6 +49,7 @@ export const TaskFilters = () => {
         className="max-w-xs"
       />
       <Select
+        items={STATUS_FILTER_ITEMS}
         value={status || 'all'}
         onValueChange={(value) =>
           update('status', value === 'all' ? '' : (value ?? ''))
@@ -53,15 +59,15 @@ export const TaskFilters = () => {
           <SelectValue placeholder="Все статусы" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Все статусы</SelectItem>
-          {STATUS_ORDER.map((value: TaskStatus) => (
-            <SelectItem key={value} value={value}>
-              {STATUS_META[value].label}
+          {STATUS_FILTER_ITEMS.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
       <Select
+        items={SORTS}
         value={sort}
         onValueChange={(value) => update('sort', value ?? '-created')}
       >

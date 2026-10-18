@@ -58,6 +58,7 @@ export const TaskTable = ({
   });
 
   const historyTask = data?.items.find((task) => task.id === historyTaskId);
+  const isPaginationVisible = !isPending && !isError && data;
 
   const handleDelete = async (id: string, title: string) => {
     const ok = await confirm({
@@ -175,7 +176,7 @@ export const TaskTable = ({
         </Table>
       )}
 
-      {!isPending && !isError && data && (
+      {isPaginationVisible && (
         <Pagination
           label="Страницы задач"
           total={data.total}
