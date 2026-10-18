@@ -9,14 +9,41 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Exporter — чтение всех задач для отчёта (только для администратора).
+// Stats — данные для карточек и графика дашборда.
+type Stats struct {
+	Total      int `json:"total"`
+	Completed  int `json:"completed"`
+	Owners     int `json:"owners"`
+	Moderation struct {
+		OK          int `json:"ok"`
+		NeedsReview int `json:"needs_review"`
+		Unchecked   int `json:"unchecked"`
+	} `json:"moderation"`
+	ByDay []DayCount `json:"by_day"`
+}
+type DayCount struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+// Exporter — чтение всех задач для отчётов (только для администратора).
 type Exporter interface {
 	ExportAll(ctx context.Context, row func(owner string, t Task) error) error
+	Stats(ctx context.Context) (Stats, error)
 }
 
 // RegisterAdmin добавляет админские маршруты. Образец отчётной выгрузки для любого домена.
 func RegisterAdmin(group *gin.RouterGroup, e Exporter) {
 	admin := group.Group("/admin", platform.RequireRole("admin"))
+	admin.GET("/tasks/stats", func(c *gin.Context) {
+		st, err := e.Stats(c.Request.Context())
+		if err != nil {
+			_ = c.Error(err)
+			c.AbortWithStatusJSON(500, gin.H{"error": gin.H{"code": "internal_error", "message": "Не удалось посчитать статистику", "request_id": c.GetString("request_id")}})
+			return
+		}
+		c.JSON(200, st)
+	})
 	admin.GET("/tasks/export.csv", func(c *gin.Context) {
 		out := platform.NewCSV(c, "tasks-"+time.Now().Format("2006-01-02")+".csv",
 			[]string{"ID", "Владелец", "Название", "Выполнена", "Создана", "Проверка ИИ", "Источник проверки"})

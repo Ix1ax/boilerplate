@@ -64,3 +64,26 @@ func TestRepositoryOwnershipAndPagination(t *testing.T) {
 		t.Fatalf("Удалённая задача осталась доступна: %v", err)
 	}
 }
+
+func TestStatsSnapshot(t *testing.T) {
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	repo := NewRepository(db)
+	before, err := repo.Stats(ctx)
+	if err != nil || len(before.ByDay) != 14 {
+		t.Fatalf("%+v %v", before, err)
+	}
+	owner := uuid.NewString()
+	defer db.Exec(context.Background(), "DELETE FROM tasks WHERE owner_id=$1", owner)
+	if _, err = New(repo).Create(ctx, owner, "для статистики"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := repo.Stats(ctx)
+	if after.Total != before.Total+1 || after.ByDay[13].Count != before.ByDay[13].Count+1 || after.Moderation.Unchecked < 1 {
+		t.Fatalf("до %+v после %+v", before, after)
+	}
+}

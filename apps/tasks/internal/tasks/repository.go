@@ -62,7 +62,7 @@ func (r *Repository) Insert(ctx context.Context, owner string, t Task) error {
 		return err
 	}
 	payload, _ := json.Marshal(map[string]string{"task_id": t.ID, "email": platform.Email(ctx)})
-	if _, err = tx.Exec(ctx, "INSERT INTO outbox(id,type,user_id,payload) VALUES($1,'task.created',$2,$3)", uuid.NewString(), owner, payload); err != nil {
+	if _, err = tx.Exec(ctx, "INSERT INTO outbox(id,type,user_id,request_id,payload) VALUES($1,'task.created',$2,$3,$4)", uuid.NewString(), owner, platform.RequestID(ctx), payload); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -126,4 +126,40 @@ FROM tasks t LEFT JOIN task_moderation m ON m.task_id=t.id ORDER BY t.created_at
 		}
 	}
 	return rows.Err()
+}
+
+// Stats — сводка для админского дашборда: итоги, разбивка по проверке и динамика за 14 дней.
+// Один снимок данных (RepeatableRead), чтобы цифры в карточках и на графике сходились.
+func (r *Repository) Stats(ctx context.Context) (Stats, error) {
+	st := Stats{ByDay: []DayCount{}}
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return st, err
+	}
+	defer tx.Rollback(ctx)
+	if err = tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE t.completed), count(DISTINCT t.owner_id),
+  count(*) FILTER (WHERE m.verdict='ok'), count(*) FILTER (WHERE m.verdict='needs_review'), count(*) FILTER (WHERE m.task_id IS NULL)
+FROM tasks t LEFT JOIN task_moderation m ON m.task_id=t.id`).Scan(&st.Total, &st.Completed, &st.Owners, &st.Moderation.OK, &st.Moderation.NeedsReview, &st.Moderation.Unchecked); err != nil {
+		return st, err
+	}
+	rows, err := tx.Query(ctx, `SELECT d::date, count(t.id) FROM generate_series(current_date - 13, current_date, interval '1 day') d
+LEFT JOIN tasks t ON t.created_at >= d AND t.created_at < d + interval '1 day' GROUP BY d ORDER BY d`)
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var day DayCount
+		var date time.Time
+		if err = rows.Scan(&date, &day.Count); err != nil {
+			return st, err
+		}
+		day.Date = date.Format("2006-01-02")
+		st.ByDay = append(st.ByDay, day)
+	}
+	if err = rows.Err(); err != nil {
+		return st, err
+	}
+	rows.Close()
+	return st, tx.Commit(ctx)
 }
