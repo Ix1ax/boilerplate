@@ -5,7 +5,7 @@ import (
 	"io"
 	"mime"
 
-	"example.com/hackathon/apps/files/internal/platform"
+	"example.com/hackathon/server/files/internal/platform"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

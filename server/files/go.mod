@@ -1,4 +1,4 @@
-module example.com/hackathon/apps/files
+module example.com/hackathon/server/files
 
 go 1.26.0
 

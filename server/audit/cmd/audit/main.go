@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/hackathon/apps/audit/internal/audit"
-	"example.com/hackathon/apps/audit/internal/broker"
-	"example.com/hackathon/apps/audit/internal/config"
-	"example.com/hackathon/apps/audit/internal/database"
-	"example.com/hackathon/apps/audit/internal/platform"
+	"example.com/hackathon/server/audit/internal/audit"
+	"example.com/hackathon/server/audit/internal/broker"
+	"example.com/hackathon/server/audit/internal/config"
+	"example.com/hackathon/server/audit/internal/database"
+	"example.com/hackathon/server/audit/internal/platform"
 )
 
 func main() {

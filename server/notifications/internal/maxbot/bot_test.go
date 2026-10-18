@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/hackathon/apps/notifications/internal/notifications"
+	"example.com/hackathon/server/notifications/internal/notifications"
 	"github.com/max-messenger/max-bot-api-client-go/v2/model"
 )
 

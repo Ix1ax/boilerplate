@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"example.com/hackathon/apps/gateway/internal/auth"
+	"example.com/hackathon/server/gateway/internal/auth"
 	"github.com/gin-gonic/gin"
 )
 

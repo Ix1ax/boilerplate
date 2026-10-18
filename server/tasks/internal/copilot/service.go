@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"example.com/hackathon/apps/tasks/internal/platform"
-	"example.com/hackathon/apps/tasks/internal/tasks"
+	"example.com/hackathon/server/tasks/internal/platform"
+	"example.com/hackathon/server/tasks/internal/tasks"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

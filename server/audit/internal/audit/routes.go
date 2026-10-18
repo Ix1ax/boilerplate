@@ -4,7 +4,7 @@ import (
 	"context"
 	"strconv"
 
-	"example.com/hackathon/apps/audit/internal/platform"
+	"example.com/hackathon/server/audit/internal/platform"
 	"github.com/gin-gonic/gin"
 )
 

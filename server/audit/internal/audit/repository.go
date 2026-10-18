@@ -3,7 +3,7 @@ package audit
 import (
 	"context"
 
-	"example.com/hackathon/apps/audit/internal/platform"
+	"example.com/hackathon/server/audit/internal/platform"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

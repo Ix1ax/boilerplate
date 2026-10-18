@@ -1,4 +1,4 @@
-module example.com/hackathon/apps/tasks
+module example.com/hackathon/server/tasks
 
 go 1.26.0
 

@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/hackathon/apps/notifications/internal/broker"
-	"example.com/hackathon/apps/notifications/internal/config"
-	"example.com/hackathon/apps/notifications/internal/database"
-	"example.com/hackathon/apps/notifications/internal/maxbot"
-	"example.com/hackathon/apps/notifications/internal/notifications"
-	"example.com/hackathon/apps/notifications/internal/platform"
+	"example.com/hackathon/server/notifications/internal/broker"
+	"example.com/hackathon/server/notifications/internal/config"
+	"example.com/hackathon/server/notifications/internal/database"
+	"example.com/hackathon/server/notifications/internal/maxbot"
+	"example.com/hackathon/server/notifications/internal/notifications"
+	"example.com/hackathon/server/notifications/internal/platform"
 )
 
 func main() {

@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/hackathon/apps/tasks/internal/broker"
-	"example.com/hackathon/apps/tasks/internal/config"
-	"example.com/hackathon/apps/tasks/internal/copilot"
-	"example.com/hackathon/apps/tasks/internal/database"
-	"example.com/hackathon/apps/tasks/internal/platform"
-	"example.com/hackathon/apps/tasks/internal/tasks"
+	"example.com/hackathon/server/tasks/internal/broker"
+	"example.com/hackathon/server/tasks/internal/config"
+	"example.com/hackathon/server/tasks/internal/copilot"
+	"example.com/hackathon/server/tasks/internal/database"
+	"example.com/hackathon/server/tasks/internal/platform"
+	"example.com/hackathon/server/tasks/internal/tasks"
 )
 
 func main() {

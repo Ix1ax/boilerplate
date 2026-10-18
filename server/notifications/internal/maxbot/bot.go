@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"example.com/hackathon/apps/notifications/internal/notifications"
+	"example.com/hackathon/server/notifications/internal/notifications"
 	maxbot "github.com/max-messenger/max-bot-api-client-go/v2"
 	"github.com/max-messenger/max-bot-api-client-go/v2/model"
 )

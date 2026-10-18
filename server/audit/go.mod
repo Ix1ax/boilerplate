@@ -1,4 +1,4 @@
-module example.com/hackathon/apps/audit
+module example.com/hackathon/server/audit
 
 go 1.26.0
 

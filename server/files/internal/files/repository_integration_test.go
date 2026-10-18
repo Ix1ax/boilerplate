@@ -5,7 +5,7 @@ package files
 import (
 	"context"
 	"errors"
-	"example.com/hackathon/apps/files/internal/database"
+	"example.com/hackathon/server/files/internal/database"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"os"

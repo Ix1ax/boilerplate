@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"example.com/hackathon/apps/tasks/internal/platform"
+	"example.com/hackathon/server/tasks/internal/platform"
 	"github.com/gin-gonic/gin"
 )
 

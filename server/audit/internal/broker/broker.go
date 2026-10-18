@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"time"
 
-	"example.com/hackathon/apps/audit/internal/platform"
+	"example.com/hackathon/server/audit/internal/platform"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

@@ -4,8 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"example.com/hackathon/apps/gateway/internal/audit"
-	"example.com/hackathon/apps/gateway/internal/auth"
+	"example.com/hackathon/server/gateway/internal/audit"
+	"example.com/hackathon/server/gateway/internal/auth"
 	"github.com/gin-gonic/gin"
 )
 

@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"example.com/hackathon/apps/files/internal/config"
+	"example.com/hackathon/server/files/internal/config"
 )
 
 // Контракт с gateway: имена заголовков повторены в каждом сервисе, общего пакета нет.

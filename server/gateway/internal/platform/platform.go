@@ -7,7 +7,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"example.com/hackathon/apps/gateway/internal/config"
+	"example.com/hackathon/server/gateway/internal/config"
 )
 
 // Gateway хранит в Redis только сессии и счётчики; данных предметной области у него нет.

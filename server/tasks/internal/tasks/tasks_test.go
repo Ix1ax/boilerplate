@@ -3,7 +3,7 @@ package tasks
 import (
 	"context"
 	"errors"
-	"example.com/hackathon/apps/tasks/internal/platform"
+	"example.com/hackathon/server/tasks/internal/platform"
 	"strings"
 	"testing"
 )

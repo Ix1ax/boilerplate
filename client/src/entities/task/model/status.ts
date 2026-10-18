@@ -1,7 +1,7 @@
 import type { TaskStatus } from './types';
 
 /**
- * Зеркало конечного автомата статусов из apps/tasks/internal/tasks/tasks.go
+ * Зеркало конечного автомата статусов из server/tasks/internal/tasks/tasks.go
  * (statusWorkflow): меняйте синхронно с бэкендом, иначе меню предложит переход,
  * который сервер отвергнет 409-м.
  */

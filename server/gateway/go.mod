@@ -1,4 +1,4 @@
-module example.com/hackathon/apps/gateway
+module example.com/hackathon/server/gateway
 
 go 1.26.0
 

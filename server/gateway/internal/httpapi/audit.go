@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"example.com/hackathon/apps/gateway/internal/audit"
-	"example.com/hackathon/apps/gateway/internal/auth"
+	"example.com/hackathon/server/gateway/internal/audit"
+	"example.com/hackathon/server/gateway/internal/auth"
 	"github.com/gin-gonic/gin"
 )
 

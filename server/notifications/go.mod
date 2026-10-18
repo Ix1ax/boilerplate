@@ -1,4 +1,4 @@
-module example.com/hackathon/apps/notifications
+module example.com/hackathon/server/notifications
 
 go 1.26.0
 
@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/max-messenger/max-bot-api-client-go/v2 v2.4.5
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 )
@@ -29,7 +30,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/max-messenger/max-bot-api-client-go/v2 v2.4.5 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

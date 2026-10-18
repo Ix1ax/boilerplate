@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"example.com/hackathon/apps/tasks/internal/broker"
-	"example.com/hackathon/apps/tasks/internal/platform"
+	"example.com/hackathon/server/tasks/internal/broker"
+	"example.com/hackathon/server/tasks/internal/platform"
 	"github.com/google/uuid"
 )
 

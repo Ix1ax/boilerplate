@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"example.com/hackathon/apps/tasks/internal/platform"
+	"example.com/hackathon/server/tasks/internal/platform"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

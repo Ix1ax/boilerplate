@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"example.com/hackathon/apps/llm/internal/ollama"
+	"example.com/hackathon/server/llm/internal/ollama"
 	"github.com/gin-gonic/gin"
 )
 

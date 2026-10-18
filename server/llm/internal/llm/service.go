@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"example.com/hackathon/apps/llm/internal/ollama"
+	"example.com/hackathon/server/llm/internal/ollama"
 )
 
 var (

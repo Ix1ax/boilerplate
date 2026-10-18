@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/hackathon/apps/llm/internal/config"
-	"example.com/hackathon/apps/llm/internal/llm"
-	"example.com/hackathon/apps/llm/internal/ollama"
-	"example.com/hackathon/apps/llm/internal/platform"
+	"example.com/hackathon/server/llm/internal/config"
+	"example.com/hackathon/server/llm/internal/llm"
+	"example.com/hackathon/server/llm/internal/ollama"
+	"example.com/hackathon/server/llm/internal/platform"
 )
 
 func main() {

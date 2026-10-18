@@ -1,4 +1,4 @@
-module example.com/hackathon/apps/llm
+module example.com/hackathon/server/llm
 
 go 1.26.0
 

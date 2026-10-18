@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/hackathon/apps/notifications/internal/database"
+	"example.com/hackathon/server/notifications/internal/database"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

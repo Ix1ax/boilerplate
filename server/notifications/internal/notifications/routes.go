@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"example.com/hackathon/apps/notifications/internal/platform"
+	"example.com/hackathon/server/notifications/internal/platform"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

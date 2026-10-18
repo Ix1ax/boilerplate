@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"example.com/hackathon/apps/tasks/internal/tasks"
+	"example.com/hackathon/server/tasks/internal/tasks"
 )
 
 func codes(f []Flag) (out []string) {

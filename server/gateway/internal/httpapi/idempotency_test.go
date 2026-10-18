@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"example.com/hackathon/apps/gateway/internal/auth"
-	"example.com/hackathon/apps/gateway/internal/platform"
+	"example.com/hackathon/server/gateway/internal/auth"
+	"example.com/hackathon/server/gateway/internal/platform"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"

@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/hackathon/apps/files/internal/config"
-	"example.com/hackathon/apps/files/internal/database"
-	"example.com/hackathon/apps/files/internal/files"
-	"example.com/hackathon/apps/files/internal/platform"
+	"example.com/hackathon/server/files/internal/config"
+	"example.com/hackathon/server/files/internal/database"
+	"example.com/hackathon/server/files/internal/files"
+	"example.com/hackathon/server/files/internal/platform"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
