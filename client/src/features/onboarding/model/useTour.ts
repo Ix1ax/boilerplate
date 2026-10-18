@@ -60,7 +60,7 @@ const buildSteps = (tour: Tour): DriveStep[] => {
       },
     ];
   });
-}
+};
 
 export const useTour = (
   tour: Tour,
@@ -114,7 +114,8 @@ export const useTour = (
       popoverClass: POPOVER_CLASS_NAME,
       disableActiveInteraction: true,
       onDestroyed: (_element, _step, { reason }) => {
-        const status = DESTROY_REASON_TO_STATUS[reason];
+        // reason в типах driver.js необязательный.
+        const status = reason ? DESTROY_REASON_TO_STATUS[reason] : undefined;
         if (status) saveTourStatus(tour, userId, status);
         active.current = null;
         setRunning(false);
