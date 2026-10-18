@@ -184,6 +184,59 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
     'CSV должен начинаться с BOM и заголовка',
   );
 }
+// Статистика, журнал аудита и вложения к записи.
+{
+  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+  assert.equal((await request('/api/v1/admin/tasks/stats', owner)).status, 403);
+  const stats = await (
+    await request('/api/v1/admin/tasks/stats', admin)
+  ).json();
+  assert.equal(stats.by_day.length, 14);
+  assert.ok(stats.total >= 1);
+  assert.equal((await request('/api/v1/admin/audit', owner)).status, 403);
+  let audited = 0;
+  for (let i = 0; i < 15 && !audited; i++) {
+    const page = await (
+      await request('/api/v1/admin/audit?method=POST&limit=1', admin)
+    ).json();
+    audited = page.total;
+    if (!audited) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(audited > 0, 'Журнал аудита пуст: события audit.recorded не дошли');
+  assert.equal(
+    (await request('/api/v1/admin/audit?sort=password', admin)).status,
+    400,
+  );
+
+  const entity = `smoke-${Date.now()}`;
+  const form = new FormData();
+  form.append(
+    'file',
+    new Blob(['вложение'], { type: 'text/plain' }),
+    'doc.txt',
+  );
+  form.append('entity_type', 'application');
+  form.append('entity_id', entity);
+  const uploaded = await request('/api/v1/files', owner, {
+    method: 'POST',
+    body: form,
+  });
+  assert.equal(uploaded.status, 201);
+  const attachment = await uploaded.json();
+  assert.equal(attachment.entity?.id, entity);
+  const attached = await (
+    await request(
+      `/api/v1/files?entity_type=application&entity_id=${entity}`,
+      owner,
+    )
+  ).json();
+  assert.equal(attached.total, 1);
+  assert.equal(
+    (await request(`/api/v1/files?entity_type=Bad`, owner)).status,
+    400,
+  );
+  await request(`/api/v1/files/${attachment.id}`, owner, { method: 'DELETE' });
+}
 assert.equal((await request('/api/v1/admin/ping', owner)).status, 403);
 assert.equal(
   (
@@ -265,7 +318,7 @@ try {
   });
   assert.equal(csrf.status, 403);
   console.log(
-    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления (SSE и почта), идемпотентность и выгрузка CSV.',
+    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления (SSE и почта), идемпотентность, выгрузка CSV, статистика, журнал аудита и вложения.',
   );
 } finally {
   if (file)

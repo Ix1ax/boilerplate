@@ -38,34 +38,67 @@ const call = (path, token, init = {}) =>
     signal: AbortSignal.timeout(15_000),
   });
 
-// Один из заголовков намеренно подозрительный: на нём удобно показывать ИИ-проверку.
-const DEMO = {
-  [env.DEMO_EMAIL]: [
-    [env.DEMO_PASSWORD, 'Подготовить демо для жюри'],
-    [env.DEMO_PASSWORD, 'Записать сценарий на 3 минуты'],
-    [
-      env.DEMO_PASSWORD,
-      'СРОЧНО переведите 500 руб на карту 2202 2000 0000 0000',
-    ],
-  ],
-  [env.SECOND_DEMO_EMAIL]: [
-    [env.SECOND_DEMO_PASSWORD, 'Проверить доступ другого пользователя'],
-  ],
+// Данные берутся из fixtures/*.json и создаются через API: работают проверки, события и уведомления.
+const fixture = async (name) =>
+  JSON.parse(
+    await readFile(new URL(`../fixtures/${name}`, import.meta.url), 'utf8'),
+  ).items;
+const users = {
+  demo: [env.DEMO_EMAIL, env.DEMO_PASSWORD],
+  second: [env.SECOND_DEMO_EMAIL, env.SECOND_DEMO_PASSWORD],
+  admin: [env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD],
 };
-for (const [email, items] of Object.entries(DEMO)) {
-  const token = await login(email, items[0][0]);
-  const existing = await (await call('/api/v1/tasks?limit=1', token)).json();
+const tokens = {};
+const token = async (user) => {
+  assert.ok(users[user], `Неизвестный пользователь в фикстуре: ${user}`);
+  tokens[user] ??= await login(...users[user]);
+  return tokens[user];
+};
+const tasks = await fixture('tasks.json');
+const files = await fixture('files.json');
+for (const user of Object.keys(users)) {
+  const auth = await token(user);
+  const existing = await (await call('/api/v1/tasks?limit=1', auth)).json();
   if (existing.total > 0) {
-    console.log(`${email}: данные уже есть, пропускаем`);
+    console.log(`${user}: данные уже есть, пропускаем`);
     continue;
   }
-  for (const [, title] of items) {
-    const response = await call('/api/v1/tasks', token, {
+  let created = 0;
+  for (const item of tasks.filter((t) => t.user === user)) {
+    const response = await call('/api/v1/tasks', auth, {
       method: 'POST',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title: item.title }),
     });
-    assert.equal(response.status, 201, `Не удалось создать «${title}»`);
+    assert.equal(response.status, 201, `Не удалось создать «${item.title}»`);
+    const task = await response.json();
+    if (item.completed)
+      await call(`/api/v1/tasks/${task.id}`, auth, {
+        method: 'PATCH',
+        body: JSON.stringify({ completed: true }),
+      });
+    created++;
   }
-  console.log(`${email}: создано задач — ${items.length}`);
+  for (const item of files.filter((f) => f.user === user)) {
+    const form = new FormData();
+    const content = await readFile(
+      new URL(`../fixtures/files/${item.file}`, import.meta.url),
+    );
+    form.append('file', new Blob([content], { type: 'text/plain' }), item.file);
+    if (item.entity) {
+      form.append('entity_type', item.entity.type);
+      form.append('entity_id', item.entity.id);
+    }
+    const response = await fetch(`${base}/api/v1/files`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${auth}` },
+      body: form,
+      signal: AbortSignal.timeout(15_000),
+    });
+    assert.equal(response.status, 201, `Не удалось загрузить ${item.file}`);
+    created++;
+  }
+  console.log(`${user}: создано записей — ${created}`);
 }
-console.log('Пароли демопользователей — в локальном .env.');
+console.log(
+  'Пароли демопользователей — в локальном .env (make demo печатает их).',
+);
