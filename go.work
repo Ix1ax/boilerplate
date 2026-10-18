@@ -6,4 +6,5 @@ use (
 	./apps/files
 	./apps/llm
 	./apps/notifications
+	./apps/audit
 )
