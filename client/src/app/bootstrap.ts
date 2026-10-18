@@ -21,7 +21,7 @@ export const bootstrap = () => {
     onUnauthorized: () => window.location.assign(STATIC_ROUTES.LOGIN),
   });
   setErrorHandler((error) => toast.error(error.message));
-  // WebSocket идёт через gateway на том же origin: сессия — HttpOnly cookie, токен в URL не нужен.
+
   configureWs({
     getUrl: () =>
       env.VITE_WS_URL ||

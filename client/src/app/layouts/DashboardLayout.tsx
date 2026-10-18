@@ -1,9 +1,12 @@
 import { Outlet, useLocation, useNavigate } from 'react-router';
 
+import { dashboardTour, useTour } from '@/features/onboarding';
+
 import { hasRole, useCurrentUser, type UserRole } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import {
+  Button,
   Container,
   PageHeader,
   Section,
@@ -40,7 +43,13 @@ export const DashboardLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
-  // Вкладки по ролям — только удобство интерфейса; доступ к данным проверяет Go.
+  const { start, running } = useTour(
+    dashboardTour,
+    user?.id,
+    location.pathname,
+    true,
+  );
+
   const tabs = TABS.filter(
     (tab) => !tab.roles || hasRole(user ?? null, tab.roles),
   );
@@ -51,7 +60,20 @@ export const DashboardLayout = () => {
   return (
     <Container>
       <Section>
-        <PageHeader title="Дашборд" description="Задачи и файлы" />
+        <PageHeader
+          title="Дашборд"
+          description="Задачи и файлы"
+          actions={
+            <Button
+              variant="outline"
+              data-tour="tour-start"
+              disabled={!user || running}
+              onClick={() => void start()}
+            >
+              Обучение
+            </Button>
+          }
+        />
 
         <Tabs
           value={activeTab}
@@ -62,7 +84,11 @@ export const DashboardLayout = () => {
         >
           <TabsList>
             {tabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                data-tour={`tab-${tab.value}`}
+              >
                 {tab.label}
               </TabsTrigger>
             ))}
