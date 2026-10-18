@@ -8,3 +8,4 @@ apps/gateway
 apps/tasks
 apps/files
 package-lock.json
+apps/gateway/internal/apidocs/assets
