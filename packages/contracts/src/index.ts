@@ -31,7 +31,7 @@ export type TaskStats = Schemas['TaskStats'];
 export type AuditRecord = Schemas['AuditRecord'];
 export type AuditPage = Schemas['AuditPage'];
 
-// Запрос к LLM-шлюзу. Пределы совпадают с проверкой в Go (apps/llm): длина считается в символах.
+// Запрос к LLM-шлюзу. Пределы совпадают с проверкой в Go (server/llm): длина считается в символах.
 export const llmPromptSchema = z.object({
   prompt: z.string().trim().min(1, 'Введите запрос').max(8000),
   system: z.string().trim().max(2000).optional(),

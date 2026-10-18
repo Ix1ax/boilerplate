@@ -3,8 +3,8 @@
 ## Новый предметный модуль
 
 1. Добавьте SQL-миграцию с секциями `-- +goose Up` и `-- +goose Down`.
-2. Новый домен — отдельный сервис. Скопируйте `apps/tasks` как шаблон (свой `go.mod`, база, миграции, Dockerfile), замените домен.
-3. Добавьте сервис в `compose.yaml` (с `<имя>-migrate`), адрес в `Upstreams` gateway и маршрут-прокси в `apps/gateway/internal/httpapi`.
+2. Новый домен — отдельный сервис. Скопируйте `server/tasks` как шаблон (свой `go.mod`, база, миграции, Dockerfile), замените домен.
+3. Добавьте сервис в `compose.yaml` (с `<имя>-migrate`), адрес в `Upstreams` gateway и маршрут-прокси в `server/gateway/internal/httpapi`.
 4. Ограничьте SQL владельцем или членством в команде. UUID не даёт права доступа.
 5. Согласованно обновите OpenAPI, типы и Zod-схемы в `packages/contracts`.
 6. Добавьте чтение в `entities`, действия в `features`, страницы в `pages`.
@@ -15,7 +15,7 @@
 Используйте npm из корня: один `package-lock.json` для всех workspaces.
 
 ```sh
-npm install имя-пакета -w @starter/web
+npm install имя-пакета -w @starter/client
 make check
 make integration
 make smoke
@@ -26,7 +26,7 @@ make smoke
 Для Go: у каждого сервиса свой модуль, команды запускаются в его каталоге.
 
 ```sh
-cd apps/tasks   # или apps/gateway, apps/files
+cd server/tasks   # или server/gateway, server/files
 go get путь/пакета
 go mod tidy
 ```
@@ -49,8 +49,8 @@ Vite, React Router, React Query, React Hook Form, Zod и Tailwind v4. `@/` ук�
 | -------------------------------------- | ---------------------------- |
 | `.env.example`                         | Корневой шаблон без секретов |
 | `.env`                                 | Compose и Go через Makefile  |
-| `web/.env.example`                     | Публичные настройки Vite     |
-| `web/.env.local`                       | Локальные настройки Vite     |
+| `client/.env.example`                  | Публичные настройки Vite     |
+| `client/.env.local`                    | Локальные настройки Vite     |
 | `.local/keycloak/hackathon-realm.json` | Первый импорт Keycloak       |
 
 `make setup` создаёт отсутствующие настройки и сохраняет существующие значения. Пароли генерируются hex-строками, подходящими для DATABASE_URL; `.env` имеет права 0600. При ручной смене пароля учитывайте URL-кодирование и shell-синтаксис: Makefile загружает `.env` как shell-файл.

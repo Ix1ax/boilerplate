@@ -182,7 +182,7 @@ services:
   tasks-migrate:
     container_name: tasks-migrate
     profiles: [app]
-    build: ./apps/tasks
+    build: ./server/tasks
     command: [migrate, up]
     environment:
       DATABASE_URL: postgres://${TASKS_DB_USER}:${TASKS_DB_PASSWORD}@tasks-postgres:5432/${TASKS_DB_NAME}?sslmode=disable
@@ -191,7 +191,7 @@ services:
   files-migrate:
     container_name: files-migrate
     profiles: [app]
-    build: ./apps/files
+    build: ./server/files
     command: [migrate, up]
     environment:
       DATABASE_URL: postgres://${FILES_DB_USER}:${FILES_DB_PASSWORD}@files-postgres:5432/${FILES_DB_NAME}?sslmode=disable
@@ -200,7 +200,7 @@ services:
   notifications-migrate:
     container_name: notifications-migrate
     profiles: [app]
-    build: ./apps/notifications
+    build: ./server/notifications
     command: [migrate, up]
     environment:
       DATABASE_URL: postgres://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-postgres:5432/${NOTIFICATIONS_DB_NAME}?sslmode=disable
@@ -209,7 +209,7 @@ services:
   audit-migrate:
     container_name: audit-migrate
     profiles: [app]
-    build: ./apps/audit
+    build: ./server/audit
     command: [migrate, up]
     environment:
       DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
@@ -218,7 +218,7 @@ services:
   tasks-service:
     container_name: tasks-service
     profiles: [app]
-    build: ./apps/tasks
+    build: ./server/tasks
     environment:
       DATABASE_URL: postgres://${TASKS_DB_USER}:${TASKS_DB_PASSWORD}@tasks-postgres:5432/${TASKS_DB_NAME}?sslmode=disable
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
@@ -232,7 +232,7 @@ services:
   files-service:
     container_name: files-service
     profiles: [app]
-    build: ./apps/files
+    build: ./server/files
     environment:
       DATABASE_URL: postgres://${FILES_DB_USER}:${FILES_DB_PASSWORD}@files-postgres:5432/${FILES_DB_NAME}?sslmode=disable
       S3_ENDPOINT: http://files-s3:8333
@@ -250,7 +250,7 @@ services:
   notifications-service:
     container_name: notifications-service
     profiles: [app]
-    build: ./apps/notifications
+    build: ./server/notifications
     environment:
       DATABASE_URL: postgres://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-postgres:5432/${NOTIFICATIONS_DB_NAME}?sslmode=disable
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
@@ -271,7 +271,7 @@ services:
   audit-service:
     container_name: audit-service
     profiles: [app]
-    build: ./apps/audit
+    build: ./server/audit
     environment:
       DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
@@ -285,7 +285,7 @@ services:
   realtime-service:
     container_name: realtime-service
     profiles: [app]
-    build: ./apps/realtime
+    build: ./server/realtime
     environment:
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
@@ -297,7 +297,7 @@ services:
   llm-service:
     container_name: llm-service
     profiles: [app]
-    build: ./apps/llm
+    build: ./server/llm
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       LLM_URL: http://llm-ollama:11434
@@ -308,7 +308,7 @@ services:
   gateway-service:
     container_name: gateway-service
     profiles: [app]
-    build: ./apps/gateway
+    build: ./server/gateway
     environment:
       APP_ENV: development
       REDIS_ADDR: gateway-redis:6379
@@ -346,7 +346,7 @@ services:
     profiles: [app]
     build:
       context: .
-      dockerfile: web/Dockerfile
+      dockerfile: client/Dockerfile
     ports: ['127.0.0.1:3000:8080']
     depends_on:
       gateway-service: { condition: service_healthy }

@@ -89,8 +89,11 @@ await writeFile(
   { mode: 0o644 },
 );
 await chmod(path.join(root, '.local/keycloak/hackathon-realm.json'), 0o644);
-const webPath = path.join(root, 'web/.env.local');
-const webTemplate = await readFile(path.join(root, 'web/.env.example'), 'utf8');
+const webPath = path.join(root, 'client/.env.local');
+const webTemplate = await readFile(
+  path.join(root, 'client/.env.example'),
+  'utf8',
+);
 const web = existsSync(webPath)
   ? addMissing(await readFile(webPath, 'utf8'), webTemplate)
   : webTemplate;

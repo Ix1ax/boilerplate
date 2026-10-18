@@ -4,8 +4,8 @@ node_modules
 **/dist
 **/pnpm-lock.yaml
 **/*.tsbuildinfo
-apps/gateway
-apps/tasks
-apps/files
+server/gateway
+server/tasks
+server/files
 package-lock.json
-apps/gateway/internal/apidocs/assets
+server/gateway/internal/apidocs/assets

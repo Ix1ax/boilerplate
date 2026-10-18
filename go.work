@@ -1,11 +1,11 @@
 go 1.26.0
 
 use (
-	./apps/gateway
-	./apps/tasks
-	./apps/files
-	./apps/llm
-	./apps/notifications
-	./apps/audit
-	./apps/realtime
+	./server/audit
+	./server/files
+	./server/gateway
+	./server/llm
+	./server/notifications
+	./server/tasks
+	./server/realtime
 )

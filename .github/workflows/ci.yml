@@ -23,13 +23,13 @@ jobs:
         service: [gateway, tasks, files, llm, notifications, audit, realtime]
     defaults:
       run:
-        working-directory: apps/${{ matrix.service }}
+        working-directory: server/${{ matrix.service }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: apps/${{ matrix.service }}/go.mod
-          cache-dependency-path: apps/${{ matrix.service }}/go.sum
+          go-version-file: server/${{ matrix.service }}/go.mod
+          cache-dependency-path: server/${{ matrix.service }}/go.sum
       - name: gofmt
         run: test -z "$(gofmt -l .)"
       - run: go vet ./...
@@ -81,8 +81,8 @@ jobs:
           node-version-file: .nvmrc
       - uses: actions/setup-go@v5
         with:
-          go-version-file: apps/gateway/go.mod
-          cache-dependency-path: apps/*/go.sum
+          go-version-file: server/gateway/go.mod
+          cache-dependency-path: server/*/go.sum
       - run: make setup
       - name: Поднять хранилища и брокер
         run: docker compose up -d --wait --wait-timeout 300 tasks-postgres files-postgres notifications-postgres audit-postgres gateway-redis files-s3 rabbitmq
@@ -99,7 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Сборка
-        run: docker build -t local/${{ matrix.service }}:ci apps/${{ matrix.service }}
+        run: docker build -t local/${{ matrix.service }}:ci server/${{ matrix.service }}
       - name: Сканирование уязвимостей (Trivy)
         uses: aquasecurity/trivy-action@0.28.0
         with:
