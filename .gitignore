@@ -28,3 +28,9 @@ bin/
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
+# Бинарники go build в корне сервисов
+/apps/*/gateway
+/apps/*/tasks
+/apps/*/files
+/apps/*/llm
+/apps/*/notifications

@@ -44,7 +44,7 @@ test:
 	for s in gateway tasks files llm notifications; do (cd apps/$$s && go test -race ./...) || exit 1; done
 	npm test
 check: test
-	for s in gateway tasks files llm notifications; do (cd apps/$$s && test -z "$$(gofmt -l .)" && go vet ./... && go build ./cmd/...) || exit 1; done
+	for s in gateway tasks files llm notifications; do (cd apps/$$s && test -z "$$(gofmt -l .)" && go vet ./... && go build ./...) || exit 1; done
 	npm run typecheck
 	npm run lint
 	npm run format:check
@@ -61,7 +61,7 @@ seed:
 smoke:
 	npm run smoke
 integration: migrate
-	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd apps/gateway && go test -race -tags=integration ./internal/auth)
+	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd apps/gateway && go test -race -tags=integration ./internal/auth)
 backup:
 	@mkdir -p .local/backups
 	for s in tasks files notifications; do docker compose exec -T $$s-postgres sh -c 'exec pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > .local/backups/$$s-$$(date +%Y%m%d-%H%M%S).dump || exit 1; done
