@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 // Запускается против живого стека (make up && make seed): make e2e.
 export default defineConfig({
@@ -12,5 +12,17 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { browserName: 'chromium' },
+      testIgnore: /mobile\.spec\.ts/,
+    },
+    {
+      // Эмуляция вьюпорта iPhone 13 на Chromium: make e2e ставит только него (webkit не скачан).
+      name: 'mobile',
+      use: { ...devices['iPhone 13'], browserName: 'chromium' },
+      testMatch: /mobile\.spec\.ts/,
+    },
+  ],
 });

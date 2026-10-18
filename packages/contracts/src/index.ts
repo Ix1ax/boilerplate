@@ -15,8 +15,11 @@ export type CreateTask = z.infer<typeof createTaskSchema>;
 // Типы ответов API генерируются из openapi.yaml (npm run gen -w @starter/contracts): вручную их не правим.
 type Schemas = components['schemas'];
 export type Task = Schemas['Task'];
+export type TaskStatus = Task['status'];
 export type TaskModeration = NonNullable<Task['moderation']>;
 export type TaskPage = Schemas['TaskPage'];
+export type TaskTransition = Schemas['TaskTransition'];
+export type TaskHistoryPage = Schemas['TaskHistoryPage'];
 export type User = Schemas['User'];
 export type UploadedFile = Schemas['File'];
 export type FilePage = Schemas['FilePage'];

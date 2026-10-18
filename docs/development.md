@@ -49,8 +49,8 @@ Vite, React Router, React Query, React Hook Form, Zod и Tailwind v4. `@/` ук�
 | -------------------------------------- | ---------------------------- |
 | `.env.example`                         | Корневой шаблон без секретов |
 | `.env`                                 | Compose и Go через Makefile  |
-| `apps/web/.env.example`                | Публичные настройки Vite     |
-| `apps/web/.env.local`                  | Локальные настройки Vite     |
+| `web/.env.example`                     | Публичные настройки Vite     |
+| `web/.env.local`                       | Локальные настройки Vite     |
 | `.local/keycloak/hackathon-realm.json` | Первый импорт Keycloak       |
 
 `make setup` создаёт отсутствующие настройки и сохраняет существующие значения. Пароли генерируются hex-строками, подходящими для DATABASE_URL; `.env` имеет права 0600. При ручной смене пароля учитывайте URL-кодирование и shell-синтаксис: Makefile загружает `.env` как shell-файл.

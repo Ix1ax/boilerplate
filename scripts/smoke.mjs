@@ -270,11 +270,12 @@ try {
   });
   assert.equal(created.status, 201);
   task = await created.json();
+  assert.equal(task.status, 'draft');
   assert.equal(
     (
       await request(`/api/v1/tasks/${task.id}`, other, {
         method: 'PATCH',
-        body: JSON.stringify({ completed: true }),
+        body: JSON.stringify({ status: 'todo' }),
       })
     ).status,
     404,
@@ -284,13 +285,25 @@ try {
       .status,
     404,
   );
+  assert.equal(
+    (
+      await request(`/api/v1/tasks/${task.id}`, owner, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'done' }),
+      })
+    ).status,
+    409,
+  );
   const patched = await request(`/api/v1/tasks/${task.id}`, owner, {
     method: 'PATCH',
-    body: JSON.stringify({ completed: true }),
+    body: JSON.stringify({ status: 'todo' }),
   });
   assert.equal(patched.status, 200);
-  assert.equal((await patched.json()).completed, true);
-  const listing = await request('/api/v1/tasks?limit=100', owner);
+  assert.equal((await patched.json()).status, 'todo');
+  const history = await request(`/api/v1/tasks/${task.id}/history`, owner);
+  assert.equal(history.status, 200);
+  assert.equal((await history.json()).items.length, 1);
+  const listing = await request('/api/v1/tasks?limit=100&status=todo', owner);
   assert.equal(listing.status, 200);
   assert.ok((await listing.json()).items.some((item) => item.id === task.id));
   const form = new FormData();

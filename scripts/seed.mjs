@@ -71,11 +71,18 @@ for (const user of Object.keys(users)) {
     });
     assert.equal(response.status, 201, `Не удалось создать «${item.title}»`);
     const task = await response.json();
-    if (item.completed)
+    // Новая задача создаётся в статусе draft; доводим её до нужного статуса по цепочке переходов.
+    const chain = {
+      todo: ['todo'],
+      in_progress: ['todo', 'in_progress'],
+      done: ['todo', 'in_progress', 'done'],
+    };
+    for (const status of chain[item.status ?? 'todo']) {
       await call(`/api/v1/tasks/${task.id}`, auth, {
         method: 'PATCH',
-        body: JSON.stringify({ completed: true }),
+        body: JSON.stringify({ status }),
       });
+    }
     created++;
   }
   for (const item of files.filter((f) => f.user === user)) {

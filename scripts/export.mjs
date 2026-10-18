@@ -53,8 +53,8 @@ for (const file of ['package.json', 'package-lock.json']) {
 }
 for (const file of [
   '.env.example',
-  'apps/web/src/pages/home/ui/HomePage.tsx',
-  'apps/web/index.html',
+  'web/src/pages/home/ui/HomePage.tsx',
+  'web/index.html',
   'infra/keycloak/realm.template.json',
 ]) {
   const target = path.join(destination, file);

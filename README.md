@@ -57,7 +57,7 @@ apps/tasks/                   # Сервис задач (свой go.mod, сво
   cmd/tasks/  internal/tasks/  internal/database/  internal/platform/  internal/config/
 apps/files/                   # Сервис файлов (свой go.mod, своя база files, S3)
   cmd/files/  internal/files/  internal/database/  internal/platform/  internal/config/
-apps/web/src/
+web/src/
   app/                        # Провайдеры, маршруты, layouts
   pages/                      # Страницы
   widgets/                    # Композиция UI, шапка
@@ -71,7 +71,7 @@ deploy/                       # Пример Caddy
 scripts/                      # Настройка, экспорт и smoke-проверка
 ```
 
-Основной UI нового фронтенда находится в `apps/web/src/shared/ui` и использует Base UI. `packages/ui` — отдельный набор на Radix, он не импортирует приложение. При добавлении компонентов выбирайте один набор для конкретного экрана.
+Основной UI нового фронтенда находится в `web/src/shared/ui` и использует Base UI. `packages/ui` — отдельный набор на Radix, он не импортирует приложение. При добавлении компонентов выбирайте один набор для конкретного экрана.
 
 ## Локальная разработка
 
@@ -93,7 +93,7 @@ make web
 
 Vite слушает порт 3000 и проксирует `/api`, `/auth` и `/healthz` на Go API, порт 8080. Контейнеры `api` и `web` при этом должны быть остановлены. После Docker-варианта выполните `make down`, затем команды выше.
 
-Корневой `.env` читают Compose и команды Go. Vite читает `apps/web/.env.local`; значение по умолчанию для API — `/api/v1`. `make setup` сохраняет существующие настройки и пароли. При переносе старого `.env.local` сверяйте его с `.env.example`; серверные OIDC-переменные нужны только Go.
+Корневой `.env` читают Compose и команды Go. Vite читает `web/.env.local`; значение по умолчанию для API — `/api/v1`. `make setup` сохраняет существующие настройки и пароли. При переносе старого `.env.local` сверяйте его с `.env.example`; серверные OIDC-переменные нужны только Go.
 
 ## Команды
 

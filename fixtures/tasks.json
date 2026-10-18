@@ -1,7 +1,7 @@
 {
   "_comment": "Демо-данные: пользователь — demo, second или admin (учётки из .env). Меняйте под свою предметную область.",
   "items": [
-    { "user": "demo", "title": "Подготовить демо для жюри", "completed": true },
+    { "user": "demo", "title": "Подготовить демо для жюри", "status": "done" },
     { "user": "demo", "title": "Записать сценарий на 3 минуты" },
     {
       "user": "demo",
@@ -15,7 +15,7 @@
     {
       "user": "second",
       "title": "Подписаться на уведомления",
-      "completed": true
+      "status": "done"
     },
     { "user": "admin", "title": "Выгрузить отчёт для руководства" }
   ]

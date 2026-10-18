@@ -171,8 +171,20 @@ paths:
             minimum: 0
             maximum: 100000
             default: 0
+        - name: q
+          in: query
+          description: Поиск по названию
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          description: Фильтр по статусу (можно несколько через запятую)
+          schema: { type: string }
+        - name: sort
+          in: query
+          description: 'created, title или status; «-» перед именем — по убыванию'
+          schema: { type: string, default: '-created' }
     post:
-      summary: Создать задачу
+      summary: Создать задачу (всегда в статусе draft — черновик визарда)
       responses:
         '201':
           description: Запрос выполнен
@@ -208,7 +220,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     patch:
-      summary: Отметить свою задачу
+      summary: Сменить статус своей задачи
+      description: Допустимость перехода и обязательность комментария (для archived) проверяет конечный автомат статусов на сервере.
       responses:
         '200':
           description: Запрос выполнен
@@ -222,6 +235,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           description: Запись не найдена или принадлежит другому пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Недопустимый переход статуса
           content:
             application/json:
               schema:
@@ -301,6 +320,31 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: Слишком много проверок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/tasks/{id}/history:
+    get:
+      summary: Лента переходов статуса задачи
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Запрос выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskHistoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Запись не найдена или принадлежит другому пользователю
           content:
             application/json:
               schema:
@@ -884,7 +928,7 @@ components:
       required:
         - id
         - title
-        - completed
+        - status
         - created_at
         - moderation
       properties:
@@ -895,8 +939,9 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-        completed:
-          type: boolean
+        status:
+          type: string
+          enum: [draft, todo, in_progress, done, archived]
         created_at:
           type: string
           format: date-time
@@ -965,10 +1010,32 @@ components:
       type: object
       additionalProperties: false
       required:
-        - completed
+        - status
       properties:
-        completed:
-          type: boolean
+        status:
+          type: string
+          enum: [draft, todo, in_progress, done, archived]
+        comment:
+          type: string
+          maxLength: 2000
+          description: Обязателен для перехода в archived (см. правило перехода статусов)
+    TaskTransition:
+      type: object
+      required: [from, to, actor, comment, created_at]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        actor: { type: string }
+        comment: { type: string }
+        created_at: { type: string, format: date-time }
+    TaskHistoryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskTransition'
     File:
       type: object
       required:
