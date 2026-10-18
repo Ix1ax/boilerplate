@@ -38,6 +38,10 @@ make integration  # тесты с реальными Postgres/Redis
 make smoke        # сквозная проверка живого стека (API)
 make seed         # демо-данные для двух демопользователей
 make demo         # up + seed + ссылки: показать проект с нуля
+make prefetch     # скачать всё заранее (SKIP_LLM=1 — без Qwen); делать до хакатона на хорошем интернете
+make reset        # стереть данные и поднять чистое демо (YES=1 — без вопроса); модель сохраняется
+make slides       # docs/presentation.md (Marp) → docs/presentation.pdf
+make loadtest     # k6: RPS и задержки → loadtest/result.json (LOAD_VUS, LOAD_DURATION)
 npm run gen -w @starter/contracts   # типы API из openapi.yaml (не править api.gen.ts вручную)
 make e2e          # Playwright против живого стека (UI + ИИ-проверка)
 ```
