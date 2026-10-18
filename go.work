@@ -7,4 +7,5 @@ use (
 	./apps/llm
 	./apps/notifications
 	./apps/audit
+	./apps/realtime
 )
