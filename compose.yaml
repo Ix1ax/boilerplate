@@ -258,6 +258,9 @@ services:
       # Письма уходят в Mailpit (http://localhost:8025); в production — свой SMTP.
       SMTP_ADDR: mailpit:1025
       MAIL_FROM: noreply@example.test
+      # Канал MAX включается токеном бота (выдаётся после верификации организации и модерации бота).
+      MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
+      MAX_BOT_USERNAME: ${MAX_BOT_USERNAME:-}
     restart: on-failure:3
     depends_on:
       mailpit: { condition: service_started }

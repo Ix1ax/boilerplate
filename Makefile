@@ -94,7 +94,7 @@ seed:
 smoke:
 	npm run smoke
 integration: migrate
-	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd apps/gateway && go test -race -tags=integration ./internal/auth)
+	set -a; . ./.env; set +a; (cd apps/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd apps/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd apps/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go test -race -tags=integration ./internal/notifications) && (cd apps/gateway && go test -race -tags=integration ./internal/auth)
 backup:
 	@mkdir -p .local/backups
 	for s in tasks files notifications audit; do docker compose exec -T $$s-postgres sh -c 'exec pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > .local/backups/$$s-$$(date +%Y%m%d-%H%M%S).dump || exit 1; done
