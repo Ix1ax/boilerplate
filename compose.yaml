@@ -281,6 +281,18 @@ services:
       audit-migrate: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
     healthcheck: *svc-health
+  # WebSocket: каналы user:<id>, room:<имя>, broadcast; реплики связаны через RabbitMQ.
+  realtime-service:
+    container_name: realtime-service
+    profiles: [app]
+    build: ./apps/realtime
+    environment:
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
   # Шлюз к Ollama. Готов и без модели: генерация вернёт 503, пока не запущен make llm.
   llm-service:
     container_name: llm-service
@@ -312,6 +324,7 @@ services:
       LLM_SERVICE_URL: http://llm-service:8080
       NOTIFICATIONS_URL: http://notifications-service:8080
       AUDIT_URL: http://audit-service:8080
+      REALTIME_URL: http://realtime-service:8080
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
@@ -326,6 +339,7 @@ services:
       llm-service: { condition: service_healthy }
       notifications-service: { condition: service_healthy }
       audit-service: { condition: service_healthy }
+      realtime-service: { condition: service_healthy }
     healthcheck: *svc-health
   web-service:
     container_name: web-service

@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, tasks, files, llm, notifications, audit]
+        service: [gateway, tasks, files, llm, notifications, audit, realtime]
     defaults:
       run:
         working-directory: apps/${{ matrix.service }}
@@ -95,7 +95,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, tasks, files, llm, notifications, audit]
+        service: [gateway, tasks, files, llm, notifications, audit, realtime]
     steps:
       - uses: actions/checkout@v4
       - name: Сборка
