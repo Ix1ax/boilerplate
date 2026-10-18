@@ -35,3 +35,6 @@ e2e/playwright-report/
 /apps/*/llm
 /apps/*/notifications
 /apps/*/audit
+loadtest/result.json
+# Сгенерированный PDF; уберите строку, чтобы приложить презентацию к сдаче
+docs/presentation.pdf

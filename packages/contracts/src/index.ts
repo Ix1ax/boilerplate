@@ -23,6 +23,7 @@ export type FilePage = Schemas['FilePage'];
 export type ApiErrorBody = Schemas['Error'];
 export type Notification = Schemas['Notification'];
 export type NotificationPage = Schemas['NotificationPage'];
+export type MaxStatus = Schemas['MaxStatus'];
 export type TaskStats = Schemas['TaskStats'];
 export type AuditRecord = Schemas['AuditRecord'];
 export type AuditPage = Schemas['AuditPage'];

@@ -150,6 +150,20 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
     'Письмо не дошло до Mailpit',
   );
 }
+// Канал MAX: статус отдаётся всегда; без токена бота ссылка привязки недоступна (503).
+{
+  const max = await (await request('/api/v1/notifications/max', owner)).json();
+  assert.equal(typeof max.enabled, 'boolean');
+  if (!max.enabled)
+    assert.equal(
+      (
+        await request('/api/v1/notifications/max/link', owner, {
+          method: 'POST',
+        })
+      ).status,
+      503,
+    );
+}
 // Idempotency-Key: повтор того же создания не создаёт дубль и помечается заголовком.
 {
   const key = `smoke-${Date.now()}`;

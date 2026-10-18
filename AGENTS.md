@@ -38,6 +38,10 @@ make integration  # тесты с реальными Postgres/Redis
 make smoke        # сквозная проверка живого стека (API)
 make seed         # демо-данные для двух демопользователей
 make demo         # up + seed + ссылки: показать проект с нуля
+make prefetch     # скачать всё заранее (SKIP_LLM=1 — без Qwen); делать до хакатона на хорошем интернете
+make reset        # стереть данные и поднять чистое демо (YES=1 — без вопроса); модель сохраняется
+make slides       # docs/presentation.md (Marp) → docs/presentation.pdf
+make loadtest     # k6: RPS и задержки → loadtest/result.json (LOAD_VUS, LOAD_DURATION)
 npm run gen -w @starter/contracts   # типы API из openapi.yaml (не править api.gen.ts вручную)
 make e2e          # Playwright против живого стека (UI + ИИ-проверка)
 ```
@@ -59,26 +63,27 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Готовые заготовки
 
-| Нужно                                     | Где образец                                                                                                                                               |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`)       |
-| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                      |
-| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                          |
-| ИИ-проверка с человеком в контуре         | `apps/tasks/internal/copilot`                                                                                                                             |
-| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                                |
-| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                                |
-| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`apps/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                                   |
-| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                      |
-| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                                    |
-| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                                  |
-| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                        |
-| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                         |
-| История статусов с комментарием           | `Workflow.RequireComment(...)` + `platform.RecordTransition` / `platform.History` (таблица `status_history`, писать в одной транзакции со сменой статуса) |
-| Дашборд админа                            | `GET /api/v1/admin/tasks/stats` (`Repository.Stats`): итоги + ряд за 14 дней в одном снимке                                                               |
-| Файлы-вложения к записи                   | `POST /api/v1/files` с `entity_type`/`entity_id`, список — `?entity_type=&entity_id=`                                                                     |
-| Кто что сделал                            | Журнал `apps/audit` (включается вместе с `AMQP_URL` у gateway)                                                                                            |
-| Демо-данные                               | `fixtures/*.json` и `fixtures/files/` → `make seed` (через API, с событиями и уведомлениями)                                                              |
-| Найти цепочку по логам                    | `request_id` идёт из gateway в сервисы, outbox и события (`platform.RequestID(ctx)`)                                                                      |
+| Нужно                                     | Где образец                                                                                                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Уведомить пользователя из любого сервиса  | Положить в outbox событие `notification.requested` `{title, body, link}` с `user_id` (см. `SaveModeration` в `apps/tasks/internal/tasks/outbox.go`)                                          |
+| Асинхронная обработка / связь сервисов    | `internal/broker` (одинаковый файл во всех сервисах): `Options{Queue, Keys, Outbox}`                                                                                                         |
+| Отчёт в Excel                             | `platform.NewCSV` + маршрут под `RequireRole("admin")` (`apps/tasks/internal/tasks/export.go`), кнопка — `pages/dashboard-admin`                                                             |
+| ИИ-проверка с человеком в контуре         | `apps/tasks/internal/copilot`                                                                                                                                                                |
+| Потоковый чат с моделью                   | `features/assistant` + `shared/api/sse.ts`                                                                                                                                                   |
+| Страница только для роли                  | `ProtectedRoute roles={['admin']}` + `roles` у вкладки в `DashboardLayout`                                                                                                                   |
+| Статусы и разрешённые переходы            | `platform.NewWorkflow` (`apps/tasks/internal/platform/workflow.go`): таблица переходов, `Check` → `ErrTransition` (409)                                                                      |
+| Список с фильтрами, сортировкой и поиском | `platform.ParseList` + `ListSpec` (белый список колонок, значения — параметрами SQL)                                                                                                         |
+| Фоновое задание по расписанию             | `platform.Every(ctx, db, log, name, interval, job)` — одна реплика за раз через advisory lock Postgres                                                                                       |
+| Защита от двойной отправки                | Заголовок `Idempotency-Key` у изменяющих запросов (gateway, Redis, 24 ч)                                                                                                                     |
+| Письмо пользователю                       | Поле `email` в `notification.requested` (адрес — `platform.Email(ctx)`); локально письма в Mailpit                                                                                           |
+| Live-обновления в UI                      | SSE `GET /api/v1/notifications/stream` + `EventSource` в `features/notifications`                                                                                                            |
+| Уведомления в мессенджер MAX              | `apps/notifications/internal/maxbot` (официальный клиент `max-bot-api-client-go`): задайте `MAX_BOT_TOKEN` и `MAX_BOT_USERNAME`, кнопка «Получать уведомления в MAX» появится в колокольчике |
+| История статусов с комментарием           | `Workflow.RequireComment(...)` + `platform.RecordTransition` / `platform.History` (таблица `status_history`, писать в одной транзакции со сменой статуса)                                    |
+| Дашборд админа                            | `GET /api/v1/admin/tasks/stats` (`Repository.Stats`): итоги + ряд за 14 дней в одном снимке                                                                                                  |
+| Файлы-вложения к записи                   | `POST /api/v1/files` с `entity_type`/`entity_id`, список — `?entity_type=&entity_id=`                                                                                                        |
+| Кто что сделал                            | Журнал `apps/audit` (включается вместе с `AMQP_URL` у gateway)                                                                                                                               |
+| Демо-данные                               | `fixtures/*.json` и `fixtures/files/` → `make seed` (через API, с событиями и уведомлениями)                                                                                                 |
+| Найти цепочку по логам                    | `request_id` идёт из gateway в сервисы, outbox и события (`platform.RequestID(ctx)`)                                                                                                         |
 
 ## Как добавить сервис (рецепт на 10 минут)
 

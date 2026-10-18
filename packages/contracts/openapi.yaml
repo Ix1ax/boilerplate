@@ -324,6 +324,53 @@ paths:
                 $ref: '#/components/schemas/NotificationPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/max:
+    get:
+      summary: Подключение мессенджера MAX
+      responses:
+        '200':
+          description: enabled — настроен ли бот на сервере, linked — привязан ли аккаунт пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaxStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      summary: Отключить уведомления в MAX
+      responses:
+        '204':
+          description: Отключено
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Канал MAX не настроен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/notifications/max/link:
+    post:
+      summary: Ссылка для подключения MAX
+      description: Одноразовая ссылка https://max.ru/<бот>/start/<код> на 10 минут; бот привязывает аккаунт по событию bot_started.
+      responses:
+        '200':
+          description: Ссылка
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, format: uri }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Канал MAX не настроен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/notifications/stream:
     get:
       summary: Поток новых уведомлений (SSE)
@@ -746,6 +793,12 @@ components:
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }
+    MaxStatus:
+      type: object
+      required: [enabled, linked]
+      properties:
+        enabled: { type: boolean }
+        linked: { type: boolean }
     Notification:
       type: object
       required: [id, title, body, link, created_at, read_at]

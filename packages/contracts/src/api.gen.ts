@@ -612,6 +612,123 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/notifications/max': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Подключение мессенджера MAX */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description enabled — настроен ли бот на сервере, linked — привязан ли аккаунт пользователя */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['MaxStatus'];
+          };
+        };
+        401: components['responses']['Unauthorized'];
+      };
+    };
+    put?: never;
+    post?: never;
+    /** Отключить уведомления в MAX */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Отключено */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        401: components['responses']['Unauthorized'];
+        /** @description Канал MAX не настроен */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/max/link': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ссылка для подключения MAX
+     * @description Одноразовая ссылка https://max.ru/<бот>/start/<код> на 10 минут; бот привязывает аккаунт по событию bot_started.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Ссылка */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uri */
+              url: string;
+            };
+          };
+        };
+        401: components['responses']['Unauthorized'];
+        /** @description Канал MAX не настроен */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/notifications/stream': {
     parameters: {
       query?: never;
@@ -1312,6 +1429,10 @@ export interface components {
       total: number;
       limit: number;
       offset: number;
+    };
+    MaxStatus: {
+      enabled: boolean;
+      linked: boolean;
     };
     Notification: {
       /** Format: uuid */

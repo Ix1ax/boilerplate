@@ -14,6 +14,7 @@ import (
 	"example.com/hackathon/apps/notifications/internal/broker"
 	"example.com/hackathon/apps/notifications/internal/config"
 	"example.com/hackathon/apps/notifications/internal/database"
+	"example.com/hackathon/apps/notifications/internal/maxbot"
 	"example.com/hackathon/apps/notifications/internal/notifications"
 	"example.com/hackathon/apps/notifications/internal/platform"
 )
@@ -81,6 +82,15 @@ func run(logger *slog.Logger) error {
 		mailer = notifications.SMTPMailer{Addr: c.SMTPAddr, From: c.MailFrom}
 	}
 	service := notifications.New(repo, notifications.NewHub(), mailer, logger.Warn)
+	if c.MaxBotToken != "" {
+		bot, err := maxbot.New(c.MaxBotToken, c.MaxBotUsername, c.MaxAPIURL, repo, logger)
+		if err != nil {
+			return err
+		}
+		service.WithMax(bot, repo)
+		go bot.Run(ctx)
+		logger.Info("Канал MAX включён", "bot", c.MaxBotUsername)
+	}
 	notifications.Register(api, service)
 	// Подписка на notification.requested: события публикуют другие сервисы через свой outbox.
 	brokerDone := make(chan struct{})
