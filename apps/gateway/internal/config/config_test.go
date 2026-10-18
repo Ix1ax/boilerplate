@@ -4,7 +4,7 @@ import "testing"
 
 func TestBrowserSessionProductionSettings(t *testing.T) {
 	for key, value := range map[string]string{
-		"REDIS_PASSWORD": "test", "TASKS_URL": "http://tasks:8080", "FILES_URL": "http://files:8080", "INTERNAL_TOKEN": "test", "OIDC_ISSUER": "https://auth.example.test/realms/test", "OIDC_INTERNAL_URL": "", "APP_ENV": "production",
+		"REDIS_PASSWORD": "test", "TASKS_URL": "http://tasks:8080", "FILES_URL": "http://files:8080", "INTERNAL_TOKEN": "test", "METRICS_TOKEN": "m", "OIDC_ISSUER": "https://auth.example.test/realms/test", "OIDC_INTERNAL_URL": "", "APP_ENV": "production",
 	} {
 		t.Setenv(key, value)
 	}
@@ -25,5 +25,21 @@ func TestBrowserSessionProductionSettings(t *testing.T) {
 		if (err == nil) != tc.valid {
 			t.Errorf("origin=%q secure=%q: %v", tc.origin, tc.secure, err)
 		}
+	}
+}
+
+func TestProductionRequiresMetricsToken(t *testing.T) {
+	for key, value := range map[string]string{
+		"REDIS_PASSWORD": "test", "TASKS_URL": "http://tasks:8080", "FILES_URL": "http://files:8080", "INTERNAL_TOKEN": "test",
+		"OIDC_ISSUER": "https://auth.example.test/realms/test", "APP_ENV": "production", "APP_ORIGIN": "https://app.example.test", "SESSION_COOKIE_SECURE": "true",
+	} {
+		t.Setenv(key, value)
+	}
+	if _, err := Load(); err == nil {
+		t.Fatal("production без METRICS_TOKEN должен быть отклонён")
+	}
+	t.Setenv("METRICS_ENABLED", "false")
+	if _, err := Load(); err != nil {
+		t.Fatalf("метрики выключены: %v", err)
 	}
 }

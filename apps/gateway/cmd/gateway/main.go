@@ -39,12 +39,21 @@ func run(log *slog.Logger) error {
 	defer deps.Close()
 	tasksURL, _ := url.Parse(c.TasksURL)
 	filesURL, _ := url.Parse(c.FilesURL)
+	// Необязательные сервисы: пустой адрес — маршрут не подключается.
+	optional := func(raw string) *url.URL {
+		if raw == "" {
+			return nil
+		}
+		u, _ := url.Parse(raw)
+		return u
+	}
+	llmURL, notificationsURL := optional(c.LLMURL), optional(c.NotificationsURL)
 	verifier, err := auth.NewVerifier(startup, c.OIDCIssuer, c.OIDCClientID, c.OIDCInternalURL)
 	if err != nil {
 		return err
 	}
 	sessions := auth.NewSessions(deps.Cache, verifier, c.OIDCIssuer, c.OIDCInternalURL, c.OIDCWebClientID, c.AppOrigin, c.SessionCookieSecure)
-	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL}, c.InternalToken, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		log.Info("API принимает запросы", "addr", c.Addr)

@@ -10,13 +10,16 @@ type Config struct {
 	Env, Addr, RedisAddr, RedisPassword       string
 	OIDCIssuer, OIDCClientID, OIDCInternalURL string
 	AppOrigin, OIDCWebClientID                string
-	TasksURL, FilesURL, InternalToken         string
+	TasksURL, FilesURL, LLMURL, InternalToken string
+	NotificationsURL                          string
+	MetricsToken                              string
+	MetricsEnabled                            bool
 	SessionCookieSecure                       bool
 }
 
 func Load() (Config, error) {
 	c := Config{
-		TasksURL: os.Getenv("TASKS_URL"), FilesURL: os.Getenv("FILES_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"),
+		TasksURL: os.Getenv("TASKS_URL"), FilesURL: os.Getenv("FILES_URL"), LLMURL: os.Getenv("LLM_SERVICE_URL"), NotificationsURL: os.Getenv("NOTIFICATIONS_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"), MetricsToken: os.Getenv("METRICS_TOKEN"), MetricsEnabled: os.Getenv("METRICS_ENABLED") != "false",
 		AppOrigin: Value("APP_ORIGIN", "http://localhost:3000"), OIDCWebClientID: Value("OIDC_WEB_CLIENT_ID", "hackathon-web"), SessionCookieSecure: os.Getenv("SESSION_COOKIE_SECURE") == "true",
 		Env: Value("APP_ENV", "development"), Addr: Value("HTTP_ADDR", ":8080"),
 		RedisAddr: Value("REDIS_ADDR", "localhost:6379"), RedisPassword: os.Getenv("REDIS_PASSWORD"),
@@ -35,10 +38,13 @@ func Load() (Config, error) {
 	if c.Env == "production" && (origin.Scheme != "https" || !c.SessionCookieSecure) {
 		return c, fmt.Errorf("В production нужны HTTPS APP_ORIGIN и SESSION_COOKIE_SECURE=true")
 	}
+	if c.Env == "production" && c.MetricsEnabled && c.MetricsToken == "" {
+		return c, fmt.Errorf("В production для /metrics нужен METRICS_TOKEN или METRICS_ENABLED=false")
+	}
 	if c.Env != "development" && c.Env != "production" && c.Env != "test" {
 		return c, fmt.Errorf("Недопустимое значение APP_ENV")
 	}
-	for name, value := range map[string]string{"OIDC_ISSUER": c.OIDCIssuer, "OIDC_INTERNAL_URL": c.OIDCInternalURL, "TASKS_URL": c.TasksURL, "FILES_URL": c.FilesURL} {
+	for name, value := range map[string]string{"OIDC_ISSUER": c.OIDCIssuer, "OIDC_INTERNAL_URL": c.OIDCInternalURL, "TASKS_URL": c.TasksURL, "FILES_URL": c.FilesURL, "LLM_SERVICE_URL": c.LLMURL, "NOTIFICATIONS_URL": c.NotificationsURL} {
 		if value == "" {
 			continue
 		}

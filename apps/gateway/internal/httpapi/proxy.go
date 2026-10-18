@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"example.com/hackathon/apps/gateway/internal/auth"
@@ -15,18 +16,28 @@ import (
 const (
 	HeaderToken  = "X-Internal-Token"
 	HeaderUserID = "X-User-ID"
+	// HeaderRoles — роли пользователя из проверенного JWT через запятую: сервисы сами решают,
+	// какие действия доступны (например, админская выгрузка), не разбирая токен.
+	HeaderRoles = "X-User-Roles"
 )
 
 // Upstreams — адреса внутренних сервисов, за которыми стоит gateway.
-type Upstreams struct{ Tasks, Files *url.URL }
+type Upstreams struct{ Tasks, Files, LLM, Notifications *url.URL }
+
+// slowUpstream — для долгих ответов (LLM, SSE): иначе gateway оборвёт их по таймаутам.
+const slowUpstream = 3 * time.Minute
 
 // proxy пересылает запрос во внутренний сервис. Пользовательские заголовки аутентификации
 // удаляются: сервис видит только личность, которую проверил gateway.
-func proxy(target *url.URL, token string) gin.HandlerFunc {
+func proxy(target *url.URL, token string, slow ...time.Duration) gin.HandlerFunc {
+	headerTimeout := 25 * time.Second
+	if len(slow) > 0 {
+		headerTimeout = slow[0]
+	}
 	rp := &httputil.ReverseProxy{
 		Rewrite:       func(r *httputil.ProxyRequest) { r.SetURL(target) },
 		FlushInterval: -1,
-		Transport:     &http.Transport{MaxIdleConnsPerHost: 16, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: 25 * time.Second},
+		Transport:     &http.Transport{MaxIdleConnsPerHost: 16, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: headerTimeout},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, _ error) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusBadGateway)
@@ -39,8 +50,13 @@ func proxy(target *url.URL, token string) gin.HandlerFunc {
 			c.Request.Header.Del(h)
 		}
 		c.Request.Header.Set(HeaderToken, token)
-		c.Request.Header.Set(HeaderUserID, auth.Current(c).Subject)
+		identity := auth.Current(c)
+		c.Request.Header.Set(HeaderUserID, identity.Subject)
+		c.Request.Header.Set(HeaderRoles, strings.Join(identity.RealmAccess.Roles, ","))
 		c.Request.Header.Set("X-Request-ID", c.GetString("request_id"))
+		if len(slow) > 0 {
+			_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(slow[0] + 10*time.Second))
+		}
 		rp.ServeHTTP(c.Writer, c.Request)
 	}
 }

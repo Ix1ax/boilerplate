@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"example.com/hackathon/apps/gateway/internal/apidocs"
 	"example.com/hackathon/apps/gateway/internal/auth"
 	"example.com/hackathon/apps/gateway/internal/platform"
 	"github.com/gin-gonic/gin"
@@ -18,12 +19,21 @@ const maxBody = 11 << 20
 
 // New собирает gateway без внутренних сервисов: вход, /me и служебные маршруты.
 func New(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, sessions ...*auth.Sessions) *gin.Engine {
-	return NewGateway(log, d, verifier, Upstreams{}, "", sessions...)
+	return NewGateway(log, d, verifier, Upstreams{}, Options{}, sessions...)
 }
 
 // NewGateway — единственная публичная точка входа: проверяет сессию или JWT, ограничивает
 // частоту изменений и проксирует домены во внутренние сервисы.
-func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, up Upstreams, internalToken string, sessions ...*auth.Sessions) *gin.Engine {
+// Options — настройки gateway, не связанные с адресами сервисов.
+type Options struct {
+	InternalToken string
+	// Metrics включает GET /metrics (Prometheus). Непустой MetricsToken требует Bearer-токен.
+	Metrics      bool
+	MetricsToken string
+}
+
+func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, up Upstreams, opts Options, sessions ...*auth.Sessions) *gin.Engine {
+	internalToken := opts.InternalToken
 	gin.SetMode(gin.ReleaseMode)
 	gin.EnableJsonDecoderDisallowUnknownFields()
 	r := gin.New()
@@ -44,6 +54,10 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	}, gin.CustomRecovery(func(c *gin.Context, _ any) {
 		c.AbortWithStatusJSON(500, gin.H{"error": gin.H{"code": "internal_error", "message": "Внутренняя ошибка сервера", "request_id": c.GetString("request_id")}})
 	}))
+	if opts.Metrics {
+		registerMetrics(r, opts.MetricsToken)
+	}
+	apidocs.Register(r)
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/readyz", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
@@ -70,29 +84,34 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	api.GET("/admin/ping", auth.RequireRole("admin"), func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	if d != nil {
 		// Счётчик общий для экземпляров API. Без Redis изменять данные временно нельзя.
-		api.Use(func(c *gin.Context) {
-			if c.Request.Method == http.MethodGet {
-				c.Next()
-				return
-			}
-			key := "rate:" + auth.Current(c).Subject + ":" + time.Now().UTC().Format("200601021504")
-			count, err := d.Cache.Eval(c.Request.Context(), `local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],120) end; return n`, []string{key}).Int64()
-			if err != nil {
-				_ = c.Error(err)
-				c.AbortWithStatusJSON(503, gin.H{"error": gin.H{"code": "cache_unavailable", "message": "Попробуйте ещё раз позже"}})
-				return
-			}
-			if count > 60 {
-				c.Header("Retry-After", "60")
-				c.AbortWithStatusJSON(429, gin.H{"error": gin.H{"code": "rate_limit", "message": "Слишком много запросов. Подождите минуту"}})
-				return
-			}
-			c.Next()
-		})
+		api.Use(limit(d, "rate", 60, true))
 		if up.Tasks != nil {
 			h := proxy(up.Tasks, internalToken)
-			api.Any("/tasks", h)
-			api.Any("/tasks/*path", h)
+			// ИИ-проверка задачи вызывает модель: на неё действует тот же строгий лимит, что и на /llm.
+			costly := limit(d, "rate:llm", 10, false)
+			g := api.Group("/tasks", func(c *gin.Context) {
+				if c.Request.Method == http.MethodPost && strings.HasSuffix(c.Request.URL.Path, "/analyze") {
+					costly(c)
+					return
+				}
+				c.Next()
+			})
+			g.Any("", h)
+			g.Any("/*path", h)
+			// Админские отчёты сервиса задач: роль проверяется и здесь, и в самом сервисе.
+			api.GET("/admin/tasks/*path", auth.RequireRole("admin"), h)
+		}
+		if up.LLM != nil {
+			// Генерация дорогая (CPU): отдельный, более строгий лимит на любой метод.
+			h := proxy(up.LLM, internalToken, slowUpstream)
+			g := api.Group("/llm", limit(d, "rate:llm", 10, false))
+			g.Any("", h)
+			g.Any("/*path", h)
+		}
+		if up.Notifications != nil {
+			h := proxy(up.Notifications, internalToken)
+			api.Any("/notifications", h)
+			api.Any("/notifications/*path", h)
 		}
 		if up.Files != nil {
 			h := proxy(up.Files, internalToken)
@@ -112,7 +131,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 }
 
 func upstreamsReady(ctx context.Context, up Upstreams) bool {
-	for _, u := range []*url.URL{up.Tasks, up.Files} {
+	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications} {
 		if u == nil {
 			continue
 		}
@@ -130,4 +149,27 @@ func upstreamsReady(ctx context.Context, up Upstreams) bool {
 		}
 	}
 	return true
+}
+
+// limit — фиксированное окно в минуту на пользователя. onlyWrites=true пропускает чтение.
+func limit(d *platform.Dependencies, prefix string, max int64, onlyWrites bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if onlyWrites && c.Request.Method == http.MethodGet {
+			c.Next()
+			return
+		}
+		key := prefix + ":" + auth.Current(c).Subject + ":" + time.Now().UTC().Format("200601021504")
+		count, err := d.Cache.Eval(c.Request.Context(), `local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],120) end; return n`, []string{key}).Int64()
+		if err != nil {
+			_ = c.Error(err)
+			c.AbortWithStatusJSON(503, gin.H{"error": gin.H{"code": "cache_unavailable", "message": "Попробуйте ещё раз позже"}})
+			return
+		}
+		if count > max {
+			c.Header("Retry-After", "60")
+			c.AbortWithStatusJSON(429, gin.H{"error": gin.H{"code": "rate_limit", "message": "Слишком много запросов. Подождите минуту"}})
+			return
+		}
+		c.Next()
+	}
 }

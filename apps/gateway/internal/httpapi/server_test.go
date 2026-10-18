@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"example.com/hackathon/apps/gateway/internal/auth"
@@ -50,6 +51,28 @@ func TestRedisFailurePreservesBrowserSession(t *testing.T) {
 		}
 		if len(response.Result().Cookies()) != 0 {
 			t.Fatalf("%s: сбой Redis изменил cookie", path)
+		}
+	}
+}
+
+func TestMetricsEndpointAndToken(t *testing.T) {
+	router := NewGateway(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, Upstreams{}, Options{Metrics: true, MetricsToken: "m"})
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/healthz", nil))
+	for _, tc := range []struct {
+		auth   string
+		status int
+	}{{"", 401}, {"Bearer wrong", 401}, {"Bearer m", 200}} {
+		req := httptest.NewRequest("GET", "/metrics", nil)
+		if tc.auth != "" {
+			req.Header.Set("Authorization", tc.auth)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != tc.status {
+			t.Fatalf("%q: %d", tc.auth, w.Code)
+		}
+		if tc.status == 200 && !strings.Contains(w.Body.String(), `http_requests_total{method="GET",route="/healthz",status="200"} 1`) {
+			t.Fatalf("нет счётчика запросов:\n%s", w.Body.String())
 		}
 	}
 }
