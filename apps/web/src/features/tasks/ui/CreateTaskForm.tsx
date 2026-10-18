@@ -44,7 +44,11 @@ export const CreateTaskForm = () => {
             <FormItem className="flex-1">
               <FormLabel className="sr-only">Новая задача</FormLabel>
               <FormControl>
-                <Input placeholder="Новая задача" {...field} />
+                <Input
+                  placeholder="Новая задача"
+                  autoComplete="off"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

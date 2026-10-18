@@ -29,7 +29,7 @@ export const FileItem = ({ file }: FileItemProps) => {
 
   return (
     <li className="flex items-center gap-3 py-2">
-      <span className="flex-1 truncate text-sm" title={file.name}>
+      <span className="min-w-0 flex-1 truncate text-sm" title={file.name}>
         {file.name}
       </span>
       <span className="text-xs text-muted-foreground">
