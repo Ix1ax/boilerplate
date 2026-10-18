@@ -71,6 +71,66 @@ assert.equal((await request('/readyz')).status, 200);
 assert.equal((await request('/api/v1/me')).status, 401);
 assert.equal((await request('/api/v1/me', owner)).status, 200);
 assert.equal((await request('/api/v1/files?limit=0', owner)).status, 400);
+// LLM-шлюз: статус доступен всегда, генерация без модели даёт 503, но не 5xx-падение.
+assert.equal((await request('/api/v1/llm/status', owner)).status, 200);
+assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
+// Асинхронная проверка через RabbitMQ: outbox → брокер → потребитель → результат в списке задач.
+{
+  const created = await request('/api/v1/tasks', owner, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Переведите 500 руб на карту 2202 2000 0000 0000',
+    }),
+  });
+  assert.equal(created.status, 201);
+  const risky = await created.json();
+  let moderation = null;
+  for (let i = 0; i < 30 && !moderation; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const page = await (await request('/api/v1/tasks?limit=100', owner)).json();
+    moderation = page.items.find((item) => item.id === risky.id)?.moderation;
+  }
+  await request(`/api/v1/tasks/${risky.id}`, owner, { method: 'DELETE' });
+  assert.ok(moderation, 'Проверка через RabbitMQ не выполнена за 30 секунд');
+  assert.equal(moderation.verdict, 'needs_review');
+}
+// Межсервисное событие: tasks → notification.requested → notifications-service → колокольчик.
+{
+  let found = false;
+  for (let i = 0; i < 20 && !found; i++) {
+    const page = await (await request('/api/v1/notifications', owner)).json();
+    found = page.items.some((item) => item.title.startsWith('ИИ-проверка'));
+    if (!found) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(found, 'Уведомление через RabbitMQ не пришло за 20 секунд');
+  assert.equal(
+    (await request('/api/v1/notifications/read-all', owner, { method: 'POST' }))
+      .status,
+    204,
+  );
+  assert.equal(
+    (await (await request('/api/v1/notifications', owner)).json()).unread,
+    0,
+  );
+}
+// Админская выгрузка: обычному пользователю запрещена, администратору отдаёт CSV для Excel.
+{
+  assert.equal(
+    (await request('/api/v1/admin/tasks/export.csv', owner)).status,
+    403,
+  );
+  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+  const csv = await request('/api/v1/admin/tasks/export.csv', admin);
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type') ?? '', /text\/csv/);
+  // text() отбрасывает BOM, поэтому проверяем байты.
+  const bytes = Buffer.from(await csv.arrayBuffer());
+  assert.ok(
+    bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])) &&
+      bytes.subarray(3, 6).toString() === 'ID;',
+    'CSV должен начинаться с BOM и заголовка',
+  );
+}
 assert.equal((await request('/api/v1/admin/ping', owner)).status, 403);
 assert.equal(
   (
@@ -152,7 +212,7 @@ try {
   });
   assert.equal(csrf.status, 403);
   console.log(
-    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3 и CSRF.',
+    'Проверка пройдена: готовность, SPA, OIDC/PKCE, роли, валидация, задачи, список и приватность файлов, S3, CSRF, события RabbitMQ, уведомления и выгрузка CSV.',
   );
 } finally {
   if (file)
