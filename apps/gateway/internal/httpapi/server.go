@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"example.com/hackathon/apps/gateway/internal/apidocs"
+	"example.com/hackathon/apps/gateway/internal/audit"
 	"example.com/hackathon/apps/gateway/internal/auth"
 	"example.com/hackathon/apps/gateway/internal/platform"
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,8 @@ type Options struct {
 	// Metrics включает GET /metrics (Prometheus). Непустой MetricsToken требует Bearer-токен.
 	Metrics      bool
 	MetricsToken string
+	// Audit — куда отправлять записи журнала (nil — журнал выключен).
+	Audit audit.Recorder
 }
 
 func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, up Upstreams, opts Options, sessions ...*auth.Sessions) *gin.Engine {
@@ -85,6 +88,9 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	if d != nil {
 		// Счётчик общий для экземпляров API. Без Redis изменять данные временно нельзя.
 		api.Use(limit(d, "rate", 60, true), idempotency(d))
+		if opts.Audit != nil {
+			api.Use(auditTrail(opts.Audit))
+		}
 		if up.Tasks != nil {
 			h := proxy(up.Tasks, internalToken)
 			// ИИ-проверка задачи вызывает модель: на неё действует тот же строгий лимит, что и на /llm.
@@ -107,6 +113,9 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 			g := api.Group("/llm", limit(d, "rate:llm", 10, false))
 			g.Any("", h)
 			g.Any("/*path", h)
+		}
+		if up.Audit != nil {
+			api.GET("/admin/audit", auth.RequireRole("admin"), proxy(up.Audit, internalToken))
 		}
 		if up.Notifications != nil {
 			// slowUpstream: поток /notifications/stream (SSE) живёт до нескольких минут.
@@ -132,7 +141,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 }
 
 func upstreamsReady(ctx context.Context, up Upstreams) bool {
-	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications} {
+	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit} {
 		if u == nil {
 			continue
 		}

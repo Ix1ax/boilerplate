@@ -381,10 +381,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/tasks/stats:
+    get:
+      summary: Сводка для дашборда (только администратор)
+      responses:
+        '200':
+          description: Итоги, разбивка по ИИ-проверке и создание задач за 14 дней
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/audit:
+    get:
+      summary: Журнал изменяющих действий (только администратор)
+      description: Фильтры actor, method, status, request_id; поиск q по пути и email; sort=-occurred|occurred|status|-status.
+      parameters:
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: method, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: request_id, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - {
+            name: sort,
+            in: query,
+            schema: { type: string, default: '-occurred' },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+        - {
+            name: offset,
+            in: query,
+            schema: { type: integer, minimum: 0, default: 0 },
+          }
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/files:
     get:
       summary: Получить свои файлы
       parameters:
+        - name: entity_type
+          in: query
+          description: Только файлы, приложенные к записи (вместе с entity_id)
+          schema: { type: string }
+        - name: entity_id
+          in: query
+          schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
@@ -456,6 +523,13 @@ paths:
                 file:
                   type: string
                   format: binary
+                entity_type:
+                  type: string
+                  pattern: '^[a-z][a-z_]{0,29}$'
+                  description: Необязательная привязка к записи другого сервиса (вместе с entity_id)
+                entity_id:
+                  type: string
+                  pattern: '^[A-Za-z0-9-]{1,64}$'
   /api/v1/files/{id}:
     parameters:
       - $ref: '#/components/parameters/ID'
@@ -615,6 +689,63 @@ components:
         type: string
         format: uuid
   schemas:
+    TaskStats:
+      type: object
+      required: [total, completed, owners, moderation, by_day]
+      properties:
+        total: { type: integer }
+        completed: { type: integer }
+        owners: { type: integer }
+        moderation:
+          type: object
+          required: [ok, needs_review, unchecked]
+          properties:
+            ok: { type: integer }
+            needs_review: { type: integer }
+            unchecked: { type: integer }
+        by_day:
+          type: array
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer }
+    AuditRecord:
+      type: object
+      required:
+        [
+          actor,
+          actor_email,
+          method,
+          route,
+          path,
+          status,
+          request_id,
+          ip,
+          occurred_at,
+        ]
+      properties:
+        actor: { type: string }
+        actor_email: { type: string }
+        method: { type: string }
+        route: { type: string }
+        path: { type: string }
+        status: { type: integer }
+        request_id: { type: string }
+        ip: { type: string }
+        occurred_at: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
     Notification:
       type: object
       required: [id, title, body, link, created_at, read_at]
@@ -806,6 +937,13 @@ components:
           maximum: 10485760
         content_type:
           type: string
+        entity:
+          nullable: true
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string }
+            id: { type: string }
         created_at:
           type: string
           format: date-time

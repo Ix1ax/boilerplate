@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"example.com/hackathon/apps/gateway/internal/audit"
 	"example.com/hackathon/apps/gateway/internal/auth"
 	"example.com/hackathon/apps/gateway/internal/config"
 	"example.com/hackathon/apps/gateway/internal/httpapi"
@@ -47,13 +48,20 @@ func run(log *slog.Logger) error {
 		u, _ := url.Parse(raw)
 		return u
 	}
-	llmURL, notificationsURL := optional(c.LLMURL), optional(c.NotificationsURL)
+	llmURL, notificationsURL, auditURL := optional(c.LLMURL), optional(c.NotificationsURL), optional(c.AuditURL)
+	// Журнал аудита включается вместе с брокером; без AMQP_URL записи не публикуются.
+	var recorder audit.Recorder
+	if c.AMQPURL != "" {
+		publisher := audit.NewPublisher(c.AMQPURL, log)
+		go publisher.Run(ctx)
+		recorder = publisher
+	}
 	verifier, err := auth.NewVerifier(startup, c.OIDCIssuer, c.OIDCClientID, c.OIDCInternalURL)
 	if err != nil {
 		return err
 	}
 	sessions := auth.NewSessions(deps.Cache, verifier, c.OIDCIssuer, c.OIDCInternalURL, c.OIDCWebClientID, c.AppOrigin, c.SessionCookieSecure)
-	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		log.Info("API принимает запросы", "addr", c.Addr)
