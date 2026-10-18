@@ -10,11 +10,12 @@ import {
   PopoverTrigger,
 } from '@/shared/ui';
 
-import { useMarkRead, useNotifications } from '../model';
+import { useMarkRead, useMax, useNotifications } from '../model';
 
 export const NotificationsBell = () => {
   const { data } = useNotifications();
   const markRead = useMarkRead();
+  const max = useMax();
   const unread = data?.unread ?? 0;
 
   return (
@@ -76,6 +77,33 @@ export const NotificationsBell = () => {
               </li>
             ))}
           </ul>
+        )}
+        {max.status?.enabled && (
+          <div className="flex items-center justify-between border-t pt-2 text-sm">
+            {max.status.linked ? (
+              <>
+                <span className="text-muted-foreground">MAX подключён</span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  disabled={max.unlink.isPending}
+                  onClick={() => max.unlink.mutate()}
+                >
+                  Отключить
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={max.link.isPending}
+                onClick={() => max.link.mutate()}
+              >
+                Получать уведомления в MAX
+              </Button>
+            )}
+          </div>
         )}
       </PopoverContent>
     </Popover>
