@@ -51,10 +51,12 @@ func (s *Service) HandleEvent(ctx context.Context, eventType, userID string, dat
 	}
 	var payload struct {
 		TaskID string `json:"task_id"`
+		Email  string `json:"email"`
 	}
 	if json.Unmarshal(data, &payload) != nil || payload.TaskID == "" {
 		return nil
 	}
+	ctx = platform.WithEmail(ctx, payload.Email)
 	if _, err := s.Analyze(ctx, userID, payload.TaskID); err != nil && !errors.Is(err, tasks.ErrNotFound) {
 		return err
 	}

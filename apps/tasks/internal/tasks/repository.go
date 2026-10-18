@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"example.com/hackathon/apps/tasks/internal/platform"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,7 +61,7 @@ func (r *Repository) Insert(ctx context.Context, owner string, t Task) error {
 	if _, err = tx.Exec(ctx, "INSERT INTO tasks(id,owner_id,title,completed,created_at) VALUES($1,$2,$3,$4,$5)", t.ID, owner, t.Title, t.Completed, t.CreatedAt); err != nil {
 		return err
 	}
-	payload, _ := json.Marshal(map[string]string{"task_id": t.ID})
+	payload, _ := json.Marshal(map[string]string{"task_id": t.ID, "email": platform.Email(ctx)})
 	if _, err = tx.Exec(ctx, "INSERT INTO outbox(id,type,user_id,payload) VALUES($1,'task.created',$2,$3)", uuid.NewString(), owner, payload); err != nil {
 		return err
 	}

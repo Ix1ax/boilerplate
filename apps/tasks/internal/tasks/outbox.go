@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"example.com/hackathon/apps/tasks/internal/broker"
+	"example.com/hackathon/apps/tasks/internal/platform"
 	"github.com/google/uuid"
 )
 
@@ -32,11 +33,14 @@ RETURNING id, type, user_id, payload, created_at`, n)
 	return out, rows.Err()
 }
 
-// MarkSent отмечает событие отправленным и заодно чистит старые отправленные записи.
+// MarkSent отмечает событие отправленным.
 func (r *Repository) MarkSent(ctx context.Context, id string) error {
-	if _, err := r.db.Exec(ctx, "UPDATE outbox SET sent_at = now() WHERE id=$1", id); err != nil {
-		return err
-	}
+	_, err := r.db.Exec(ctx, "UPDATE outbox SET sent_at = now() WHERE id=$1", id)
+	return err
+}
+
+// CleanupOutbox удаляет отправленные события старше суток (фоновое задание, см. platform.Every).
+func (r *Repository) CleanupOutbox(ctx context.Context) error {
 	_, err := r.db.Exec(ctx, "DELETE FROM outbox WHERE sent_at < now() - interval '1 day'")
 	return err
 }
@@ -61,7 +65,8 @@ RETURNING (xmax = 0)`, taskID, m.Verdict, m.Source, result).Scan(&inserted); err
 		if m.Verdict == "needs_review" {
 			title = "ИИ-проверка: задача требует внимания"
 		}
-		payload, _ := json.Marshal(map[string]string{"title": title, "body": "Откройте задачу, чтобы посмотреть рекомендацию. Решение остаётся за вами.", "link": "/dashboard/tasks"})
+		// email непустой — notifications дополнительно отправит письмо (если настроен SMTP).
+		payload, _ := json.Marshal(map[string]string{"title": title, "body": "Откройте задачу, чтобы посмотреть рекомендацию. Решение остаётся за вами.", "link": "/dashboard/tasks", "email": platform.Email(ctx)})
 		if _, err = tx.Exec(ctx, "INSERT INTO outbox(id,type,user_id,payload) VALUES($1,'notification.requested',$2,$3)", uuid.NewString(), owner, payload); err != nil {
 			return err
 		}

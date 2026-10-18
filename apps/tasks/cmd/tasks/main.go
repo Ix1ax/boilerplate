@@ -86,6 +86,8 @@ func run(logger *slog.Logger) error {
 	}
 	moderation := copilot.New(service, advisor, repo)
 	copilot.Register(api, moderation)
+	// Образец фонового задания: при нескольких репликах выполняется одной (advisory lock).
+	go platform.Every(ctx, db, logger, "outbox-cleanup", time.Hour, repo.CleanupOutbox)
 	// Брокер необязателен для CRUD: события лежат в outbox и уйдут, когда он станет доступен.
 	brokerDone := make(chan struct{})
 	if c.AMQPURL != "" {
