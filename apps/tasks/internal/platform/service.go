@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +43,7 @@ func TrustGateway(token string) gin.HandlerFunc {
 			return
 		}
 		c.Set("owner_id", user)
+		c.Set("roles", c.GetHeader(HeaderRoles))
 		c.Next()
 	}
 }
@@ -81,4 +83,28 @@ func NewEngine(log *slog.Logger, maxBody int64, check func(context.Context) erro
 		c.JSON(200, gin.H{"status": "ready"})
 	})
 	return r
+}
+
+// HeaderRoles — роли пользователя, которые gateway взял из проверенного JWT.
+const HeaderRoles = "X-User-Roles"
+
+// HasRole сообщает, есть ли у пользователя роль. Доверять можно, потому что запрос прошёл TrustGateway.
+func HasRole(c *gin.Context, role string) bool {
+	for _, r := range strings.Split(c.GetString("roles"), ",") {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+// RequireRole пропускает только пользователей с ролью.
+func RequireRole(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !HasRole(c, role) {
+			c.AbortWithStatusJSON(403, gin.H{"error": gin.H{"code": "forbidden", "message": "Недостаточно прав для этого действия"}})
+			return
+		}
+		c.Next()
+	}
 }

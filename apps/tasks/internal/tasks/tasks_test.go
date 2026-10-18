@@ -18,6 +18,7 @@ func (f *fakeStore) Insert(_ context.Context, owner string, t Task) error {
 	f.inserted = append(f.inserted, t)
 	return nil
 }
+func (f *fakeStore) Get(context.Context, string, string) (Task, error)          { return Task{}, ErrNotFound }
 func (f *fakeStore) Update(context.Context, string, string, bool) (Task, error) { return Task{}, nil }
 func (f *fakeStore) Delete(context.Context, string, string) error               { return nil }
 func TestCreateValidatesUnicodeTitleBeforePersistence(t *testing.T) {

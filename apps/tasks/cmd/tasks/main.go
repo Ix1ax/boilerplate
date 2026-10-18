@@ -11,7 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/hackathon/apps/tasks/internal/broker"
 	"example.com/hackathon/apps/tasks/internal/config"
+	"example.com/hackathon/apps/tasks/internal/copilot"
 	"example.com/hackathon/apps/tasks/internal/database"
 	"example.com/hackathon/apps/tasks/internal/platform"
 	"example.com/hackathon/apps/tasks/internal/tasks"
@@ -74,7 +76,26 @@ func run(logger *slog.Logger) error {
 	}
 	r := platform.NewEngine(logger, 1<<20, check)
 	api := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
-	tasks.Register(api, tasks.New(tasks.NewRepository(db)))
+	repo := tasks.NewRepository(db)
+	service := tasks.New(repo)
+	tasks.Register(api, service)
+	tasks.RegisterAdmin(api, repo)
+	var advisor copilot.Advisor
+	if c.LLMServiceURL != "" {
+		advisor = copilot.NewHTTPAdvisor(c.LLMServiceURL, c.InternalToken)
+	}
+	moderation := copilot.New(service, advisor, repo)
+	copilot.Register(api, moderation)
+	// Брокер необязателен для CRUD: события лежат в outbox и уйдут, когда он станет доступен.
+	brokerDone := make(chan struct{})
+	if c.AMQPURL != "" {
+		b := broker.New(c.AMQPURL, broker.Options{Queue: "tasks.moderation", Keys: []string{"task.created"}, Outbox: repo}, func(ctx context.Context, m broker.Message) error {
+			return moderation.HandleEvent(ctx, m.Type, m.UserID, m.Data)
+		}, logger)
+		go func() { b.Run(ctx); close(brokerDone) }()
+	} else {
+		close(brokerDone)
+	}
 	server := &http.Server{Addr: c.Addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
@@ -88,6 +109,8 @@ func run(logger *slog.Logger) error {
 		}
 	case <-ctx.Done():
 	}
+	stop()
+	<-brokerDone
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
 	return server.Shutdown(shutdown)
