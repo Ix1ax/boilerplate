@@ -1,4 +1,3 @@
-export { MotionProvider } from './MotionProvider';
 export { DURATION, EASING, SPRING } from './tokens';
 export { TRANSITION } from './transitions';
 export {

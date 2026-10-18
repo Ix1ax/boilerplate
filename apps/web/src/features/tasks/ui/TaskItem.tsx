@@ -34,6 +34,7 @@ export const TaskItem = ({ task }: TaskItemProps) => {
         <Checkbox
           checked={task.completed}
           disabled={toggleTask.isPending}
+          aria-label={task.title}
           onCheckedChange={(checked) =>
             toggleTask.mutate({ id: task.id, completed: checked === true })
           }
