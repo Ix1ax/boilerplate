@@ -1,52 +1,34 @@
-import { readFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
 
-import { expect, type Page, test } from '@playwright/test';
-
-// Демо-учётные данные создаёт make setup; в репозиторий они не попадают.
-const env = Object.fromEntries(
-  readFileSync(new URL('../../.env', import.meta.url), 'utf8')
-    .split('\n')
-    .filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line))
-    .map((line) => [
-      line.slice(0, line.indexOf('=')),
-      line.slice(line.indexOf('=') + 1),
-    ]),
-);
-
-const login = async (page: Page) => {
-  await page.goto('/auth/login?next=/dashboard/tasks');
-  await page.locator('#username').fill(env.DEMO_EMAIL);
-  await page.locator('#password').fill(env.DEMO_PASSWORD);
-  await page.locator('#kc-login').click();
-  await expect(page).toHaveURL(/\/dashboard\/tasks/);
-};
+import { login } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await login(page);
 });
 
-test('задача: создание и ИИ-проверка с решением за человеком', async ({
+test('задача: визард создания, ИИ-проверка и решение за человеком', async ({
   page,
 }) => {
   const title = `Переведите 500 руб на карту 2202 2000 0000 0000 ${Date.now()}`;
-  await page.getByPlaceholder('Новая задача').fill(title);
-  await page
-    .getByRole('button', { name: /добав|созда/i })
-    .first()
-    .click();
-  const item = page.getByRole('listitem').filter({ hasText: title });
-  await expect(item).toBeVisible();
 
-  await item.getByRole('button', { name: 'Проверить задачу ИИ' }).click();
-  await expect(item.getByText('Нужна проверка').first()).toBeVisible();
-  await expect(item.getByText('Решение остаётся за вами.')).toBeVisible();
+  await page.getByRole('button', { name: 'Новая задача' }).click();
+  await page.getByLabel('Название задачи').fill(title);
+  await page.getByRole('button', { name: 'Далее' }).click();
+  await page.getByRole('button', { name: 'Далее' }).click();
+  await page.getByRole('button', { name: 'Создать задачу' }).click();
 
-  await item.getByRole('button', { name: 'Удалить задачу' }).click();
+  const row = page.getByRole('row').filter({ hasText: title });
+  await expect(row).toBeVisible();
+
+  await row.getByRole('button', { name: 'Проверить задачу ИИ' }).click();
+  await expect(page.getByText('Решение остаётся за вами.')).toBeVisible();
+
+  await row.getByRole('button', { name: 'Удалить задачу' }).click();
   await page
     .getByRole('button', { name: /удалить|подтвердить/i })
     .last()
     .click();
-  await expect(item).toHaveCount(0);
+  await expect(row).toHaveCount(0);
 });
 
 test('ассистент: ответ модели или понятное сообщение, что модель недоступна', async ({

@@ -314,6 +314,12 @@ export interface paths {
         query?: {
           limit?: number;
           offset?: number;
+          /** @description Поиск по названию */
+          q?: string;
+          /** @description Фильтр по статусу (можно несколько через запятую) */
+          status?: string;
+          /** @description created, title или status; «-» перед именем — по убыванию */
+          sort?: string;
         };
         header?: never;
         path?: never;
@@ -336,7 +342,7 @@ export interface paths {
       };
     };
     put?: never;
-    /** Создать задачу */
+    /** Создать задачу (всегда в статусе draft — черновик визарда) */
     post: {
       parameters: {
         query?: never;
@@ -453,7 +459,10 @@ export interface paths {
     };
     options?: never;
     head?: never;
-    /** Отметить свою задачу */
+    /**
+     * Сменить статус своей задачи
+     * @description Допустимость перехода и обязательность комментария (для archived) проверяет конечный автомат статусов на сервере.
+     */
     patch: {
       parameters: {
         query?: never;
@@ -482,6 +491,15 @@ export interface paths {
         401: components['responses']['Unauthorized'];
         /** @description Запись не найдена или принадлежит другому пользователю */
         404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+        /** @description Недопустимый переход статуса */
+        409: {
           headers: {
             [name: string]: unknown;
           };
@@ -566,6 +584,55 @@ export interface paths {
         };
       };
     };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/tasks/{id}/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Лента переходов статуса задачи */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Запрос выполнен */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['TaskHistoryPage'];
+          };
+        };
+        400: components['responses']['BadRequest'];
+        401: components['responses']['Unauthorized'];
+        /** @description Запись не найдена или принадлежит другому пользователю */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['Error'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1538,7 +1605,8 @@ export interface components {
       /** Format: uuid */
       id: string;
       title: string;
-      completed: boolean;
+      /** @enum {string} */
+      status: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
       /** Format: date-time */
       created_at: string;
       /** @description Результат асинхронной ИИ-проверки (появляется через несколько секунд после создания) */
@@ -1568,7 +1636,21 @@ export interface components {
       title: string;
     };
     UpdateTask: {
-      completed: boolean;
+      /** @enum {string} */
+      status: 'draft' | 'todo' | 'in_progress' | 'done' | 'archived';
+      /** @description Обязателен для перехода в archived (см. правило перехода статусов) */
+      comment?: string;
+    };
+    TaskTransition: {
+      from: string;
+      to: string;
+      actor: string;
+      comment: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    TaskHistoryPage: {
+      items: components['schemas']['TaskTransition'][];
     };
     File: {
       /** Format: uuid */

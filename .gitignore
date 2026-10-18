@@ -21,7 +21,7 @@ bin/
 
 # Локальные макеты, инструкции, скриншоты и демо
 /design-handoff/
-/apps/web/src/app/preview/
+/web/src/app/preview/
 
 # Локальные данные и резервные копии
 .local/
