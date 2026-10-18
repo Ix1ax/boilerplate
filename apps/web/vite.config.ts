@@ -15,7 +15,8 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:8080',
+      // ws: true — проксировать и WebSocket (/api/v1/ws).
+      '/api': { target: 'http://localhost:8080', ws: true },
       '/auth': 'http://localhost:8080',
       '/healthz': 'http://localhost:8080',
     },
