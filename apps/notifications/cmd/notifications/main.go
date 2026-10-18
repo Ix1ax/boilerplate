@@ -76,7 +76,11 @@ func run(logger *slog.Logger) error {
 	r := platform.NewEngine(logger, 1<<20, check)
 	api := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
 	repo := notifications.NewRepository(db)
-	service := notifications.New(repo)
+	var mailer notifications.Mailer
+	if c.SMTPAddr != "" {
+		mailer = notifications.SMTPMailer{Addr: c.SMTPAddr, From: c.MailFrom}
+	}
+	service := notifications.New(repo, notifications.NewHub(), mailer, logger.Warn)
 	notifications.Register(api, service)
 	// Подписка на notification.requested: события публикуют другие сервисы через свой outbox.
 	brokerDone := make(chan struct{})
@@ -88,7 +92,7 @@ func run(logger *slog.Logger) error {
 	} else {
 		close(brokerDone)
 	}
-	server := &http.Server{Addr: c.Addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	server := &http.Server{Addr: c.Addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second /* SSE продлевает дедлайн сам */, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		logger.Info("Сервис notifications принимает запросы", "addr", c.Addr)

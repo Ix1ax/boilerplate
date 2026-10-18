@@ -41,9 +41,9 @@ func (r *Repository) List(ctx context.Context, user string, limit, offset int) (
 }
 
 // Insert идемпотентен по source_event_id: повторная доставка события ничего не меняет.
-func (r *Repository) Insert(ctx context.Context, user, eventID string, n Notification) error {
-	_, err := r.db.Exec(ctx, "INSERT INTO notifications(id,user_id,title,body,link,source_event_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (source_event_id) DO NOTHING", n.ID, user, n.Title, n.Body, n.Link, eventID)
-	return err
+func (r *Repository) Insert(ctx context.Context, user, eventID string, n Notification) (bool, error) {
+	tag, err := r.db.Exec(ctx, "INSERT INTO notifications(id,user_id,title,body,link,created_at,source_event_id) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (source_event_id) DO NOTHING", n.ID, user, n.Title, n.Body, n.Link, n.CreatedAt, eventID)
+	return err == nil && tag.RowsAffected() == 1, err
 }
 func (r *Repository) MarkRead(ctx context.Context, user, id string) error {
 	tag, err := r.db.Exec(ctx, "UPDATE notifications SET read_at=coalesce(read_at, now()) WHERE id=$1 AND user_id=$2", id, user)

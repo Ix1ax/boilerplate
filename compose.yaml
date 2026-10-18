@@ -234,8 +234,12 @@ services:
       DATABASE_URL: postgres://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-postgres:5432/${NOTIFICATIONS_DB_NAME}?sslmode=disable
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      # Письма уходят в Mailpit (http://localhost:8025); в production — свой SMTP.
+      SMTP_ADDR: mailpit:1025
+      MAIL_FROM: noreply@example.test
     restart: on-failure:3
     depends_on:
+      mailpit: { condition: service_started }
       notifications-migrate: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
     healthcheck: *svc-health

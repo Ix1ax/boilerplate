@@ -1,7 +1,10 @@
 package notifications
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"time"
 
 	"example.com/hackathon/apps/notifications/internal/platform"
 	"github.com/gin-gonic/gin"
@@ -9,6 +12,42 @@ import (
 )
 
 func Register(group *gin.RouterGroup, s *Service) {
+	// SSE: новые уведомления приходят сразу. Соединение живёт до 2 минут, затем EventSource
+	// в браузере переподключается сам; комментарий-пинг держит прокси от закрытия по простою.
+	group.GET("/notifications/stream", func(c *gin.Context) {
+		if s.Hub() == nil {
+			fail(c, 503, "stream_unavailable", "Поток уведомлений отключён")
+			return
+		}
+		events, unsubscribe := s.Hub().Subscribe(platform.Owner(c))
+		defer unsubscribe()
+		rc := http.NewResponseController(c.Writer)
+		_ = rc.SetWriteDeadline(time.Now().Add(3 * time.Minute))
+		h := c.Writer.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Cache-Control", "no-cache")
+		h.Set("X-Accel-Buffering", "no")
+		c.Status(200)
+		_, _ = c.Writer.WriteString(": connected\n\n")
+		c.Writer.Flush()
+		ping := time.NewTicker(25 * time.Second)
+		defer ping.Stop()
+		deadline := time.After(2 * time.Minute)
+		for {
+			select {
+			case <-c.Request.Context().Done():
+				return
+			case <-deadline:
+				return
+			case <-ping.C:
+				_, _ = c.Writer.WriteString(": ping\n\n")
+			case n := <-events:
+				b, _ := json.Marshal(n)
+				_, _ = c.Writer.WriteString("event: notification\ndata: " + string(b) + "\n\n")
+			}
+			c.Writer.Flush()
+		}
+	})
 	group.GET("/notifications", func(c *gin.Context) {
 		limit, offset, ok := platform.ParsePagination(c.DefaultQuery("limit", "20"), c.DefaultQuery("offset", "0"))
 		if !ok {

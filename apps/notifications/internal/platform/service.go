@@ -44,6 +44,7 @@ func TrustGateway(token string) gin.HandlerFunc {
 		}
 		c.Set("owner_id", user)
 		c.Set("roles", c.GetHeader(HeaderRoles))
+		c.Request = c.Request.WithContext(WithEmail(c.Request.Context(), c.GetHeader(HeaderEmail)))
 		c.Next()
 	}
 }
@@ -107,4 +108,20 @@ func RequireRole(role string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// HeaderEmail — адрес пользователя из JWT (может быть пустым).
+const HeaderEmail = "X-User-Email"
+
+type emailKey struct{}
+
+// WithEmail кладёт адрес пользователя в контекст: так он доходит до outbox и фоновых обработчиков.
+func WithEmail(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, emailKey{}, email)
+}
+
+// Email — адрес пользователя из контекста запроса или события.
+func Email(ctx context.Context) string {
+	v, _ := ctx.Value(emailKey{}).(string)
+	return v
 }

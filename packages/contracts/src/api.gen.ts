@@ -612,6 +612,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/notifications/stream': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Поток новых уведомлений (SSE)
+     * @description События event: notification с JSON уведомления; комментарии-пинги каждые 25 с; соединение закрывается через 2 минуты, клиент переподключается.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description text/event-stream */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'text/event-stream': string;
+          };
+        };
+        401: components['responses']['Unauthorized'];
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/notifications/{id}/read': {
     parameters: {
       query?: never;

@@ -33,14 +33,28 @@ type Page struct {
 
 type Store interface {
 	List(ctx context.Context, user string, limit, offset int) (Page, error)
-	Insert(ctx context.Context, user, eventID string, n Notification) error
+	// Insert возвращает false, если событие уже обработано (повторная доставка).
+	Insert(ctx context.Context, user, eventID string, n Notification) (bool, error)
 	MarkRead(ctx context.Context, user, id string) error
 	MarkAllRead(ctx context.Context, user string) error
 }
 
-type Service struct{ store Store }
+type Service struct {
+	store  Store
+	hub    *Hub
+	mailer Mailer
+	log    func(msg string, args ...any)
+}
 
-func New(store Store) *Service { return &Service{store: store} }
+// New: hub и mailer необязательны (nil — без live-событий и писем).
+func New(store Store, hub *Hub, mailer Mailer, log func(msg string, args ...any)) *Service {
+	if log == nil {
+		log = func(string, ...any) {}
+	}
+	return &Service{store: store, hub: hub, mailer: mailer, log: log}
+}
+
+func (s *Service) Hub() *Hub { return s.hub }
 
 func (s *Service) List(ctx context.Context, user string, limit, offset int) (Page, error) {
 	return s.store.List(ctx, user, limit, offset)
@@ -58,7 +72,7 @@ func (s *Service) HandleEvent(ctx context.Context, eventID, eventType, userID st
 	if eventType != "notification.requested" || userID == "" {
 		return nil
 	}
-	var in struct{ Title, Body, Link string }
+	var in struct{ Title, Body, Link, Email string }
 	if json.Unmarshal(data, &in) != nil {
 		return nil
 	}
@@ -72,5 +86,20 @@ func (s *Service) HandleEvent(ctx context.Context, eventID, eventType, userID st
 	if _, err := uuid.Parse(eventID); err != nil {
 		eventID = uuid.NewString()
 	}
-	return s.store.Insert(ctx, userID, eventID, Notification{ID: uuid.NewString(), Title: in.Title, Body: in.Body, Link: in.Link})
+	n := Notification{ID: uuid.NewString(), Title: in.Title, Body: in.Body, Link: in.Link, CreatedAt: time.Now().UTC()}
+	created, err := s.store.Insert(ctx, userID, eventID, n)
+	if err != nil || !created {
+		return err
+	}
+	if s.hub != nil {
+		s.hub.Publish(userID, n)
+	}
+	// Письмо — дополнительный канал: его сбой логируем, но не повторяем доставку события,
+	// иначе пользователь получит дубли писем.
+	if s.mailer != nil && in.Email != "" {
+		if err := s.mailer.Send(ctx, in.Email, n.Title, n.Body); err != nil {
+			s.log("Не удалось отправить письмо", "error", err)
+		}
+	}
+	return nil
 }
