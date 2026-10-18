@@ -6,9 +6,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen": "openapi-typescript openapi.yaml -o src/api.gen.ts && prettier --write src/api.gen.ts"
   },
   "dependencies": {
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.4"
   }
 }

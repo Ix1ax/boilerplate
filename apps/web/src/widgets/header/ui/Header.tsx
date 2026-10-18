@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 
 import { useLogout } from '@/features/auth';
+import { NotificationsBell } from '@/features/notifications';
 import { ThemeToggle } from '@/features/theme';
 
 import { useCurrentUser } from '@/entities/user';
@@ -25,6 +26,7 @@ export const Header = () => {
 
         {user ? (
           <div className="flex items-center gap-2">
+            <NotificationsBell />
             <span className="text-sm">{user.name}</span>
             <Button
               variant="outline"

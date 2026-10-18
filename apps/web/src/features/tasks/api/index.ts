@@ -1,1 +1,1 @@
-export { createTask, deleteTask, updateTask } from './taskApi';
+export { analyzeTask, createTask, deleteTask, updateTask } from './taskApi';

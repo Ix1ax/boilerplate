@@ -5,6 +5,9 @@ export const toTask = (dto: TaskDto): Task => ({
   title: dto.title,
   completed: dto.completed,
   createdAt: dto.created_at,
+  moderation: dto.moderation
+    ? { verdict: dto.moderation.verdict, source: dto.moderation.source }
+    : null,
 });
 
 export const toTaskPage = (dto: TaskPageDto): TaskPage => ({
