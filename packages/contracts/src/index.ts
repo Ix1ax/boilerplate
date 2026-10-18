@@ -1,4 +1,6 @@
 import { z } from 'zod';
+
+import type { components } from './api.gen';
 export const createTaskSchema = z.object({
   title: z
     .string()
@@ -10,32 +12,43 @@ export const createTaskSchema = z.object({
     ),
 });
 export type CreateTask = z.infer<typeof createTaskSchema>;
-export type Task = {
-  id: string;
-  title: string;
-  completed: boolean;
-  created_at: string;
-};
-export type User = { id: string; email: string; name: string; roles: string[] };
-export type TaskPage = {
-  items: Task[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-export type ApiErrorBody = {
-  error: { code: string; message: string; request_id?: string };
-};
-export type UploadedFile = {
-  id: string;
-  name: string;
-  size: number;
-  content_type: string;
-  created_at: string;
-};
-export type FilePage = {
-  items: UploadedFile[];
-  total: number;
-  limit: number;
-  offset: number;
-};
+// Типы ответов API генерируются из openapi.yaml (npm run gen -w @starter/contracts): вручную их не правим.
+type Schemas = components['schemas'];
+export type Task = Schemas['Task'];
+export type TaskModeration = NonNullable<Task['moderation']>;
+export type TaskPage = Schemas['TaskPage'];
+export type User = Schemas['User'];
+export type UploadedFile = Schemas['File'];
+export type FilePage = Schemas['FilePage'];
+export type ApiErrorBody = Schemas['Error'];
+export type Notification = Schemas['Notification'];
+export type NotificationPage = Schemas['NotificationPage'];
+export type TaskStats = Schemas['TaskStats'];
+export type AuditRecord = Schemas['AuditRecord'];
+export type AuditPage = Schemas['AuditPage'];
+
+// Запрос к LLM-шлюзу. Пределы совпадают с проверкой в Go (apps/llm): длина считается в символах.
+export const llmPromptSchema = z.object({
+  prompt: z.string().trim().min(1, 'Введите запрос').max(8000),
+  system: z.string().trim().max(2000).optional(),
+  json: z.boolean().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+});
+export type LlmPrompt = z.infer<typeof llmPromptSchema>;
+
+// Ответ ИИ-проверки задачи. Вердикт — рекомендация: решение принимает человек.
+export const taskAnalysisSchema = z.object({
+  task_id: z.string(),
+  verdict: z.enum(['ok', 'needs_review']),
+  flags: z.array(z.object({ code: z.string(), message: z.string() })),
+  advice: z
+    .object({
+      summary: z.string(),
+      risk: z.enum(['low', 'medium', 'high']),
+      suggestion: z.string(),
+    })
+    .nullable(),
+  source: z.enum(['rules', 'rules+llm']),
+  decision_required: z.boolean(),
+});
+export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;

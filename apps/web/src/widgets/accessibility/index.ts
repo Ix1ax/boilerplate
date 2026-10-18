@@ -1,1 +1,1 @@
-export { Accessibility } from "./ui"
+export { Accessibility } from './ui';

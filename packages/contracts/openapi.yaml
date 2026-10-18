@@ -5,9 +5,11 @@ info:
   description: >-
     Контракт Go API. Браузер использует cookie-сессию на том же origin;
     токены хранятся в Redis. Внешние клиенты используют Bearer JWT.
+    Изменяющие запросы принимают необязательный заголовок Idempotency-Key:
+    повтор с тем же ключом вернёт сохранённый ответ (заголовок Idempotent-Replayed).
 servers:
-  - url: http://localhost:8080
-    description: Локальный Go API
+  - url: /
+    description: Тот же origin (в Docker — через Nginx на :3000)
 security:
   - bearerAuth: []
   - cookieAuth: []
@@ -273,10 +275,183 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/tasks/{id}/analyze:
+    post:
+      summary: ИИ-проверка задачи (рекомендация для человека)
+      description: Правила дают флаги и вердикт, модель (если доступна) добавляет совет. Решение остаётся за человеком. Лимит 10 в минуту на пользователя.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Рекомендация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskAnalysis'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Задача не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много проверок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/notifications:
+    get:
+      summary: Мои уведомления
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+      responses:
+        '200':
+          description: Страница уведомлений и число непрочитанных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/stream:
+    get:
+      summary: Поток новых уведомлений (SSE)
+      description: 'События event: notification с JSON уведомления; комментарии-пинги каждые 25 с; соединение закрывается через 2 минуты, клиент переподключается.'
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/{id}/read:
+    post:
+      summary: Отметить уведомление прочитанным
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Отмечено
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/notifications/read-all:
+    post:
+      summary: Отметить все уведомления прочитанными
+      responses:
+        '204':
+          description: Отмечено
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/admin/tasks/export.csv:
+    get:
+      summary: Выгрузка всех задач в CSV (только администратор)
+      description: UTF-8 с BOM, разделитель «;» — открывается в Excel с русской локалью.
+      responses:
+        '200':
+          description: CSV-файл
+          content:
+            text/csv:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/tasks/stats:
+    get:
+      summary: Сводка для дашборда (только администратор)
+      responses:
+        '200':
+          description: Итоги, разбивка по ИИ-проверке и создание задач за 14 дней
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/audit:
+    get:
+      summary: Журнал изменяющих действий (только администратор)
+      description: Фильтры actor, method, status, request_id; поиск q по пути и email; sort=-occurred|occurred|status|-status.
+      parameters:
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: method, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: request_id, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - {
+            name: sort,
+            in: query,
+            schema: { type: string, default: '-occurred' },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+        - {
+            name: offset,
+            in: query,
+            schema: { type: integer, minimum: 0, default: 0 },
+          }
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет роли admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/files:
     get:
       summary: Получить свои файлы
       parameters:
+        - name: entity_type
+          in: query
+          description: Только файлы, приложенные к записи (вместе с entity_id)
+          schema: { type: string }
+        - name: entity_id
+          in: query
+          schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
@@ -348,6 +523,13 @@ paths:
                 file:
                   type: string
                   format: binary
+                entity_type:
+                  type: string
+                  pattern: '^[a-z][a-z_]{0,29}$'
+                  description: Необязательная привязка к записи другого сервиса (вместе с entity_id)
+                entity_id:
+                  type: string
+                  pattern: '^[A-Za-z0-9-]{1,64}$'
   /api/v1/files/{id}:
     parameters:
       - $ref: '#/components/parameters/ID'
@@ -402,6 +584,92 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/llm/status:
+    get:
+      summary: Состояние локальной модели
+      responses:
+        '200':
+          description: Доступность Ollama и установленной модели
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available, model, model_installed]
+                properties:
+                  available: { type: boolean }
+                  model: { type: string }
+                  model_installed: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/llm/generate:
+    post:
+      summary: Сгенерировать ответ модели целиком
+      description: До 10 запросов в минуту на пользователя; одновременно обрабатывается ограниченное число запросов.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmPrompt'
+      responses:
+        '200':
+          description: Ответ модели
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [text, model]
+                properties:
+                  text: { type: string }
+                  model: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Лимит запросов или модель занята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Модель недоступна (не запущен make llm)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/llm/stream:
+    post:
+      summary: Потоковый ответ модели (SSE)
+      description: 'События: data {"t":"фрагмент"}, затем event done; при сбое event error.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmPrompt'
+      responses:
+        '200':
+          description: Поток text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Лимит запросов или модель занята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Модель недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     cookieAuth:
@@ -421,6 +689,126 @@ components:
         type: string
         format: uuid
   schemas:
+    TaskStats:
+      type: object
+      required: [total, completed, owners, moderation, by_day]
+      properties:
+        total: { type: integer }
+        completed: { type: integer }
+        owners: { type: integer }
+        moderation:
+          type: object
+          required: [ok, needs_review, unchecked]
+          properties:
+            ok: { type: integer }
+            needs_review: { type: integer }
+            unchecked: { type: integer }
+        by_day:
+          type: array
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer }
+    AuditRecord:
+      type: object
+      required:
+        [
+          actor,
+          actor_email,
+          method,
+          route,
+          path,
+          status,
+          request_id,
+          ip,
+          occurred_at,
+        ]
+      properties:
+        actor: { type: string }
+        actor_email: { type: string }
+        method: { type: string }
+        route: { type: string }
+        path: { type: string }
+        status: { type: integer }
+        request_id: { type: string }
+        ip: { type: string }
+        occurred_at: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Notification:
+      type: object
+      required: [id, title, body, link, created_at, read_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string }
+        link:
+          {
+            type: string,
+            description: Внутренний путь приложения или пустая строка,
+          }
+        created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true }
+    NotificationPage:
+      type: object
+      required: [items, total, unread, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        total: { type: integer }
+        unread: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    TaskAnalysis:
+      type: object
+      required: [task_id, verdict, flags, advice, source, decision_required]
+      properties:
+        task_id: { type: string, format: uuid }
+        verdict: { type: string, enum: [ok, needs_review] }
+        flags:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                {
+                  type: string,
+                  enum: [money, link, contact, shouting, too_short],
+                }
+              message: { type: string }
+        advice:
+          nullable: true
+          type: object
+          required: [summary, risk, suggestion]
+          properties:
+            summary: { type: string }
+            risk: { type: string, enum: [low, medium, high] }
+            suggestion: { type: string }
+        source: { type: string, enum: [rules, rules+llm] }
+        decision_required: { type: boolean }
+    LlmPrompt:
+      type: object
+      required: [prompt]
+      additionalProperties: false
+      properties:
+        prompt: { type: string, minLength: 1, maxLength: 8000 }
+        system: { type: string, maxLength: 2000 }
+        json: { type: boolean, description: Просить модель вернуть JSON }
+        temperature: { type: number, minimum: 0, maximum: 2 }
     Error:
       type: object
       required:
@@ -445,6 +833,7 @@ components:
         - title
         - completed
         - created_at
+        - moderation
       properties:
         id:
           type: string
@@ -458,6 +847,15 @@ components:
         created_at:
           type: string
           format: date-time
+        moderation:
+          nullable: true
+          description: Результат асинхронной ИИ-проверки (появляется через несколько секунд после создания)
+          type: object
+          required: [verdict, source, checked_at]
+          properties:
+            verdict: { type: string, enum: [ok, needs_review] }
+            source: { type: string, enum: [rules, rules+llm] }
+            checked_at: { type: string, format: date-time }
     TaskPage:
       type: object
       required:
@@ -539,6 +937,13 @@ components:
           maximum: 10485760
         content_type:
           type: string
+        entity:
+          nullable: true
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string }
+            id: { type: string }
         created_at:
           type: string
           format: date-time

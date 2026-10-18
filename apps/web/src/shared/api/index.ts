@@ -1,5 +1,5 @@
 export { API, request } from './client';
-export { ApiError } from './errors';
+export { ApiError, toApiError } from './errors';
 export { setErrorHandler, queryClient } from './queryClient';
 export {
   type ApiConfig,
@@ -7,3 +7,4 @@ export {
   getApiConfig,
   SILENT_UNAUTHORIZED_URL,
 } from './config';
+export { streamSSE } from './sse';

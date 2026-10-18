@@ -44,6 +44,19 @@ export const router = createBrowserRouter([
                     path: 'files',
                     lazy: () => import('@/pages/dashboard-files'),
                   },
+                  {
+                    path: 'assistant',
+                    lazy: () => import('@/pages/dashboard-assistant'),
+                  },
+                  {
+                    element: <ProtectedRoute roles={['admin']} />,
+                    children: [
+                      {
+                        path: 'admin',
+                        lazy: () => import('@/pages/dashboard-admin'),
+                      },
+                    ],
+                  },
                 ],
               },
             ],

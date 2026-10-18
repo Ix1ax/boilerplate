@@ -8,5 +8,10 @@ export const useTasks = (params: TaskListParams = {}) => {
   return useQuery({
     queryKey: TASK_KEYS.LIST(params),
     queryFn: () => getTasks(params),
+    // Пока очередь не проверила новую задачу, периодически обновляем список.
+    refetchInterval: (query) =>
+      query.state.data?.items.some((task) => task.moderation === null)
+        ? 3000
+        : false,
   });
 };
