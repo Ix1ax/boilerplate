@@ -1,6 +1,6 @@
 # AGENTS.md — рабочие правила для AI-агентов
 
-Шаблон хакатонного проекта: микросервисный Go-бэкенд + React SPA + Keycloak + локальная LLM (Qwen в Ollama). Цель — за часы собрать **работающий, красиво показанный** продукт. Фронтенд: `apps/web/CLAUDE.md`.
+Шаблон хакатонного проекта: микросервисный Go-бэкенд + React SPA + Keycloak + локальная LLM (Qwen в Ollama). Цель — за часы собрать **работающий, красиво показанный** продукт. Фронтенд: `web/CLAUDE.md`.
 
 ## Карта репозитория
 
@@ -11,7 +11,7 @@
 | `apps/notifications`       | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                             |
 | `apps/audit`               | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit` |
 | `apps/llm`                 | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                 |
-| `apps/web`                 | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
+| `web`                      | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                         |
 | `packages/contracts`       | OpenAPI, TS-типы, Zod-схемы (источник правды для API)                                                                   |
 | `compose.yaml`, `Makefile` | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                         |
 | `docs/`                    | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)         |
@@ -59,7 +59,7 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Образец ИИ-функции (копировать, а не изобретать)
 
-`apps/tasks/internal/copilot`: **правила** (детерминированно ставят флаги и вердикт) → **LLM** (опциональный совет, строго валидируемый JSON, текст пользователя передаётся как данные в `<task>`) → **человек решает** (`decision_required`). Сбой модели не ломает проверку: остаются правила. Дорогие эндпоинты, вызывающие модель, ограничиваются в gateway тем же лимитом `rate:llm` (10 в минуту). Потоковый чат — `apps/web/src/features/assistant` + `shared/api/sse.ts`.
+`apps/tasks/internal/copilot`: **правила** (детерминированно ставят флаги и вердикт) → **LLM** (опциональный совет, строго валидируемый JSON, текст пользователя передаётся как данные в `<task>`) → **человек решает** (`decision_required`). Сбой модели не ломает проверку: остаются правила. Дорогие эндпоинты, вызывающие модель, ограничиваются в gateway тем же лимитом `rate:llm` (10 в минуту). Потоковый чат — `web/src/features/assistant` + `shared/api/sse.ts`.
 
 ## Готовые заготовки
 

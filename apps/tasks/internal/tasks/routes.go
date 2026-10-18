@@ -7,14 +7,21 @@ import (
 	"github.com/google/uuid"
 )
 
+var taskListSpec = platform.ListSpec{
+	Filters:     map[string]string{"status": "t.status"},
+	Sorts:       map[string]string{"created": "t.created_at", "title": "t.title", "status": "t.status"},
+	DefaultSort: "-created",
+	Search:      []string{"t.title"},
+}
+
 func Register(group *gin.RouterGroup, s *Service) {
 	group.GET("/tasks", func(c *gin.Context) {
-		limit, offset, ok := platform.ParsePagination(c.DefaultQuery("limit", "20"), c.DefaultQuery("offset", "0"))
-		if !ok {
-			fail(c, 400, "invalid_pagination", "limit должен быть от 1 до 100, offset — от 0 до 100000")
+		q, err := platform.ParseList(c, taskListSpec, 2)
+		if err != nil {
+			fail(c, 400, "invalid_query", err.Error())
 			return
 		}
-		page, err := s.List(c.Request.Context(), platform.Owner(c), limit, offset)
+		page, err := s.List(c.Request.Context(), platform.Owner(c), q)
 		if err != nil {
 			_ = c.Error(err)
 			fail(c, 500, "internal_error", "Не удалось загрузить задачи")
@@ -48,17 +55,29 @@ func Register(group *gin.RouterGroup, s *Service) {
 			return
 		}
 		var input struct {
-			Completed *bool `json:"completed"`
+			Status  string `json:"status"`
+			Comment string `json:"comment"`
 		}
-		if c.ShouldBindJSON(&input) != nil || input.Completed == nil {
-			fail(c, 400, "invalid_body", "Укажите поле completed")
+		if c.ShouldBindJSON(&input) != nil || input.Status == "" {
+			fail(c, 400, "invalid_body", "Укажите поле status")
 			return
 		}
-		task, err := s.Update(c.Request.Context(), platform.Owner(c), c.Param("id"), *input.Completed)
+		task, err := s.Update(c.Request.Context(), platform.Owner(c), c.Param("id"), input.Status, input.Comment)
 		if handleError(c, err) {
 			return
 		}
 		c.JSON(200, task)
+	})
+	group.GET("/tasks/:id/history", func(c *gin.Context) {
+		if _, err := uuid.Parse(c.Param("id")); err != nil {
+			fail(c, 400, "invalid_id", "Ожидается идентификатор UUID")
+			return
+		}
+		items, err := s.History(c.Request.Context(), platform.Owner(c), c.Param("id"))
+		if handleError(c, err) {
+			return
+		}
+		c.JSON(200, gin.H{"items": items})
 	})
 	group.DELETE("/tasks/:id", func(c *gin.Context) {
 		if _, err := uuid.Parse(c.Param("id")); err != nil {
@@ -74,6 +93,14 @@ func Register(group *gin.RouterGroup, s *Service) {
 func handleError(c *gin.Context, err error) bool {
 	if errors.Is(err, ErrNotFound) {
 		fail(c, 404, "not_found", "Задача не найдена")
+		return true
+	}
+	if errors.Is(err, platform.ErrTransition) {
+		fail(c, 409, "invalid_transition", err.Error())
+		return true
+	}
+	if errors.Is(err, platform.ErrCommentRequired) {
+		fail(c, 400, "comment_required", err.Error())
 		return true
 	}
 	if err != nil {
