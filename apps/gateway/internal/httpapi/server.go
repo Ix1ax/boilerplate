@@ -33,6 +33,8 @@ type Options struct {
 	MetricsToken string
 	// Audit — куда отправлять записи журнала (nil — журнал выключен).
 	Audit audit.Recorder
+	// AppOrigin — origin приложения; нужен для проверки WebSocket-подключений по cookie.
+	AppOrigin string
 }
 
 func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifier, up Upstreams, opts Options, sessions ...*auth.Sessions) *gin.Engine {
@@ -114,6 +116,12 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 			g.Any("", h)
 			g.Any("/*path", h)
 		}
+		if up.Realtime != nil {
+			// WebSocket: GET проходит мимо CSRF и лимитов изменений, поэтому Origin проверяется отдельно.
+			// ReverseProxy сам выполняет upgrade, а net/http снимает таймауты сервера с захваченного
+			// соединения (это проверяет TestWebsocketSurvivesServerTimeouts).
+			api.GET("/ws", websocketGuard(opts.AppOrigin), proxy(up.Realtime, internalToken))
+		}
 		if up.Audit != nil {
 			api.GET("/admin/audit", auth.RequireRole("admin"), proxy(up.Audit, internalToken))
 		}
@@ -141,7 +149,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 }
 
 func upstreamsReady(ctx context.Context, up Upstreams) bool {
-	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit} {
+	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit, up.Realtime} {
 		if u == nil {
 			continue
 		}
