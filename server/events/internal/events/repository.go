@@ -90,7 +90,7 @@ mp.id,mp.status,mp.decision_reason,e.created_at,
 e.min_participants,e.quorum_deadline,e.quorum_status,e.outdoor,
 (SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='confirmed' AND p.first_time),
 (SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='confirmed' AND p.buddy),
-COALESCE(mp.first_time,false),COALESCE(mp.buddy,false),bp.user_id,COALESCE(bpr.display_name,'')
+COALESCE(mp.first_time,false),COALESCE(mp.buddy,false),bp.user_id,COALESCE(bpr.display_name,''),e.format
 FROM events e
 JOIN sports s ON s.id=e.sport_id
 LEFT JOIN organizations o ON o.id=e.organization_id
@@ -115,7 +115,7 @@ func scanEvent(row pgx.Row, a Actor) (Event, error) {
 		&e.Status, &e.ModerationReason, &organizerID, &organizerName, &orgID, &orgName,
 		&mpID, &mpStatus, &mpReason, &e.CreatedAt,
 		&e.MinParticipants, &e.QuorumDeadline, &e.QuorumStatus, &e.Outdoor, &e.FirstTimersCount, &e.BuddiesCount,
-		&mpFirstTime, &mpBuddy, &buddyID, &buddyName)
+		&mpFirstTime, &mpBuddy, &buddyID, &buddyName, &e.Format)
 	if err != nil {
 		return Event{}, err
 	}
@@ -266,11 +266,11 @@ func (r *Repository) CreateEvent(ctx context.Context, a Actor, in EventInput) (E
 			orgID = &oid
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO events(id,organizer_id,organization_id,sport_id,title,description,starts_at,ends_at,location,lat,lng,
-level,requirements,price_note,private_info,join_mode,capacity,min_participants,quorum_deadline,quorum_status,outdoor)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+level,requirements,price_note,private_info,join_mode,capacity,min_participants,quorum_deadline,quorum_status,outdoor,format)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
 			id, a.ID, orgID, sportID, in.Title, in.Description, in.StartsAt, in.EndsAt, in.Location, in.Lat, in.Lng,
 			in.Level, in.Requirements, in.PriceNote, in.PrivateInfo, in.JoinMode, in.Capacity,
-			in.MinParticipants, in.QuorumDeadline, quorumStatusFor(in.MinParticipants), in.Outdoor)
+			in.MinParticipants, in.QuorumDeadline, quorumStatusFor(in.MinParticipants), in.Outdoor, in.Format)
 		if err != nil {
 			return err
 		}
@@ -543,6 +543,9 @@ func (r *Repository) Decide(ctx context.Context, a Actor, eventID, pid string, a
 		}
 		if e.Status != "published" {
 			return ErrEventClosed
+		}
+		if !endOf(e).After(time.Now()) {
+			return ErrEventPast
 		}
 		var from, userID string
 		err = tx.QueryRow(ctx, "SELECT status,user_id FROM participations WHERE id=$1 AND event_id=$2 FOR UPDATE", pid, eventID).Scan(&from, &userID)

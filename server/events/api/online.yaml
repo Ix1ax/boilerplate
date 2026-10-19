@@ -1,0 +1,91 @@
+# Фрагмент для включения в основной OpenAPI сервиса events.
+paths:
+  /api/v1/events/{id}/format:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Events]
+      summary: Формат доступного пользователю мероприятия
+      responses:
+        '200':
+          description: Формат без ссылок и билетов видеокомнаты
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EventFormat'}
+        '401': {description: Требуется вход}
+        '404': {description: Мероприятие не найдено или недоступно}
+        '500': {description: Внутренняя ошибка}
+        '503': {description: Хранилище форматов недоступно}
+    put:
+      tags: [Events]
+      summary: Организатор меняет формат встречи до открытия видеокомнаты
+      description: Только опубликованное мероприятие, раньше чем за 15 минут до начала. Участники получают уведомление. Повтор того же формата не создаёт уведомления.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EventFormatInput'}
+            example: {format: online}
+      responses:
+        '200':
+          description: Сохранённый формат
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EventFormat'}
+        '400': {description: Невалидный JSON или UUID}
+        '401': {description: Требуется вход}
+        '403': {description: Только организатор}
+        '404': {description: Мероприятие не найдено}
+        '409': {description: Событие закрыто или окно входа уже открылось}
+        '422': {description: Допустимые форматы offline и online}
+        '500': {description: Внутренняя ошибка}
+        '503': {description: Хранилище форматов недоступно}
+  /api/v1/events/{id}/video/token:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      tags: [Events]
+      summary: Билет в видеокомнату онлайн мероприятия
+      description: Организатор или подтверждённый участник опубликованного online события. Вход с starts_at минус 15 минут до ends_at; при отсутствии ends_at — 90 минут после начала. Билет действует до двух минут, без прав администратора. Уже подключённого участника истечение JWT не отключает.
+      responses:
+        '200':
+          description: Билет для LiveKit SDK. Не кэшировать и не сохранять в localStorage.
+          headers:
+            Cache-Control:
+              schema: {type: string, example: no-store}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VideoToken'}
+        '400': {description: Невалидный UUID}
+        '401': {description: Требуется вход}
+        '404': {description: Нет события или права участия}
+        '409': {description: Встреча очная, снята с публикации или вход сейчас закрыт}
+        '500': {description: Внутренняя ошибка}
+        '503': {description: LiveKit не настроен}
+components:
+  schemas:
+    EventFormatInput:
+      type: object
+      required: [format]
+      properties:
+        format: {type: string, enum: [offline, online], example: online}
+    EventFormat:
+      type: object
+      required: [event_id, format]
+      properties:
+        event_id: {type: string, format: uuid}
+        format: {type: string, enum: [offline, online]}
+    VideoToken:
+      type: object
+      required: [url, room, token, expires_at]
+      properties:
+        url: {type: string, format: uri, example: 'wss://video.example.test'}
+        room: {type: string, example: event_28b17314-b332-42d0-b867-b2de5747dbbd}
+        token: {type: string, description: Короткоживущий JWT, не логировать}
+        expires_at: {type: string, format: date-time}

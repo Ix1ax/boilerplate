@@ -270,6 +270,7 @@ components:
         - roles
         - last_login_at
         - created_at
+        - password_changed_at
       properties:
         id:
           type: string
@@ -304,6 +305,10 @@ components:
         created_at:
           type: string
           format: date-time
+        password_changed_at:
+          type: string
+          format: date-time
+          description: Версия пароля для отзыва серверных сессий
     AccountPage:
       type: object
       required:

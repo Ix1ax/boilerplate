@@ -381,19 +381,15 @@ test('production setup создаёт HTTPS-настройки и сохраня
   assert.deepEqual(swagger.redirectUris, [
     'https://app.example.invalid/api/docs/oauth2-redirect.html',
   ]);
-  assert.deepEqual(
-    realm.users.map((user) => user.credentials[0].value),
-    [
-      '${DEMO_PASSWORD}',
-      '${SECOND_DEMO_PASSWORD}',
-      '${ORG_DEMO_PASSWORD}',
-      '${ORG_PENDING_DEMO_PASSWORD}',
-      '${ORG_REJECTED_DEMO_PASSWORD}',
-      '${ADMIN_DEMO_PASSWORD}',
-    ],
-  );
+  assert.deepEqual(realm.users, []);
+  assert.doesNotMatch(environment, /^DEMO_PASSWORD=.+$/m);
+  assert.doesNotMatch(environment, /^ADMIN_DEMO_PASSWORD=.+$/m);
   assert.equal(run().status, 0);
   assert.equal(readFileSync(path.join(root, '.env'), 'utf8'), environment);
+  const noFlag = spawnSync(process.execPath, [path.join(root, 'scripts/setup.mjs')], { encoding: 'utf8' });
+  assert.equal(noFlag.status, 0, noFlag.stderr);
+  const repeatedRealm = JSON.parse(readFileSync(path.join(root, '.local/keycloak/hackathon-realm.json'), 'utf8'));
+  assert.deepEqual(repeatedRealm.users, []);
 });
 
 test('production setup отклоняет некорректные домены, сохраняя исходный .env', (t) => {

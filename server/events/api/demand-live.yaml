@@ -1,0 +1,176 @@
+paths:
+  /api/v1/my/company-proposals:
+    get:
+      tags: [Ищу компанию]
+      summary: Мои предложения встреч из общего спроса
+      description: |
+        При чтении запускается детерминированный подбор из первых 1000 активных запросов.
+        Минимум 3 человека, совместимый уровень, общий день и время, совпадающий район
+        либо точка в радиусе каждого участника. Слоты 10:00, 14:00, 19:00 UTC+7 в ближайшие
+        14 дней, не раньше чем через 2 часа. Место — район из запроса, точку подтверждает
+        организатор. Одно предложение на запрос; срок — до 48 часов или часа до встречи.
+        Чужие имена и исходные координаты запросов не выдаются.
+      operationId: demandProposals
+      responses:
+        '200':
+          description: Предложения, включая истёкшие и принятые
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/DemandProposal'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/company-proposals/{id}/claim:
+    post:
+      tags: [Ищу компанию]
+      summary: Стать организатором предложенной встречи
+      description: |
+        Только участник предложения с активным запросом. Побеждает первая транзакция;
+        нужно не менее трёх активных, не отказавшихся участников. Создаёт обычное открытое
+        событие длительностью час. Приглашённые записываются самостоятельно. Точное место
+        указывает организатор; если предложение содержит координаты, координаты точки сбора
+        обязательны и проверяются по радиусам запросов. Повторный claim возвращает 409.
+      operationId: claimDemandProposal
+      parameters:
+        - {$ref: '#/components/parameters/DemandLiveID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProposalClaim'}
+            example: {location: 'У главного входа в парк'}
+      responses:
+        '201':
+          description: Опубликованное событие
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Event'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/company-proposals/{id}/decline:
+    post:
+      tags: [Ищу компанию]
+      summary: Отказаться от предложения
+      description: Повторный отказ допустим. Принятое или истёкшее предложение недоступно.
+      operationId: declineDemandProposal
+      parameters:
+        - {$ref: '#/components/parameters/DemandLiveID'}
+      responses:
+        '204': {description: Отказ сохранён}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/events/{id}/arrivals:
+    get:
+      tags: [Мероприятия]
+      summary: Приватные отметки участников в день встречи
+      description: |
+        Только организатор и подтверждённые участники. Состав включает организатора;
+        неизвестный статус обозначен unknown. Доступ с 30 минут до начала по 30 минут
+        после окончания; без ends_at встреча считается двухчасовой. За пределами окна 409.
+        Для снятого события 409. После изменения личным каналам участников отправляется
+        arrival.changed с event_id. Данные отметки в WebSocket не передаются.
+      operationId: eventArrivals
+      parameters:
+        - {$ref: '#/components/parameters/DemandLiveID'}
+      responses:
+        '200':
+          description: Состав и последние отметки
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Arrival'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/events/{id}/arrival:
+    put:
+      tags: [Мероприятия]
+      summary: Обновить свою отметку прибытия
+      description: |
+        Права и окно совпадают с GET arrivals. arriving — в пути, late — опаздываю,
+        here — на месте. eta_minutes от 1 до 120 для late, 0 для других статусов.
+        description — одежда или ориентир, не длиннее 200 символов.
+      operationId: setEventArrival
+      parameters:
+        - {$ref: '#/components/parameters/DemandLiveID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ArrivalInput'}
+            example: {status: late, eta_minutes: 10, description: 'Оранжевая куртка'}
+      responses:
+        '200':
+          description: Собственная отметка
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Arrival'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+components:
+  parameters:
+    DemandLiveID:
+      in: path
+      name: id
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    DemandProposal:
+      type: object
+      required: [id, sport_id, level, starts_at, area, requires_coordinates, status, event_id, expires_at, members_count, declined]
+      properties:
+        id: {type: string, format: uuid}
+        sport_id: {type: string, format: uuid}
+        level: {type: string, enum: [any, beginner, amateur, pro]}
+        starts_at: {type: string, format: date-time}
+        area: {type: string}
+        requires_coordinates: {type: boolean}
+        status: {type: string, enum: [pending, claimed, expired]}
+        event_id: {type: string, format: uuid, nullable: true}
+        expires_at: {type: string, format: date-time}
+        members_count: {type: integer, minimum: 0}
+        declined: {type: boolean}
+    ProposalClaim:
+      type: object
+      required: [location]
+      properties:
+        location: {type: string, minLength: 3, maxLength: 300}
+        lat: {type: number, nullable: true, minimum: -90, maximum: 90}
+        lng: {type: number, nullable: true, minimum: -180, maximum: 180}
+    ArrivalInput:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [arriving, late, here]}
+        eta_minutes: {type: integer, minimum: 0, maximum: 120, default: 0}
+        description: {type: string, maxLength: 200, default: ''}
+    Arrival:
+      type: object
+      required: [user_id, display_name, status, eta_minutes, description, updated_at]
+      properties:
+        user_id: {type: string}
+        display_name: {type: string}
+        status: {type: string, enum: [unknown, arriving, late, here]}
+        eta_minutes: {type: integer, minimum: 0, maximum: 120}
+        description: {type: string, maxLength: 200}
+        updated_at: {type: string, format: date-time, nullable: true}

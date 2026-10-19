@@ -395,11 +395,11 @@ func (r *Repository) RemoveParticipant(ctx context.Context, a Actor, eventID, pi
 		if from != "confirmed" && from != "waitlist" {
 			return fmt.Errorf("%w: исключить можно участника или человека из листа ожидания; заявку — отклонить", platform.ErrTransition)
 		}
-		// Если человек кого-то встречал как проводник, пара распадается — новичок не должен ждать.
-		if _, err = tx.Exec(ctx, "UPDATE participations SET buddy_id=NULL WHERE buddy_id=$1", pid); err != nil {
+		if _, err = tx.Exec(ctx, "UPDATE participations SET status='rejected', buddy=false, buddy_id=NULL, decision_reason=$2, decided_by=$3, decided_at=now(), updated_at=now() WHERE id=$1", pid, reason, a.ID); err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, "UPDATE participations SET status='rejected', buddy=false, buddy_id=NULL, decision_reason=$2, decided_by=$3, decided_at=now(), updated_at=now() WHERE id=$1", pid, reason, a.ID); err != nil {
+		// После исключения проводника назначаем замену или предупреждаем новичков и организатора.
+		if err = releaseNewcomers(ctx, tx, eventID, pid, e); err != nil {
 			return err
 		}
 		if err = record(ctx, tx, "participation", pid, platform.Transition{From: from, To: "rejected", Actor: actorLabel(a), Comment: reason}); err != nil {

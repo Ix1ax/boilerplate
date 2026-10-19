@@ -88,6 +88,38 @@ func (r *Repository) ReminderTargetFor(ctx context.Context, a Actor, eventID str
 func (r *Repository) SendReminder(ctx context.Context, t ReminderTarget, kind, weatherLine string) (int, error) {
 	sent := 0
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
+		var current ReminderTarget
+		var status string
+		var created time.Time
+		err := scanReminderTarget(tx.QueryRow(ctx, reminderSelect+`,e.status,e.created_at FROM events e WHERE e.id=$1 FOR UPDATE`, t.EventID), &current, &status, &created)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if status != "published" || !current.StartsAt.After(time.Now()) {
+			return nil
+		}
+		now := time.Now()
+		switch kind {
+		case "day":
+			if !current.StartsAt.After(now.Add(2*time.Hour)) || current.StartsAt.After(now.Add(24*time.Hour)) || !created.Before(current.StartsAt.Add(-24*time.Hour)) {
+				return nil
+			}
+		case "soon":
+			if current.StartsAt.After(now.Add(2*time.Hour)) || !created.Before(current.StartsAt.Add(-2*time.Hour)) {
+				return nil
+			}
+		case "manual":
+		default:
+			return FieldError{"kind", "Неизвестный вид напоминания"}
+		}
+		// Пока запрашивали прогноз, организатор мог перенести встречу. Старую погоду не прикладываем.
+		if !current.StartsAt.Equal(t.StartsAt) || !sameFloat(current.Lat, t.Lat) || !sameFloat(current.Lng, t.Lng) || !current.Outdoor {
+			weatherLine = ""
+		}
+		t = current
 		query := "INSERT INTO event_reminders(event_id,kind) VALUES($1,$2) ON CONFLICT DO NOTHING"
 		if kind == "manual" {
 			query = `INSERT INTO event_reminders(event_id,kind) VALUES($1,$2) ON CONFLICT (event_id,kind)

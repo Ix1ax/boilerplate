@@ -144,7 +144,7 @@ export interface paths {
     put?: never;
     /**
      * Сменить пароль
-     * @description Только для сессии обычной регистрации (у «Столото ID» пароль меняется в SSO). Требует текущий пароль; после смены все остальные сессии пользователя закрываются, текущая остаётся.
+     * @description Только для сессии обычной регистрации (у «Столото ID» пароль меняется в SSO). Требует текущий пароль; после смены все остальные сессии пользователя закрываются, текущая остаётся. При ошибке session_revocation_unavailable пароль уже изменён, отзыв остальных сессий завершится после истечения кэша статуса (до 30 секунд); требуется повторный вход.
      */
     post: operations['changeLocalPassword'];
     delete?: never;
@@ -1436,6 +1436,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+<<<<<<< HEAD
   '/api/v1/my/company-requests/{id}/proposal': {
     parameters: {
       query?: never;
@@ -1489,6 +1490,9 @@ export interface paths {
     trace?: never;
   };
   '/api/v1/sports/company-demand': {
+=======
+  '/api/v1/my/company-proposals': {
+>>>>>>> main
     parameters: {
       query?: never;
       header?: never;
@@ -1496,10 +1500,766 @@ export interface paths {
       cookie?: never;
     };
     /**
+<<<<<<< HEAD
      * Обезличенные группы спроса для допущенного клуба
      * @description Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
      */
     get: operations['companyDemand'];
+=======
+     * Мои предложения встреч из общего спроса
+     * @description При чтении запускается детерминированный подбор из первых 1000 активных запросов.
+     *     Минимум 3 человека, совместимый уровень, общий день и время, совпадающий район
+     *     либо точка в радиусе каждого участника. Слоты 10:00, 14:00, 19:00 UTC+7 в ближайшие
+     *     14 дней, не раньше чем через 2 часа. Место — район из запроса, точку подтверждает
+     *     организатор. Одно предложение на запрос; срок — до 48 часов или часа до встречи.
+     *     Чужие имена и исходные координаты запросов не выдаются.
+     */
+    get: operations['demandProposals'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/company-proposals/{id}/claim': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Стать организатором предложенной встречи
+     * @description Только участник предложения с активным запросом. Побеждает первая транзакция;
+     *     нужно не менее трёх активных, не отказавшихся участников. Создаёт обычное открытое
+     *     событие длительностью час. Приглашённые записываются самостоятельно. Точное место
+     *     указывает организатор; если предложение содержит координаты, координаты точки сбора
+     *     обязательны и проверяются по радиусам запросов. Повторный claim возвращает 409.
+     */
+    post: operations['claimDemandProposal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/company-proposals/{id}/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отказаться от предложения
+     * @description Повторный отказ допустим. Принятое или истёкшее предложение недоступно.
+     */
+    post: operations['declineDemandProposal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/arrivals': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Приватные отметки участников в день встречи
+     * @description Только организатор и подтверждённые участники. Состав включает организатора;
+     *     неизвестный статус обозначен unknown. Доступ с 30 минут до начала по 30 минут
+     *     после окончания; без ends_at встреча считается двухчасовой. За пределами окна 409.
+     *     Для снятого события 409. После изменения личным каналам участников отправляется
+     *     arrival.changed с event_id. Данные отметки в WebSocket не передаются.
+     */
+    get: operations['eventArrivals'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/arrival': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Обновить свою отметку прибытия
+     * @description Права и окно совпадают с GET arrivals. arriving — в пути, late — опаздываю,
+     *     here — на месте. eta_minutes от 1 до 120 для late, 0 для других статусов.
+     *     description — одежда или ориентир, не длиннее 200 символов.
+     */
+    put: operations['setEventArrival'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/friends': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Свои друзья и входящие/исходящие заявки
+     * @description Свои друзья и входящие/исходящие заявки
+     */
+    get: operations['socialFriends'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/friends/{uid}/request': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отправить заявку в друзья
+     * @description Отправить заявку в друзья. Встречная заявка не принимает дружбу автоматически. При изменении обе стороны получают friendship.changed в личный WebSocket-канал.
+     */
+    post: operations['socialFriendRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/friends/{uid}/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Принять входящую заявку
+     * @description Принять входящую заявку. Встречная заявка не принимает дружбу автоматически. При изменении обе стороны получают friendship.changed в личный WebSocket-канал.
+     */
+    post: operations['socialFriendAccept'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/friends/{uid}/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отклонить входящую заявку
+     * @description Отклонить входящую заявку. Встречная заявка не принимает дружбу автоматически. При изменении обе стороны получают friendship.changed в личный WebSocket-канал.
+     */
+    post: operations['socialFriendDecline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/friends/{uid}/remove': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Удалить друга или отозвать свою заявку
+     * @description Удалить друга или отозвать свою заявку. Встречная заявка не принимает дружбу автоматически. При изменении обе стороны получают friendship.changed в личный WebSocket-канал.
+     */
+    post: operations['socialFriendRemove'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/chats': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Открыть личный чат с подтверждённым другом
+     * @description Один чат на пару пользователей. Повтор возвращает тот же id. После удаления дружбы история доступна обеим сторонам, отправка запрещена.
+     */
+    post: operations['socialOpenChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/chats': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Личные чаты и чаты своих мероприятий
+     * @description Чат мероприятия существует автоматически. Его messages_url ведёт в /events/{id}/comments: история одна, модерация и ответы сохраняются. Список содержит события организатора и подтверждённого участника.
+     */
+    get: operations['socialChats'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/chats/{chat}/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * История личного чата
+     * @description История личного чата
+     */
+    get: operations['socialMessages'];
+    put?: never;
+    /**
+     * Отправить сообщение другу
+     * @description Отправитель должен быть участником чата и подтверждённым другом адресата. Сообщение и chat.changed для обоих user:<id> каналов фиксируются в одной транзакции.
+     */
+    post: operations['socialSendMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Оставить отзыв о прошедшем мероприятии
+     * @description Только подтверждённый участник опубликованного события после ends_at; если ends_at нет, через два часа после starts_at. Один отзыв на событие от автора. Организатор не оценивает себя. Запись участника не считается доказанным посещением.
+     */
+    post: operations['socialCreateReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{id}/reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Отзывы о мероприятиях организатора
+     * @description Только нескрытые отзывы опубликованных мероприятий. Скрытые и отменённые события не раскрываются.
+     */
+    get: operations['socialProfileReviews'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/reviews/{review}/hide': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Скрыть свой отзыв или модерировать с правами admin
+     * @description Причина обязательна. Организатор не может скрывать чужую критику. Проверка автора или роли выполняется сервером в SQL.
+     */
+    post: operations['socialHideReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Живые истории друзей и свои
+     * @description Срок 24 часа проверяется при каждом чтении. После удаления дружбы доступ пропадает сразу. Общей публичной ленты нет.
+     */
+    get: operations['socialStories'];
+    put?: never;
+    /**
+     * Создать историю на 24 часа
+     * @description Видна только автору и подтверждённым друзьям. Медиа загружается отдельно в /stories/{id}/media. Внешние URL и file_id других сервисов не принимаются.
+     */
+    post: operations['socialCreateStory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories/{story}/delete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Удалить историю автора или модерировать с правами admin
+     * @description Удалить историю автора или модерировать с правами admin
+     */
+    post: operations['socialDeleteStory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories/{story}/media': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Получить фото или видео истории
+     * @description Проверка аудитории, удаления и истечения истории перед чтением S3. Ответ private, no-store; прямой адрес S3 не раскрывается.
+     */
+    get: operations['socialReadStoryMedia'];
+    put?: never;
+    /**
+     * Прикрепить фото или видео к своей живой истории
+     * @description Один файл на историю, только её автор. 1 байт–10 МиБ. Тип определяется по содержимому: JPEG, PNG, WebP, GIF, MP4, WebM. Приватный S3-бакет events, собственные метаданные. Неудачная загрузка не публикует ссылку; незавершённые объекты удаляет фоновая очистка.
+     */
+    post: operations['socialUploadStoryMedia'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/organizations/{id}/membership': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Вступить в допущенный клуб
+     * @description Допущенная организация служит клубом. Членство не даёт прав управления событиями или организацией. Владелец уже управляет клубом и не вступает повторно.
+     */
+    post: operations['socialJoinClub'];
+    /**
+     * Выйти из клуба
+     * @description Выйти из клуба
+     */
+    delete: operations['socialLeaveClub'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/organizations/{id}/members': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Участники клуба для владельца или admin
+     * @description Участники клуба для владельца или admin
+     */
+    get: operations['socialClubMembers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/format': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    /** Формат доступного пользователю мероприятия */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Формат без ссылок и билетов видеокомнаты */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['EventFormat'];
+          };
+        };
+        /** @description Требуется вход */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Мероприятие не найдено или недоступно */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Внутренняя ошибка */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Хранилище форматов недоступно */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    /**
+     * Организатор меняет формат встречи до открытия видеокомнаты
+     * @description Только опубликованное мероприятие, раньше чем за 15 минут до начала. Участники получают уведомление. Повтор того же формата не создаёт уведомления.
+     */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          /**
+           * @example {
+           *       "format": "online"
+           *     }
+           */
+          'application/json': components['schemas']['EventFormatInput'];
+        };
+      };
+      responses: {
+        /** @description Сохранённый формат */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['EventFormat'];
+          };
+        };
+        /** @description Невалидный JSON или UUID */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Требуется вход */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Только организатор */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Мероприятие не найдено */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Событие закрыто или окно входа уже открылось */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Допустимые форматы offline и online */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Внутренняя ошибка */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Хранилище форматов недоступно */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/video/token': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Билет в видеокомнату онлайн мероприятия
+     * @description Организатор или подтверждённый участник опубликованного online события. Вход с starts_at минус 15 минут до ends_at; при отсутствии ends_at — 90 минут после начала. Билет действует до двух минут, без прав администратора. Уже подключённого участника истечение JWT не отключает.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Билет для LiveKit SDK. Не кэшировать и не сохранять в localStorage. */
+        200: {
+          headers: {
+            'Cache-Control'?: string;
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': components['schemas']['VideoToken'];
+          };
+        };
+        /** @description Невалидный UUID */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Требуется вход */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Нет события или права участия */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Встреча очная */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Внутренняя ошибка */
+        500: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description LiveKit не настроен */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/recommendation-preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Мои предпочтения подбора */
+    get: operations['recommendationPreferences'];
+    /** Задать направления, время, уровень и место */
+    put: operations['saveRecommendationPreferences'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/recommendations/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Персональная подборка с объяснением
+     * @description Детерминированный подбор из ближайших 1000 опубликованных событий в горизонте 60 дней. Учитывает явные интересы, записи и активные запросы компании. Уже записанные, отклонённые, скрытые пользователем и события со скрытым направлением исключаются. Радиус ограничивает офлайн-события; онлайн доступны независимо от места. offset относится к текущей подборке, при изменении данных начните с нуля.
+     */
+    get: operations['recommendEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/recommendation-feedback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Просмотр, интерес, скрытие или сброс скрытия */
+    post: operations['recommendationFeedback'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/progress': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Личный прогресс и достижения */
+    get: operations['personalProgress'];
+>>>>>>> main
     put?: never;
     post?: never;
     delete?: never;
@@ -2343,6 +3103,8 @@ export interface components {
       my_participation?: components['schemas']['MyParticipation'] | null;
       /** Format: date-time */
       created_at: string;
+      /** @enum {string} */
+      format: 'offline' | 'online';
     };
     EventPage: {
       items: components['schemas']['Event'][];
@@ -2402,6 +3164,11 @@ export interface components {
        * @default false
        */
       outdoor: boolean;
+      /**
+       * @default offline
+       * @enum {string}
+       */
+      format: 'offline' | 'online';
     };
     Person: {
       id: string;
@@ -2772,6 +3539,255 @@ export interface components {
       limit: number;
       offset: number;
     };
+    DemandProposal: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      sport_id: string;
+      /** @enum {string} */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      /** Format: date-time */
+      starts_at: string;
+      area: string;
+      requires_coordinates: boolean;
+      /** @enum {string} */
+      status: 'pending' | 'claimed' | 'expired';
+      /** Format: uuid */
+      event_id: string | null;
+      /** Format: date-time */
+      expires_at: string;
+      members_count: number;
+      declined: boolean;
+    };
+    ProposalClaim: {
+      location: string;
+      lat?: number | null;
+      lng?: number | null;
+    };
+    ArrivalInput: {
+      /** @enum {string} */
+      status: 'arriving' | 'late' | 'here';
+      /** @default 0 */
+      eta_minutes: number;
+      /** @default  */
+      description: string;
+    };
+    Arrival: {
+      user_id: string;
+      display_name: string;
+      /** @enum {string} */
+      status: 'unknown' | 'arriving' | 'late' | 'here';
+      eta_minutes: number;
+      description: string;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    SocialFriend: {
+      id: string;
+      display_name: string;
+      /** @enum {string} */
+      status: 'pending' | 'accepted';
+      requested_by: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialFriendship: {
+      user_id: string;
+      requested_by: string;
+      /** @enum {string} */
+      status: 'pending' | 'accepted' | 'declined';
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialChat: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      kind: 'direct' | 'event';
+      title: string;
+      peer_id: string | null;
+      event_id: string | null;
+      /** @description У чата мероприятия ведёт в существующий comments API */
+      messages_url: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialDirectChat: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      kind: 'direct';
+      peer_id: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialMessage: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      chat_id: string;
+      author_id: string;
+      body: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialReview: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      event_id: string;
+      author_id: string;
+      organizer_id: string;
+      score: number;
+      body: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialStory: {
+      /** Format: uuid */
+      id: string;
+      author_id: string;
+      author_name?: string;
+      body: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      expires_at: string;
+      media_url?: string | null;
+      media_content_type?: string | null;
+      media_size?: number | null;
+    };
+    SocialClubMember: {
+      id: string;
+      display_name: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SocialFriendPage: {
+      items: components['schemas']['SocialFriend'][];
+      /** @description Передайте в cursor следующего запроса; отсутствие означает конец */
+      next_cursor?: string;
+    };
+    SocialChatPage: {
+      items: components['schemas']['SocialChat'][];
+      /** @description Передайте в cursor следующего запроса; отсутствие означает конец */
+      next_cursor?: string;
+    };
+    SocialMessagePage: {
+      items: components['schemas']['SocialMessage'][];
+      /** @description Передайте в cursor следующего запроса; отсутствие означает конец */
+      next_cursor?: string;
+    };
+    SocialReviewPage: {
+      items: components['schemas']['SocialReview'][];
+      /** @description Передайте в cursor следующего запроса; отсутствие означает конец */
+      next_cursor?: string;
+    };
+    SocialStoryPage: {
+      items: components['schemas']['SocialStory'][];
+      /** @description Передайте в cursor следующего запроса; отсутствие означает конец */
+      next_cursor?: string;
+    };
+    SocialClubMemberPage: {
+      items: components['schemas']['SocialClubMember'][];
+      /** @description Передайте в cursor следующего запроса; отсутствие означает конец */
+      next_cursor?: string;
+    };
+    SocialChatInput: {
+      /**
+       * @description Подтверждённый друг
+       * @example local-123
+       */
+      user_id: string;
+    };
+    SocialMessageInput: {
+      /** @example Я у входа в парк */
+      body: string;
+    };
+    SocialReviewInput: {
+      /** @example 5 */
+      score: number;
+      /** @example Понятный маршрут, организатор встретил новичков */
+      body: string;
+    };
+    SocialStoryInput: {
+      /** @example Сегодня первая совместная пробежка */
+      body: string;
+    };
+    SocialReasonInput: {
+      /** @example Отзываю свою публикацию */
+      reason: string;
+    };
+    EventFormatInput: {
+      /**
+       * @example online
+       * @enum {string}
+       */
+      format: 'offline' | 'online';
+    };
+    EventFormat: {
+      /** Format: uuid */
+      event_id: string;
+      /** @enum {string} */
+      format: 'offline' | 'online';
+    };
+    VideoToken: {
+      /**
+       * Format: uri
+       * @example wss://video.example.test
+       */
+      url: string;
+      /** @example event_28b17314-b332-42d0-b867-b2de5747dbbd */
+      room: string;
+      /** @description Короткоживущий JWT */
+      token: string;
+      /** Format: date-time */
+      expires_at: string;
+    };
+    RecommendationPreferences: {
+      sport_ids: string[];
+      /** @enum {string} */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      city: string;
+      weekdays: number[];
+      day_parts: ('morning' | 'day' | 'evening')[];
+      lat: number | null;
+      lng: number | null;
+      radius_km: number;
+    };
+    RecommendedEvent: {
+      event: components['schemas']['Event'];
+      reasons: string[];
+    };
+    RecommendationPage: {
+      items: components['schemas']['RecommendedEvent'][];
+      personalized: boolean;
+      algorithm: string;
+      /** Format: date-time */
+      generated_at: string;
+      has_more: boolean;
+      next_offset: number;
+    };
+    RecommendationFeedback: {
+      /** @enum {string} */
+      action: 'view' | 'interested' | 'dismiss' | 'reset';
+    };
+    Achievement: {
+      code: string;
+      title: string;
+      description: string;
+      current: number;
+      target: number;
+      points: number;
+      earned: boolean;
+    };
+    PersonalProgress: {
+      points: number;
+      title: string;
+      next_title_at: number;
+      achievements: components['schemas']['Achievement'][];
+      note: string;
+    };
     /** @description Метаданные файла */
     File: {
       /** Format: uuid */
@@ -2829,6 +3845,11 @@ export interface components {
       last_login_at: string | null;
       /** Format: date-time */
       created_at: string;
+      /**
+       * Format: date-time
+       * @description Версия пароля для отзыва серверных сессий
+       */
+      password_changed_at: string;
     };
     AccountPage: {
       items: components['schemas']['Account'][];
@@ -3285,6 +4306,7 @@ export interface components {
     ParticipationID: string;
     /** @description Идентификатор сообщения (UUID) */
     CommentID: string;
+    DemandLiveID: string;
   };
   requestBodies: never;
   headers: never;
@@ -5935,6 +6957,7 @@ export interface operations {
       500: components['responses']['InternalError'];
     };
   };
+<<<<<<< HEAD
   getCompanyProposal: {
     parameters: {
       query?: never;
@@ -6015,6 +7038,9 @@ export interface operations {
     };
   };
   companyDemand: {
+=======
+  demandProposals: {
+>>>>>>> main
     parameters: {
       query?: never;
       header?: never;
@@ -6023,22 +7049,2247 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+<<<<<<< HEAD
       /** @description Результат подбора */
+=======
+      /** @description Предложения, включая истёкшие и принятые */
+>>>>>>> main
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
+<<<<<<< HEAD
           'application/json': components['schemas']['CompanyDemandPage'];
+=======
+          'application/json': {
+            items: components['schemas']['DemandProposal'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  claimDemandProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['DemandLiveID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "location": "У главного входа в парк"
+         *     }
+         */
+        'application/json': components['schemas']['ProposalClaim'];
+      };
+    };
+    responses: {
+      /** @description Опубликованное событие */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+>>>>>>> main
         };
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+<<<<<<< HEAD
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
       500: components['responses']['InternalError'];
       503: components['responses']['Unavailable'];
+=======
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  declineDemandProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['DemandLiveID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Отказ сохранён */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  eventArrivals: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['DemandLiveID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Состав и последние отметки */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Arrival'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  setEventArrival: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['DemandLiveID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "status": "late",
+         *       "eta_minutes": 10,
+         *       "description": "Оранжевая куртка"
+         *     }
+         */
+        'application/json': components['schemas']['ArrivalInput'];
+      };
+    };
+    responses: {
+      /** @description Собственная отметка */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Arrival'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  socialFriends: {
+    parameters: {
+      query?: {
+        /** @description Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialFriendPage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialFriendRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        uid: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialFriendship'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialFriendAccept: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        uid: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialFriendship'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialFriendDecline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        uid: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialFriendship'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialFriendRemove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        uid: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialFriendship'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialOpenChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialChatInput'];
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialDirectChat'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialChats: {
+    parameters: {
+      query?: {
+        /** @description Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialChatPage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialMessages: {
+    parameters: {
+      query?: {
+        /** @description Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        chat: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialMessagePage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialSendMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chat: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialMessageInput'];
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialMessage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialCreateReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialReviewInput'];
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialReview'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialProfileReviews: {
+    parameters: {
+      query?: {
+        /** @description Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialReviewPage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialHideReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        review: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialReasonInput'];
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialStories: {
+    parameters: {
+      query?: {
+        /** @description Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialStoryPage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialCreateStory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialStoryInput'];
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialStory'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialDeleteStory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        story: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialReasonInput'];
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialReadStoryMedia: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        story: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description S3 временно недоступен */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  socialUploadStoryMedia: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        story: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': {
+          /** Format: binary */
+          file: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Действие выполнено */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            media_url: string;
+            content_type: string;
+            size: number;
+          };
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Файл слишком большой */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Тип не разрешён */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description S3 временно недоступен */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  socialJoinClub: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialLeaveClub: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  socialClubMembers: {
+    parameters: {
+      query?: {
+        /** @description Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Действие выполнено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SocialClubMemberPage'];
+        };
+      };
+      /** @description Неверный JSON */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Войдите в аккаунт */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Не найдено или недоступно */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Действие недоступно в текущем состоянии */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Ошибка полей или курсора */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Слишком много запросов */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Внутренняя ошибка */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  recommendationPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Результат */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecommendationPreferences'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  saveRecommendationPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RecommendationPreferences'];
+      };
+    };
+    responses: {
+      /** @description Результат */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecommendationPreferences'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  recommendEvents: {
+    parameters: {
+      query?: {
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Результат */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecommendationPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  recommendationFeedback: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RecommendationFeedback'];
+      };
+    };
+    responses: {
+      /** @description Сохранено */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  personalProgress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Результат */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PersonalProgress'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+>>>>>>> main
     };
   };
   listFiles: {

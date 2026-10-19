@@ -65,7 +65,8 @@ type Store interface {
 // Service — валидация ввода поверх Store. Weather необязателен: без него погода не показывается.
 type Service struct {
 	Store
-	Weather Forecaster
+	Weather    Forecaster
+	StoryMedia StoryBlobs
 }
 
 func New(store Store) *Service { return &Service{Store: store} }
@@ -78,6 +79,9 @@ func ValidateEvent(in *EventInput, now time.Time) error {
 }
 
 func validateEvent(in *EventInput, now time.Time, checkQuorumDeadline bool) error {
+	if in.Format == "" {
+		in.Format = "offline"
+	}
 	in.Title, in.Description, in.Location = strings.TrimSpace(in.Title), strings.TrimSpace(in.Description), strings.TrimSpace(in.Location)
 	in.SportID, in.SportName = strings.TrimSpace(in.SportID), strings.Join(strings.Fields(in.SportName), " ")
 	in.Requirements, in.PriceNote, in.PrivateInfo = strings.TrimSpace(in.Requirements), strings.TrimSpace(in.PriceNote), strings.TrimSpace(in.PrivateInfo)
@@ -85,6 +89,8 @@ func validateEvent(in *EventInput, now time.Time, checkQuorumDeadline bool) erro
 		in.Level = "any"
 	}
 	switch {
+	case in.Format != "offline" && in.Format != "online":
+		return FieldError{"format", "Формат: offline или online"}
 	case !between(in.Title, 3, 120):
 		return FieldError{"title", "Название — от 3 до 120 символов"}
 	case utf8.RuneCountInString(in.Description) > 5000:

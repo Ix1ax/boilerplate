@@ -236,10 +236,14 @@ const eventFields = {
 export const eventInputSchema = z
   .object({
     ...eventFields,
+<<<<<<< HEAD
     zone: eventFields.zone.default(''),
     meeting_host: eventFields.meeting_host.default(''),
     step_free: eventFields.step_free.default(false),
     companion_allowed: eventFields.companion_allowed.default(false),
+=======
+    format: z.enum(['offline', 'online']).default('offline'),
+>>>>>>> main
     description: eventFields.description.default(''),
     level: level.default('any'),
     requirements: eventFields.requirements.default(''),

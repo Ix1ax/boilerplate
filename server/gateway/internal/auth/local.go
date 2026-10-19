@@ -48,15 +48,16 @@ func (e *UpstreamError) Error() string { return fmt.Sprintf("identity: %d", e.St
 const statusTTL = 30 * time.Second
 
 type account struct {
-	ID     string   `json:"id"`
-	Email  string   `json:"email"`
-	Name   string   `json:"name"`
-	Status string   `json:"status"`
-	Roles  []string `json:"roles"`
+	ID                string    `json:"id"`
+	Email             string    `json:"email"`
+	Name              string    `json:"name"`
+	Status            string    `json:"status"`
+	Roles             []string  `json:"roles"`
+	PasswordChangedAt time.Time `json:"password_changed_at"`
 }
 
 func (a account) identity() Identity {
-	i := Identity{Subject: a.ID, Email: a.Email, Name: a.Name, Provider: ProviderLocal}
+	i := Identity{Subject: a.ID, Email: a.Email, Name: a.Name, Provider: ProviderLocal, PasswordChangedAt: a.PasswordChangedAt}
 	i.RealmAccess.Roles = a.Roles
 	return i
 }
@@ -148,26 +149,74 @@ func (s *Sessions) EnableLocal(accounts Accounts) { s.accounts = accounts }
 // сессию удаляем сразу: следующий запрос получит 401, а не продолжит работать до конца срока.
 func (s *Sessions) checkLocal(ctx context.Context, id string, local *Identity) error {
 	key := "account_active:" + local.Subject
-	if n, err := s.cache.Exists(ctx, key).Result(); err != nil {
+	cached, err := s.cache.Get(ctx, key).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
 		return err
-	} else if n == 1 {
-		return nil
+	}
+	if err == nil {
+		// Старый кэш содержал только «1»: после обновления его надо сверить с identity.
+		if changed, parseErr := time.Parse(time.RFC3339Nano, cached); parseErr == nil {
+			if !changed.Equal(local.PasswordChangedAt) {
+				return s.dropLocalSession(ctx, id, local.Subject)
+			}
+			return nil
+		}
 	}
 	if s.accounts == nil {
 		return redis.Nil
 	}
 	fresh, err := s.accounts.Status(ctx, local.Subject)
 	if errors.Is(err, ErrAccountInactive) {
-		_ = s.cache.Del(ctx, "session:"+id).Err()
-		_ = s.cache.SRem(ctx, sessionsKey(local.Subject), id).Err()
-		return redis.Nil
+		return s.dropLocalSession(ctx, id, local.Subject)
 	}
 	if err != nil {
 		return err
 	}
-	// Имя и роли берём свежими: так сервисы видят изменения без повторного входа.
+	if !fresh.PasswordChangedAt.Equal(local.PasswordChangedAt) {
+		return s.dropLocalSession(ctx, id, local.Subject)
+	}
 	local.Name, local.Email, local.RealmAccess.Roles = fresh.Name, fresh.Email, fresh.RealmAccess.Roles
-	return s.cache.Set(ctx, key, "1", statusTTL).Err()
+	return s.cache.Set(ctx, key, fresh.PasswordChangedAt.Format(time.RFC3339Nano), statusTTL).Err()
+}
+
+func (s *Sessions) dropLocalSession(ctx context.Context, id, subject string) error {
+	pipe := s.cache.TxPipeline()
+	pipe.Del(ctx, "session:"+id)
+	pipe.SRem(ctx, sessionsKey(subject), id)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return err
+	}
+	return redis.Nil
+}
+
+// Пароль уже сохранён в identity. Обрыв браузерного запроса не должен отменять отзыв.
+// Версия пароля в identity остаётся страховкой: даже после сбоя Redis старые сессии
+// перестанут проходить проверку не позже истечения account_active (30 секунд).
+func (s *Sessions) revokeAfterPasswordChange(ctx context.Context, subject, current string) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	fresh, err := s.accounts.Status(cleanup, subject)
+	if err != nil {
+		return err
+	}
+	return s.cache.Eval(cleanup, `
+ local raw = redis.call('GET', KEYS[2])
+ local data
+ if raw then
+  data = cjson.decode(raw)
+  if not data['local'] or data['local'].sub ~= ARGV[3] then return redis.error_reply('invalid current session') end
+  data['local'].password_changed_at = ARGV[2]
+ end
+ local ids = redis.call('SMEMBERS', KEYS[1])
+ for _, id in ipairs(ids) do
+  if id ~= ARGV[1] then
+   redis.call('DEL', 'session:' .. id)
+   redis.call('SREM', KEYS[1], id)
+  end
+ end
+ if data then redis.call('SET', KEYS[2], cjson.encode(data), 'KEEPTTL') end
+ redis.call('SET', KEYS[3], ARGV[2], 'PX', ARGV[4])
+ return 1`, []string{sessionsKey(subject), "session:" + current, "account_active:" + subject}, current, fresh.PasswordChangedAt.Format(time.RFC3339Nano), subject, statusTTL.Milliseconds()).Err()
 }
 
 // Лимиты защищают identity от перебора и потока регистраций. IP клиента за прокси недоступен,
@@ -245,7 +294,7 @@ func (s *Sessions) startLocal(c *gin.Context, i Identity) bool {
 	if _, ok := s.save(c, ctx, session{Local: &i, Deadline: time.Now().Add(sessionLifetime)}); !ok {
 		return false
 	}
-	_ = s.cache.Set(ctx, "account_active:"+i.Subject, "1", statusTTL).Err()
+	_ = s.cache.Set(ctx, "account_active:"+i.Subject, i.PasswordChangedAt.Format(time.RFC3339Nano), statusTTL).Err()
 	return true
 }
 
@@ -325,17 +374,11 @@ func (s *Sessions) RegisterProviders(r *gin.Engine) {
 			relay(c, err)
 			return
 		}
-		// Пароль могли сменить из-за утечки: закрываем все сессии, кроме текущей.
-		ctx := c.Request.Context()
 		current, _ := c.Cookie(sessionCookie)
-		ids, err := s.cache.SMembers(ctx, sessionsKey(local.Subject)).Result()
-		if err == nil {
-			for _, id := range ids {
-				if id != current {
-					_ = s.cache.Del(ctx, "session:"+id).Err()
-					_ = s.cache.SRem(ctx, sessionsKey(local.Subject), id).Err()
-				}
-			}
+		if err := s.revokeAfterPasswordChange(s.ctx(c), local.Subject, current); err != nil {
+			_ = c.Error(err)
+			sessionError(c, 503, "session_revocation_unavailable", "Пароль изменён, но завершение других сессий задерживается. Повторите вход через минуту")
+			return
 		}
 		c.Status(204)
 	})

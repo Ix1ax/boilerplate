@@ -71,22 +71,35 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer db.Close()
+	var stories *events.StoryS3
+	if c.StoriesEndpoint != "" {
+		stories = events.NewStoryS3(c.StoriesEndpoint, c.StoriesRegion, c.StoriesAccessKey, c.StoriesSecretKey, c.StoriesBucket)
+		if err := stories.EnsureBucket(startup); err != nil {
+			return err
+		}
+	}
 	check := func(ctx context.Context) error {
 		if err := db.Ping(ctx); err != nil {
 			return errors.New("Postgres недоступен")
+		}
+		if stories != nil {
+			return stories.Check(ctx)
 		}
 		return nil
 	}
 	if err := check(startup); err != nil {
 		return err
 	}
-	r := platform.NewEngine(logger, 1<<20, check)
+	r := platform.NewEngine(logger, 11<<20, check)
 	// Своя спецификация: её читает Swagger в gateway. Маршрут без проверки пользователя —
 	// сервис доступен только во внутренней сети.
 	r.GET("/openapi.yaml", func(c *gin.Context) { c.Data(http.StatusOK, "application/yaml; charset=utf-8", api.Spec) })
 	group := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
 	repo := events.NewRepository(db)
 	service := events.New(repo)
+	if stories != nil {
+		service.StoryMedia = stories
+	}
 	switch c.WeatherURL {
 	case "off":
 	case "":
@@ -97,8 +110,10 @@ func run(logger *slog.Logger) error {
 	events.Register(group, service)
 	events.RegisterAdmin(group, service)
 	go platform.Every(ctx, db, logger, "outbox-cleanup", time.Hour, repo.CleanupOutbox)
+	go platform.Every(ctx, db, logger, "story-media-cleanup", 10*time.Minute, func(ctx context.Context) error { return repo.CleanupStoryMedia(ctx, service.StoryMedia) })
 	// Срок сбора состава проверяем раз в минуту: отмена должна прийти вовремя, а не через час.
 	go platform.Every(ctx, db, logger, "quorum-deadlines", time.Minute, repo.FailQuorums)
+	go platform.Every(ctx, db, logger, "demand-proposals", time.Minute, service.RefreshDemandProposals)
 	go platform.Every(ctx, db, logger, "event-reminders", 5*time.Minute, service.SendReminders)
 	// Брокер только публикует уведомления и realtime-сигналы из outbox; без него данные
 	// сохраняются, а события уйдут, когда он станет доступен.

@@ -83,6 +83,7 @@ type MyParticipation struct {
 }
 
 type Event struct {
+	Format       string     `json:"format"`
 	ID           string     `json:"id"`
 	Title        string     `json:"title"`
 	Description  string     `json:"description"`
@@ -214,6 +215,7 @@ type Profile struct {
 // EventInput — поля формы создания. Направление — SportID из справочника или SportName
 // (своё, заводится в справочнике без правки кода).
 type EventInput struct {
+	Format         string     `json:"format"`
 	Title          string     `json:"title"`
 	Description    string     `json:"description"`
 	SportID        string     `json:"sport_id"`

@@ -451,7 +451,9 @@ paths:
       summary: Сменить пароль
       description:
         Только для сессии обычной регистрации (у «Столото ID» пароль меняется в SSO). Требует текущий
-        пароль; после смены все остальные сессии пользователя закрываются, текущая остаётся.
+        пароль; после смены все остальные сессии пользователя закрываются, текущая остаётся. При ошибке
+        session_revocation_unavailable пароль уже изменён, отзыв остальных сессий завершится после истечения
+        кэша статуса (до 30 секунд); требуется повторный вход.
       security:
         - cookieAuth: []
       requestBody:
@@ -2693,6 +2695,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
+<<<<<<< HEAD
   /api/v1/my/company-requests/{id}/proposal:
     parameters:
       - $ref: '#/components/parameters/ID'
@@ -2736,11 +2739,59 @@ paths:
       description:
         Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба
         только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+=======
+  /api/v1/my/company-proposals:
+    get:
+      tags:
+        - Ищу компанию
+      summary: Мои предложения встреч из общего спроса
+      description: |
+        При чтении запускается детерминированный подбор из первых 1000 активных запросов.
+        Минимум 3 человека, совместимый уровень, общий день и время, совпадающий район
+        либо точка в радиусе каждого участника. Слоты 10:00, 14:00, 19:00 UTC+7 в ближайшие
+        14 дней, не раньше чем через 2 часа. Место — район из запроса, точку подтверждает
+        организатор. Одно предложение на запрос; срок — до 48 часов или часа до встречи.
+        Чужие имена и исходные координаты запросов не выдаются.
+      operationId: demandProposals
+      responses:
+        '200':
+          description: Предложения, включая истёкшие и принятые
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DemandProposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/company-proposals/{id}/claim:
+    post:
+      tags:
+        - Ищу компанию
+      summary: Стать организатором предложенной встречи
+      description: |
+        Только участник предложения с активным запросом. Побеждает первая транзакция;
+        нужно не менее трёх активных, не отказавшихся участников. Создаёт обычное открытое
+        событие длительностью час. Приглашённые записываются самостоятельно. Точное место
+        указывает организатор; если предложение содержит координаты, координаты точки сбора
+        обязательны и проверяются по радиусам запросов. Повторный claim возвращает 409.
+      operationId: claimDemandProposal
+      parameters:
+        - $ref: '#/components/parameters/DemandLiveID'
+>>>>>>> main
       requestBody:
         required: true
         content:
           application/json:
             schema:
+<<<<<<< HEAD
               type: object
               required:
                 - version
@@ -2761,18 +2812,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompanyProposalEnvelope'
+=======
+              $ref: '#/components/schemas/ProposalClaim'
+            example:
+              location: У главного входа в парк
+      responses:
+        '201':
+          description: Опубликованное событие
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+>>>>>>> main
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+<<<<<<< HEAD
         '403':
           $ref: '#/components/responses/Forbidden'
+=======
+>>>>>>> main
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
+<<<<<<< HEAD
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/sports/company-demand:
@@ -2791,20 +2858,1872 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompanyDemandPage'
+=======
+  /api/v1/company-proposals/{id}/decline:
+    post:
+      tags:
+        - Ищу компанию
+      summary: Отказаться от предложения
+      description: Повторный отказ допустим. Принятое или истёкшее предложение недоступно.
+      operationId: declineDemandProposal
+      parameters:
+        - $ref: '#/components/parameters/DemandLiveID'
+      responses:
+        '204':
+          description: Отказ сохранён
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/arrivals:
+    get:
+      tags:
+        - Мероприятия
+      summary: Приватные отметки участников в день встречи
+      description: |
+        Только организатор и подтверждённые участники. Состав включает организатора;
+        неизвестный статус обозначен unknown. Доступ с 30 минут до начала по 30 минут
+        после окончания; без ends_at встреча считается двухчасовой. За пределами окна 409.
+        Для снятого события 409. После изменения личным каналам участников отправляется
+        arrival.changed с event_id. Данные отметки в WebSocket не передаются.
+      operationId: eventArrivals
+      parameters:
+        - $ref: '#/components/parameters/DemandLiveID'
+      responses:
+        '200':
+          description: Состав и последние отметки
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Arrival'
+>>>>>>> main
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+<<<<<<< HEAD
         '403':
           $ref: '#/components/responses/Forbidden'
+=======
+>>>>>>> main
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
+<<<<<<< HEAD
         '503':
           $ref: '#/components/responses/Unavailable'
+=======
+  /api/v1/events/{id}/arrival:
+    put:
+      tags:
+        - Мероприятия
+      summary: Обновить свою отметку прибытия
+      description: |
+        Права и окно совпадают с GET arrivals. arriving — в пути, late — опаздываю,
+        here — на месте. eta_minutes от 1 до 120 для late, 0 для других статусов.
+        description — одежда или ориентир, не длиннее 200 символов.
+      operationId: setEventArrival
+      parameters:
+        - $ref: '#/components/parameters/DemandLiveID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArrivalInput'
+            example:
+              status: late
+              eta_minutes: 10
+              description: Оранжевая куртка
+      responses:
+        '200':
+          description: Собственная отметка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Arrival'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/friends:
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialFriends
+      summary: Свои друзья и входящие/исходящие заявки
+      description: Свои друзья и входящие/исходящие заявки
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialFriendPage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+          description: Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+  /api/v1/friends/{uid}/request:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialFriendRequest
+      summary: Отправить заявку в друзья
+      description:
+        Отправить заявку в друзья. Встречная заявка не принимает дружбу автоматически. При изменении обе
+        стороны получают friendship.changed в личный WebSocket-канал.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialFriendship'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+  /api/v1/friends/{uid}/accept:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialFriendAccept
+      summary: Принять входящую заявку
+      description:
+        Принять входящую заявку. Встречная заявка не принимает дружбу автоматически. При изменении обе
+        стороны получают friendship.changed в личный WebSocket-канал.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialFriendship'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+  /api/v1/friends/{uid}/decline:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialFriendDecline
+      summary: Отклонить входящую заявку
+      description:
+        Отклонить входящую заявку. Встречная заявка не принимает дружбу автоматически. При изменении обе
+        стороны получают friendship.changed в личный WebSocket-канал.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialFriendship'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+  /api/v1/friends/{uid}/remove:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialFriendRemove
+      summary: Удалить друга или отозвать свою заявку
+      description:
+        Удалить друга или отозвать свою заявку. Встречная заявка не принимает дружбу автоматически. При
+        изменении обе стороны получают friendship.changed в личный WebSocket-канал.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialFriendship'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+  /api/v1/chats:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialOpenChat
+      summary: Открыть личный чат с подтверждённым другом
+      description:
+        Один чат на пару пользователей. Повтор возвращает тот же id. После удаления дружбы история
+        доступна обеим сторонам, отправка запрещена.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialDirectChat'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialChatInput'
+  /api/v1/my/chats:
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialChats
+      summary: Личные чаты и чаты своих мероприятий
+      description:
+        'Чат мероприятия существует автоматически. Его messages_url ведёт в /events/{id}/comments:
+        история одна, модерация и ответы сохраняются. Список содержит события организатора и подтверждённого
+        участника.'
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialChatPage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+          description: Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+  /api/v1/chats/{chat}/messages:
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialMessages
+      summary: История личного чата
+      description: История личного чата
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialMessagePage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+          description: Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialSendMessage
+      summary: Отправить сообщение другу
+      description:
+        Отправитель должен быть участником чата и подтверждённым другом адресата. Сообщение и
+        chat.changed для обоих user:<id> каналов фиксируются в одной транзакции.
+      responses:
+        '201':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialMessage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialMessageInput'
+  /api/v1/events/{id}/reviews:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialCreateReview
+      summary: Оставить отзыв о прошедшем мероприятии
+      description:
+        Только подтверждённый участник опубликованного события после ends_at; если ends_at нет, через два
+        часа после starts_at. Один отзыв на событие от автора. Организатор не оценивает себя. Запись участника
+        не считается доказанным посещением.
+      responses:
+        '201':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialReview'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialReviewInput'
+  /api/v1/profiles/{id}/reviews:
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialProfileReviews
+      summary: Отзывы о мероприятиях организатора
+      description: Только нескрытые отзывы опубликованных мероприятий. Скрытые и отменённые события не раскрываются.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialReviewPage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+          description: Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+  /api/v1/reviews/{review}/hide:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialHideReview
+      summary: Скрыть свой отзыв или модерировать с правами admin
+      description:
+        Причина обязательна. Организатор не может скрывать чужую критику. Проверка автора или роли
+        выполняется сервером в SQL.
+      responses:
+        '204':
+          description: Действие выполнено
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: review
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialReasonInput'
+  /api/v1/stories:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialCreateStory
+      summary: Создать историю на 24 часа
+      description:
+        Видна только автору и подтверждённым друзьям. Медиа загружается отдельно в /stories/{id}/media.
+        Внешние URL и file_id других сервисов не принимаются.
+      responses:
+        '201':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialStory'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialStoryInput'
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialStories
+      summary: Живые истории друзей и свои
+      description:
+        Срок 24 часа проверяется при каждом чтении. После удаления дружбы доступ пропадает сразу. Общей
+        публичной ленты нет.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialStoryPage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+          description: Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+  /api/v1/stories/{story}/delete:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialDeleteStory
+      summary: Удалить историю автора или модерировать с правами admin
+      description: Удалить историю автора или модерировать с правами admin
+      responses:
+        '204':
+          description: Действие выполнено
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: story
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialReasonInput'
+  /api/v1/stories/{story}/media:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialUploadStoryMedia
+      summary: Прикрепить фото или видео к своей живой истории
+      description:
+        'Один файл на историю, только её автор. 1 байт–10 МиБ. Тип определяется по содержимому: JPEG,
+        PNG, WebP, GIF, MP4, WebM. Приватный S3-бакет events, собственные метаданные. Неудачная загрузка не
+        публикует ссылку; незавершённые объекты удаляет фоновая очистка.'
+      responses:
+        '201':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media_url
+                  - content_type
+                  - size
+                properties:
+                  media_url:
+                    type: string
+                    description: ''
+                  content_type:
+                    type: string
+                    description: ''
+                  size:
+                    type: integer
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Файл слишком большой
+        '415':
+          description: Тип не разрешён
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: S3 временно недоступен
+      parameters:
+        - name: story
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  description: ''
+                  format: binary
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialReadStoryMedia
+      summary: Получить фото или видео истории
+      description:
+        Проверка аудитории, удаления и истечения истории перед чтением S3. Ответ private, no-store;
+        прямой адрес S3 не раскрывается.
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                description: ''
+                format: binary
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: S3 временно недоступен
+      parameters:
+        - name: story
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+  /api/v1/organizations/{id}/membership:
+    post:
+      tags:
+        - Социальные возможности
+      operationId: socialJoinClub
+      summary: Вступить в допущенный клуб
+      description:
+        Допущенная организация служит клубом. Членство не даёт прав управления событиями или
+        организацией. Владелец уже управляет клубом и не вступает повторно.
+      responses:
+        '204':
+          description: Действие выполнено
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+    delete:
+      tags:
+        - Социальные возможности
+      operationId: socialLeaveClub
+      summary: Выйти из клуба
+      description: Выйти из клуба
+      responses:
+        '204':
+          description: Действие выполнено
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+  /api/v1/organizations/{id}/members:
+    get:
+      tags:
+        - Социальные возможности
+      operationId: socialClubMembers
+      summary: Участники клуба для владельца или admin
+      description: Участники клуба для владельца или admin
+      responses:
+        '200':
+          description: Действие выполнено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialClubMemberPage'
+        '400':
+          description: Неверный JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Войдите в аккаунт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено или недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Действие недоступно в текущем состоянии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Ошибка полей или курсора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+          description: Непрозрачный курсор следующей страницы. Сортировка по созданию от новых к старым.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+  /api/v1/events/{id}/format:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Events
+      summary: Формат доступного пользователю мероприятия
+      responses:
+        '200':
+          description: Формат без ссылок и билетов видеокомнаты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventFormat'
+        '401':
+          description: Требуется вход
+        '404':
+          description: Мероприятие не найдено или недоступно
+        '500':
+          description: Внутренняя ошибка
+        '503':
+          description: Хранилище форматов недоступно
+    put:
+      tags:
+        - Events
+      summary: Организатор меняет формат встречи до открытия видеокомнаты
+      description:
+        Только опубликованное мероприятие, раньше чем за 15 минут до начала. Участники получают
+        уведомление. Повтор того же формата не создаёт уведомления.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventFormatInput'
+            example:
+              format: online
+      responses:
+        '200':
+          description: Сохранённый формат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventFormat'
+        '400':
+          description: Невалидный JSON или UUID
+        '401':
+          description: Требуется вход
+        '403':
+          description: Только организатор
+        '404':
+          description: Мероприятие не найдено
+        '409':
+          description: Событие закрыто или окно входа уже открылось
+        '422':
+          description: Допустимые форматы offline и online
+        '500':
+          description: Внутренняя ошибка
+        '503':
+          description: Хранилище форматов недоступно
+  /api/v1/events/{id}/video/token:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Events
+      summary: Билет в видеокомнату онлайн мероприятия
+      description:
+        Организатор или подтверждённый участник опубликованного online события. Вход с starts_at минус 15
+        минут до ends_at; при отсутствии ends_at — 90 минут после начала. Билет действует до двух минут, без
+        прав администратора. Уже подключённого участника истечение JWT не отключает.
+      responses:
+        '200':
+          description: Билет для LiveKit SDK. Не кэшировать и не сохранять в localStorage.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoToken'
+        '400':
+          description: Невалидный UUID
+        '401':
+          description: Требуется вход
+        '404':
+          description: Нет события или права участия
+        '409':
+          description: Встреча очная
+          снята с публикации или вход сейчас закрыт: null
+        '500':
+          description: Внутренняя ошибка
+        '503':
+          description: LiveKit не настроен
+  /api/v1/my/recommendation-preferences:
+    get:
+      tags:
+        - Персональная подборка и прогресс
+      operationId: recommendationPreferences
+      summary: Мои предпочтения подбора
+      responses:
+        '200':
+          description: Результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationPreferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - Персональная подборка и прогресс
+      operationId: saveRecommendationPreferences
+      summary: Задать направления, время, уровень и место
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationPreferences'
+      responses:
+        '200':
+          description: Результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationPreferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/recommendations/events:
+    get:
+      tags:
+        - Персональная подборка и прогресс
+      operationId: recommendEvents
+      summary: Персональная подборка с объяснением
+      responses:
+        '200':
+          description: Результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description:
+        Детерминированный подбор из ближайших 1000 опубликованных событий в горизонте 60 дней. Учитывает
+        явные интересы, записи и активные запросы компании. Уже записанные, отклонённые, скрытые пользователем
+        и события со скрытым направлением исключаются. Радиус ограничивает офлайн-события; онлайн доступны
+        независимо от места. offset относится к текущей подборке, при изменении данных начните с нуля.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000
+  /api/v1/events/{id}/recommendation-feedback:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: &a1
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Персональная подборка и прогресс
+      operationId: recommendationFeedback
+      summary: Просмотр, интерес, скрытие или сброс скрытия
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationFeedback'
+      responses:
+        '204':
+          description: Сохранено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/progress:
+    get:
+      tags:
+        - Персональная подборка и прогресс
+      operationId: personalProgress
+      summary: Личный прогресс и достижения
+      responses:
+        '200':
+          description: Результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalProgress'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+>>>>>>> main
   /api/v1/files:
     get:
       tags:
@@ -4044,6 +5963,13 @@ components:
       schema:
         type: string
         format: uuid
+    DemandLiveID:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     Error:
       type: object
@@ -4370,6 +6296,7 @@ components:
         - organizer
         - is_organizer
         - created_at
+        - format
       properties:
         zone:
           type: string
@@ -4504,6 +6431,11 @@ components:
         created_at:
           type: string
           format: date-time
+        format:
+          type: string
+          enum:
+            - offline
+            - online
     EventPage:
       type: object
       required:
@@ -4620,6 +6552,12 @@ components:
           type: boolean
           default: false
           description: Занятие на улице — для него показываем погоду
+        format:
+          type: string
+          enum:
+            - offline
+            - online
+          default: offline
     Person:
       type: object
       required:
@@ -5524,6 +7462,707 @@ components:
           type: integer
         offset:
           type: integer
+    DemandProposal:
+      type: object
+      required:
+        - id
+        - sport_id
+        - level
+        - starts_at
+        - area
+        - requires_coordinates
+        - status
+        - event_id
+        - expires_at
+        - members_count
+        - declined
+      properties:
+        id:
+          type: string
+          format: uuid
+        sport_id:
+          type: string
+          format: uuid
+        level:
+          type: string
+          enum:
+            - any
+            - beginner
+            - amateur
+            - pro
+        starts_at:
+          type: string
+          format: date-time
+        area:
+          type: string
+        requires_coordinates:
+          type: boolean
+        status:
+          type: string
+          enum:
+            - pending
+            - claimed
+            - expired
+        event_id:
+          type: string
+          format: uuid
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        members_count:
+          type: integer
+          minimum: 0
+        declined:
+          type: boolean
+    ProposalClaim:
+      type: object
+      required:
+        - location
+      properties:
+        location:
+          type: string
+          minLength: 3
+          maxLength: 300
+        lat:
+          type: number
+          nullable: true
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          nullable: true
+          minimum: -180
+          maximum: 180
+    ArrivalInput:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - arriving
+            - late
+            - here
+        eta_minutes:
+          type: integer
+          minimum: 0
+          maximum: 120
+          default: 0
+        description:
+          type: string
+          maxLength: 200
+          default: ''
+    Arrival:
+      type: object
+      required:
+        - user_id
+        - display_name
+        - status
+        - eta_minutes
+        - description
+        - updated_at
+      properties:
+        user_id:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - unknown
+            - arriving
+            - late
+            - here
+        eta_minutes:
+          type: integer
+          minimum: 0
+          maximum: 120
+        description:
+          type: string
+          maxLength: 200
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    SocialFriend:
+      type: object
+      required:
+        - id
+        - display_name
+        - status
+        - requested_by
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ''
+        display_name:
+          type: string
+          description: ''
+        status:
+          type: string
+          description: ''
+          enum:
+            - pending
+            - accepted
+        requested_by:
+          type: string
+          description: ''
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialFriendship:
+      type: object
+      required:
+        - user_id
+        - requested_by
+        - status
+        - created_at
+      properties:
+        user_id:
+          type: string
+          description: ''
+        requested_by:
+          type: string
+          description: ''
+        status:
+          type: string
+          description: ''
+          enum:
+            - pending
+            - accepted
+            - declined
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialChat:
+      type: object
+      required:
+        - id
+        - kind
+        - title
+        - peer_id
+        - event_id
+        - messages_url
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ''
+          format: uuid
+        kind:
+          type: string
+          description: ''
+          enum:
+            - direct
+            - event
+        title:
+          type: string
+          description: ''
+        peer_id:
+          type: string
+          description: ''
+          nullable: true
+        event_id:
+          type: string
+          description: ''
+          nullable: true
+        messages_url:
+          type: string
+          description: У чата мероприятия ведёт в существующий comments API
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialDirectChat:
+      type: object
+      required:
+        - id
+        - kind
+        - peer_id
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ''
+          format: uuid
+        kind:
+          type: string
+          description: ''
+          enum:
+            - direct
+        peer_id:
+          type: string
+          description: ''
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialMessage:
+      type: object
+      required:
+        - id
+        - chat_id
+        - author_id
+        - body
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ''
+          format: uuid
+        chat_id:
+          type: string
+          description: ''
+          format: uuid
+        author_id:
+          type: string
+          description: ''
+        body:
+          type: string
+          description: ''
+          maxLength: 2000
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialReview:
+      type: object
+      required:
+        - id
+        - event_id
+        - author_id
+        - organizer_id
+        - score
+        - body
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ''
+          format: uuid
+        event_id:
+          type: string
+          description: ''
+          format: uuid
+        author_id:
+          type: string
+          description: ''
+        organizer_id:
+          type: string
+          description: ''
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        body:
+          type: string
+          description: ''
+          maxLength: 2000
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialStory:
+      type: object
+      required:
+        - id
+        - author_id
+        - body
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: string
+          description: ''
+          format: uuid
+        author_id:
+          type: string
+          description: ''
+        author_name:
+          type: string
+          description: ''
+        body:
+          type: string
+          description: ''
+          maxLength: 1000
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+        expires_at:
+          type: string
+          description: ''
+          format: date-time
+        media_url:
+          type: string
+          description: ''
+          nullable: true
+        media_content_type:
+          type: string
+          description: ''
+          nullable: true
+        media_size:
+          type: integer
+          nullable: true
+    SocialClubMember:
+      type: object
+      required:
+        - id
+        - display_name
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ''
+        display_name:
+          type: string
+          description: ''
+        created_at:
+          type: string
+          description: ''
+          format: date-time
+    SocialFriendPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialFriend'
+        next_cursor:
+          type: string
+          description: Передайте в cursor следующего запроса; отсутствие означает конец
+    SocialChatPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialChat'
+        next_cursor:
+          type: string
+          description: Передайте в cursor следующего запроса; отсутствие означает конец
+    SocialMessagePage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialMessage'
+        next_cursor:
+          type: string
+          description: Передайте в cursor следующего запроса; отсутствие означает конец
+    SocialReviewPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialReview'
+        next_cursor:
+          type: string
+          description: Передайте в cursor следующего запроса; отсутствие означает конец
+    SocialStoryPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialStory'
+        next_cursor:
+          type: string
+          description: Передайте в cursor следующего запроса; отсутствие означает конец
+    SocialClubMemberPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialClubMember'
+        next_cursor:
+          type: string
+          description: Передайте в cursor следующего запроса; отсутствие означает конец
+    SocialChatInput:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: string
+          description: Подтверждённый друг
+          minLength: 1
+          maxLength: 200
+          example: local-123
+    SocialMessageInput:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          description: ''
+          minLength: 1
+          maxLength: 2000
+          example: Я у входа в парк
+    SocialReviewInput:
+      type: object
+      required:
+        - score
+        - body
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        body:
+          type: string
+          description: ''
+          minLength: 1
+          maxLength: 2000
+          example: Понятный маршрут, организатор встретил новичков
+    SocialStoryInput:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          description: ''
+          minLength: 1
+          maxLength: 1000
+          example: Сегодня первая совместная пробежка
+    SocialReasonInput:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          description: ''
+          minLength: 1
+          maxLength: 500
+          example: Отзываю свою публикацию
+    EventFormatInput:
+      type: object
+      required:
+        - format
+      properties:
+        format:
+          type: string
+          enum:
+            - offline
+            - online
+          example: online
+    EventFormat:
+      type: object
+      required:
+        - event_id
+        - format
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum:
+            - offline
+            - online
+    VideoToken:
+      type: object
+      required:
+        - url
+        - room
+        - token
+        - expires_at
+      properties:
+        url:
+          type: string
+          format: uri
+          example: wss://video.example.test
+        room:
+          type: string
+          example: event_28b17314-b332-42d0-b867-b2de5747dbbd
+        token:
+          type: string
+          description: Короткоживущий JWT
+          не логировать: null
+        expires_at:
+          type: string
+          format: date-time
+    RecommendationPreferences:
+      type: object
+      required:
+        - sport_ids
+        - level
+        - city
+        - weekdays
+        - day_parts
+        - lat
+        - lng
+        - radius_km
+      properties:
+        sport_ids:
+          type: array
+          items: *a1
+          maxItems: 30
+        level:
+          type: string
+          enum:
+            - any
+            - beginner
+            - amateur
+            - pro
+        city:
+          type: string
+          maxLength: 100
+        weekdays:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        day_parts:
+          type: array
+          items:
+            type: string
+            enum:
+              - morning
+              - day
+              - evening
+        lat:
+          type:
+            - number
+            - 'null'
+          minimum: -90
+          maximum: 90
+        lng:
+          type:
+            - number
+            - 'null'
+          minimum: -180
+          maximum: 180
+        radius_km:
+          type: integer
+          minimum: 1
+          maximum: 100
+    RecommendedEvent:
+      type: object
+      required:
+        - event
+        - reasons
+      properties:
+        event:
+          $ref: '#/components/schemas/Event'
+        reasons:
+          type: array
+          items:
+            type: string
+    RecommendationPage:
+      type: object
+      required:
+        - items
+        - personalized
+        - algorithm
+        - generated_at
+        - has_more
+        - next_offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendedEvent'
+        personalized:
+          type: boolean
+        algorithm:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        has_more:
+          type: boolean
+        next_offset:
+          type: integer
+          minimum: 0
+    RecommendationFeedback:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum:
+            - view
+            - interested
+            - dismiss
+            - reset
+    Achievement:
+      type: object
+      required:
+        - code
+        - title
+        - description
+        - current
+        - target
+        - points
+        - earned
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        current:
+          type: integer
+          minimum: 0
+        target:
+          type: integer
+          minimum: 1
+        points:
+          type: integer
+          minimum: 0
+        earned:
+          type: boolean
+    PersonalProgress:
+      type: object
+      required:
+        - points
+        - title
+        - next_title_at
+        - achievements
+        - note
+      properties:
+        points:
+          type: integer
+          minimum: 0
+        title:
+          type: string
+        next_title_at:
+          type: integer
+          minimum: 0
+        achievements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Achievement'
+        note:
+          type: string
     File:
       type: object
       description: Метаданные файла
@@ -5597,6 +8236,7 @@ components:
         - roles
         - last_login_at
         - created_at
+        - password_changed_at
       properties:
         id:
           type: string
@@ -5631,6 +8271,10 @@ components:
         created_at:
           type: string
           format: date-time
+        password_changed_at:
+          type: string
+          format: date-time
+          description: Версия пароля для отзыва серверных сессий
     AccountPage:
       type: object
       required:

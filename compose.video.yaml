@@ -1,0 +1,28 @@
+# Дополнительный медиасервер. HTTP API приложения по-прежнему проходит через gateway;
+# WebRTC передаётся напрямую в LiveKit, иначе UDP и NAT traversal работать не будут.
+services:
+  livekit:
+    image: ${LIVEKIT_IMAGE:?Укажите проверенную версию livekit/livekit-server или digest}
+    profiles: [video]
+    restart: unless-stopped
+    environment:
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY:?required}: ${LIVEKIT_API_SECRET:?required}'
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses: [0.0.0.0]
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: false
+          node_ip: ${LIVEKIT_NODE_IP:?Укажите доступный участникам IP медиасервера}
+        room:
+          empty_timeout: 60
+          departure_timeout: 20
+          max_participants: 100
+        logging:
+          level: info
+          json: true
+    ports:
+      - '127.0.0.1:7880:7880'
+      - '7881:7881/tcp'
+      - '7882:7882/udp'

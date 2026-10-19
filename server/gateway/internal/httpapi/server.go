@@ -147,7 +147,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 		if up.Events != nil {
 			// Домен кейса: мероприятия, организации, записи и обсуждения живут в одном сервисе.
 			h := proxy(up.Events, internalToken)
-			for _, prefix := range []string{"/events", "/sports", "/organizations", "/profiles", "/my"} {
+			for _, prefix := range []string{"/events", "/sports", "/organizations", "/profiles", "/my", "/company-proposals", "/friends", "/chats", "/reviews", "/stories", "/recommendations"} {
 				api.Any(prefix, h)
 				api.Any(prefix+"/*path", h)
 			}

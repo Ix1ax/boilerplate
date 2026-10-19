@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ type EventChanges struct {
 	Time, Place, Conditions bool
 	OldStartsAt             time.Time
 	OldLocation             string
+	Expected                *EventInput
 }
 
 func (c EventChanges) any() bool { return c.Time || c.Place || c.Conditions }
@@ -56,10 +58,11 @@ func (s *Service) UpdateEvent(ctx context.Context, a Actor, id string, p EventPa
 	case !cur.StartsAt.After(time.Now()):
 		return Event{}, ErrEventPast
 	}
-	in := EventInput{Title: cur.Title, Description: cur.Description, SportID: cur.Sport.ID, StartsAt: cur.StartsAt, EndsAt: cur.EndsAt,
+	in := EventInput{Format: cur.Format, Title: cur.Title, Description: cur.Description, SportID: cur.Sport.ID, StartsAt: cur.StartsAt, EndsAt: cur.EndsAt,
 		Location: cur.Location, Lat: cur.Lat, Lng: cur.Lng, Level: cur.Level, Requirements: cur.Requirements, PriceNote: cur.PriceNote,
 		PrivateInfo: cur.PrivateInfo, JoinMode: cur.JoinMode, Capacity: cur.Capacity, MinParticipants: cur.MinParticipants,
 		QuorumDeadline: cur.QuorumDeadline, Outdoor: cur.Outdoor}
+	expected := in
 	set(&in.Title, p.Title)
 	set(&in.Description, p.Description)
 	set(&in.StartsAt, p.StartsAt)
@@ -90,7 +93,7 @@ func (s *Service) UpdateEvent(ctx context.Context, a Actor, id string, p EventPa
 	if err := validateEvent(&in, time.Now(), p.StartsAt != nil); err != nil {
 		return Event{}, err
 	}
-	changes := EventChanges{OldStartsAt: cur.StartsAt, OldLocation: cur.Location,
+	changes := EventChanges{Expected: &expected, OldStartsAt: cur.StartsAt, OldLocation: cur.Location,
 		Time:  !in.StartsAt.Equal(cur.StartsAt) || !sameTime(in.EndsAt, cur.EndsAt),
 		Place: in.Location != cur.Location || !sameFloat(in.Lat, cur.Lat) || !sameFloat(in.Lng, cur.Lng),
 		Conditions: in.Requirements != cur.Requirements || in.PrivateInfo != cur.PrivateInfo || in.PriceNote != cur.PriceNote ||
@@ -124,6 +127,29 @@ func (r *Repository) UpdateEvent(ctx context.Context, a Actor, id string, in Eve
 			return ErrNotEventOwner
 		case e.Status != "published":
 			return ErrEventClosed
+		}
+		if !e.StartsAt.After(time.Now()) {
+			return ErrEventPast
+		}
+		if c.Expected != nil {
+			current, err := getEvent(ctx, tx, a, id)
+			if err != nil {
+				return err
+			}
+			snapshot := EventInput{Format: current.Format, Title: current.Title, Description: current.Description, SportID: current.Sport.ID, StartsAt: current.StartsAt, EndsAt: current.EndsAt,
+				Location: current.Location, Lat: current.Lat, Lng: current.Lng, Level: current.Level, Requirements: current.Requirements, PriceNote: current.PriceNote,
+				PrivateInfo: current.PrivateInfo, JoinMode: current.JoinMode, Capacity: current.Capacity, MinParticipants: current.MinParticipants,
+				QuorumDeadline: current.QuorumDeadline, Outdoor: current.Outdoor}
+			// Полный снимок сравниваем под блокировкой: устаревшая правка не затрёт изменения другого запроса.
+			// Времена PostgreSQL нормализуются в UTC, поэтому сравниваем их отдельно через Equal.
+			expected := *c.Expected
+			sameDates := snapshot.StartsAt.Equal(expected.StartsAt) && sameTime(snapshot.EndsAt, expected.EndsAt) && sameTime(snapshot.QuorumDeadline, expected.QuorumDeadline)
+			snapshot.StartsAt = expected.StartsAt
+			snapshot.EndsAt = expected.EndsAt
+			snapshot.QuorumDeadline = expected.QuorumDeadline
+			if !sameDates || !reflect.DeepEqual(snapshot, expected) {
+				return fmt.Errorf("%w: мероприятие уже изменилось, обновите страницу и повторите правку", platform.ErrTransition)
+			}
 		}
 		if in.Capacity != nil {
 			n, err := confirmedCount(ctx, tx, id)
