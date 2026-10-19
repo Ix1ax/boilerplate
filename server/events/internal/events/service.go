@@ -29,6 +29,10 @@ type Store interface {
 	AdminSports(ctx context.Context) ([]AdminSport, error)
 	SetSportHidden(ctx context.Context, a Actor, id string, hidden bool, reason string) (AdminSport, error)
 	RepublishDomain(ctx context.Context) (int, error)
+	UpdateProfile(ctx context.Context, a Actor, p ProfilePatch) (Profile, error)
+	OrganizationStats(ctx context.Context, id string) (OrganizerStats, error)
+	UpdateEvent(ctx context.Context, a Actor, id string, in EventInput, changed EventChanges) (Event, error)
+	Alternatives(ctx context.Context, a Actor, id string, limit int) ([]Event, error)
 	Leave(ctx context.Context, a Actor, eventID string) error
 	Participants(ctx context.Context, a Actor, eventID string) ([]Participant, error)
 	Decide(ctx context.Context, a Actor, eventID, participationID string, approve bool, reason string) (Participant, error)

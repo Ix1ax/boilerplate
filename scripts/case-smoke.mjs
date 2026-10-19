@@ -499,6 +499,58 @@ try {
     `★ Соберём состав и встречу новичка: состав собран, проводник назначен, напоминание ушло; погода — ${forecast.available ? forecast.forecast.description : forecast.reason}`,
   );
 
+  // Для фронта: профиль, правка и перенос события, поиск рядом, другая встреча, календарь.
+  const me = ok(
+    await as.anna('/my/profile', 'PATCH', {
+      about: 'Люблю утренние пробежки',
+      level: 'beginner',
+    }),
+    'правка профиля',
+  );
+  assert.equal(me.level, 'beginner');
+  assert.ok(me.stats, 'нет статистики организатора в профиле');
+  const later = new Date(Date.parse(own.starts_at) + 3600_000).toISOString();
+  const moved = ok(
+    await as.anna(`/events/${own.id}`, 'PATCH', {
+      starts_at: later,
+      location: 'Красноярск, остров Татышев',
+    }),
+    'перенос события',
+  );
+  assert.equal(Date.parse(moved.starts_at), Date.parse(later));
+  assert.equal(
+    (await as.igor(`/events/${own.id}`, 'PATCH', { title: 'Чужое' })).status,
+    403,
+    'чужое событие изменено',
+  );
+  let warned = false;
+  for (let i = 0; i < 20 && !warned; i++) {
+    const bell = ok(await as.igor('/notifications'), 'колокольчик Игоря');
+    warned = bell.items.some(
+      (n) => n.title.startsWith('Перенос:') && n.link === `/events/${own.id}`,
+    );
+    if (!warned) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(warned, 'участник не узнал о переносе');
+  const nearby = ok(
+    await as.petr(`/events?near=56.0285,92.9271&radius_km=2`),
+    'события рядом',
+  );
+  assert.ok(
+    nearby.items.some(
+      (e) => e.id === squad.id && typeof e.distance_km === 'number',
+    ),
+    'нет события рядом',
+  );
+  ok(await as.petr(`/events/${squad.id}/alternatives`), 'другие встречи');
+  const ics = await fetch(`${base}/api/v1/events/${squad.id}/calendar.ics`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  assert.ok((await ics.text()).startsWith('BEGIN:VCALENDAR'), 'файл календаря');
+  step(
+    '★ Для фронта: профиль, перенос с уведомлением, поиск рядом, другие встречи, календарь',
+  );
+
   // Админка: карточки и история в events, аналитика и журнал — в отдельном сервисе moderation.
   const orgCard = ok(
     await as.admin(`/admin/organizations/${ladya.id}`),

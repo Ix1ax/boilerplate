@@ -167,6 +167,20 @@ paths:
           in: query
           description: Только события организации (UUID)
           schema: { type: string, format: uuid }
+        - name: near
+          in: query
+          description: 'Рядом с точкой «широта,долгота» — только события с координатами, ближайшие первыми, в ответе distance_km'
+          schema: { type: string }
+          example: '56.0106,92.8710'
+        - name: radius_km
+          in: query
+          description: Радиус для near, км
+          schema: { type: number, minimum: 0, maximum: 100, default: 10 }
+        - name: bbox
+          in: query
+          description: 'Видимая область карты «minLng,minLat,maxLng,maxLat»; вместе с near не задаётся'
+          schema: { type: string }
+          example: '92.70,55.95,93.10,56.10'
       responses:
         '200':
           description: Страница мероприятий
@@ -263,6 +277,45 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Мероприятия]
+      operationId: updateEvent
+      summary: Изменить мероприятие
+      description:
+        Только организатор, только опубликованное и ещё не начавшееся. Передаются только меняемые поля; режим записи,
+        направление и «от чьего имени» не меняются. Перенос времени или места — уведомление всем записавшимся
+        «было → стало», напоминания придут заново от нового времени; правка условий (что взять, точка сбора,
+        стоимость, уровень) — уведомление «проверьте, что изменилось». Мест не может стать меньше, чем уже записано (422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventPatch'
+            example:
+              starts_at: 2026-10-25T04:00:00Z
+              location: Красноярск, Центральная набережная, у Коммунального моста
+      responses:
+        '200':
+          description: Мероприятие после изменения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/events/{id}/cancel:
@@ -481,6 +534,64 @@ paths:
                   code: 61
                   description: дождь
                   advice: возьмите дождевик и сменную обувь
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/alternatives:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Мероприятия]
+      operationId: eventAlternatives
+      summary: Найти другую встречу
+      description:
+        Если событие отменили или сняли, места кончились или заявку отклонили, путь не обрывается. То же направление,
+        опубликованные предстоящие события со свободными местами, кроме своих; сначала в пределах 15 км (если у события есть
+        точка), затем ближайшие по времени к исходному.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+      responses:
+        '200':
+          description: Похожие встречи
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/calendar.ics:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Мероприятия]
+      operationId: eventCalendar
+      summary: Добавить в календарь
+      description:
+        Файл iCalendar (RFC 5545) для телефона и почты — время, место, что взять и напоминание за 2 часа.
+        Точка сбора попадает в описание только тем, кому она видна (организатор и подтверждённые участники).
+      responses:
+        '200':
+          description: Файл .ics
+          content:
+            text/calendar:
+              schema: { type: string }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -959,8 +1070,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [organization, events]
+                required: [organization, events, stats]
                 properties:
+                  stats:
+                    $ref: '#/components/schemas/OrganizerStats'
                   organization:
                     $ref: '#/components/schemas/Organization'
                   events:
@@ -973,6 +1086,53 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/profile:
+    get:
+      tags: [Профили и справочники]
+      operationId: getMyProfile
+      summary: Мой профиль
+      description: Имя приходит из входа (Keycloak) и здесь не меняется. В `stats` — встречи, проведённые от своего имени.
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Профили и справочники]
+      operationId: updateMyProfile
+      summary: Изменить профиль
+      description: Только переданные поля. Пустой `level` — «не указывать».
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+            example:
+              about: Бегаю по выходным, хочу компанию
+              city: Красноярск
+              level: beginner
+      responses:
+        '200':
+          description: Профиль после изменения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/profiles/{id}:
@@ -1664,6 +1824,9 @@ components:
         company_matches:
           type: integer
           description: Сколько людей из «Ищу компанию» получили это событие в подборке
+        distance_km:
+          type: number
+          description: Расстояние до точки near, км (только в выдаче с near)
         spots_left:
           type: integer
           nullable: true
@@ -1912,13 +2075,15 @@ components:
           items: { type: string, format: uuid }
     Profile:
       type: object
-      required: [id, name, about, city, level, events]
+      required: [id, name, about, city, level, events, stats]
       properties:
         id: { type: string }
         name: { type: string }
         about: { type: string }
         city: { type: string }
         level: { type: string }
+        stats:
+          $ref: '#/components/schemas/OrganizerStats'
         events:
           type: array
           items:
@@ -2108,6 +2273,45 @@ components:
             requests_count:
               { type: integer, description: Активные запросы «Ищу компанию» }
             created_at: { type: string, format: date-time }
+    OrganizerStats:
+      type: object
+      description: Факты из данных платформы, без оценок. Посещение не проверяется, поэтому people_came — подтверждённые записи на прошедшие встречи.
+      required: [events_held, people_came, upcoming_events, since]
+      properties:
+        events_held:
+          { type: integer, description: Прошедшие опубликованные встречи }
+        people_came:
+          { type: integer, description: Подтверждённые записи на них }
+        upcoming_events: { type: integer }
+        since:
+          {
+            type: string,
+            format: date-time,
+            description: На платформе с (для организации — с допуска),
+          }
+    ProfilePatch:
+      type: object
+      properties:
+        about: { type: string, maxLength: 1000 }
+        city: { type: string, maxLength: 100 }
+        level: { type: string, enum: ['', beginner, amateur, pro] }
+    EventPatch:
+      type: object
+      description: Только меняемые поля. Режим записи, направление и организатор не меняются.
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time, nullable: true }
+        location: { type: string, minLength: 3, maxLength: 300 }
+        lat: { type: number, nullable: true }
+        lng: { type: number, nullable: true }
+        level: { type: string, enum: [any, beginner, amateur, pro] }
+        requirements: { type: string, maxLength: 2000 }
+        price_note: { type: string, maxLength: 200 }
+        private_info: { type: string, maxLength: 2000 }
+        capacity: { type: integer, minimum: 1, maximum: 10000, nullable: true }
+        outdoor: { type: boolean }
     Reason:
       type: object
       properties:
