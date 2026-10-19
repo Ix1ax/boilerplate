@@ -27,6 +27,7 @@ import (
 //	GET    /organizations, /organizations/:id            каталог и страница организации
 //	GET    /profiles/:id                                 профиль организатора
 //	… /my/company-requests, /sports/demand               «Ищу компанию» (company_routes.go)
+//	… /events/:id/buddy, /remind, /weather              проводники, напоминания, погода (gathering_routes.go)
 func Register(parent *gin.RouterGroup, s *Service) {
 	g := parent.Group("", profileSync(s))
 	g.GET("/sports", func(c *gin.Context) {
@@ -83,14 +84,15 @@ func Register(parent *gin.RouterGroup, s *Service) {
 	}))
 	g.POST("/events/:id/join", withID(func(c *gin.Context, id string) {
 		var in struct {
-			Message string `json:"message"`
+			Message   string `json:"message"`
+			FirstTime bool   `json:"first_time"`
 		}
 		// Тело необязательно: для свободной записи сообщение не нужно.
 		if c.Request.ContentLength > 0 && c.ShouldBindJSON(&in) != nil {
-			fail(c, 400, "invalid_body", "Ожидается JSON с полем message")
+			fail(c, 400, "invalid_body", "Ожидается JSON с полями message и first_time")
 			return
 		}
-		p, err := s.Join(c.Request.Context(), actor(c), id, in.Message)
+		p, err := s.Join(c.Request.Context(), actor(c), id, in.Message, in.FirstTime)
 		if handle(c, err) {
 			return
 		}
@@ -244,6 +246,7 @@ func Register(parent *gin.RouterGroup, s *Service) {
 		c.JSON(200, p)
 	})
 	registerCompany(g, s)
+	registerGatherings(g, s)
 }
 
 // RegisterAdmin — модерация. Роль admin проверяется и в gateway, и здесь.
@@ -438,7 +441,8 @@ func handle(c *gin.Context, err error) bool {
 	case errors.Is(err, ErrOrgNotApproved), errors.Is(err, ErrNotOrganizer):
 		fail(c, 403, "forbidden", err.Error())
 	case errors.Is(err, ErrEventClosed), errors.Is(err, ErrEventPast), errors.Is(err, ErrOwnEvent),
-		errors.Is(err, ErrFull), errors.Is(err, ErrOrgExists), errors.Is(err, ErrRequestExists), errors.Is(err, ErrNotParticipant), errors.Is(err, ErrSportHidden):
+		errors.Is(err, ErrFull), errors.Is(err, ErrOrgExists), errors.Is(err, ErrRequestExists),
+		errors.Is(err, ErrNotConfirmed), errors.Is(err, ErrNewcomerBuddy), errors.Is(err, ErrRemindedRecently), errors.Is(err, ErrNotParticipant), errors.Is(err, ErrSportHidden):
 		fail(c, 409, "conflict", err.Error())
 	case errors.Is(err, ErrBadParent):
 		fail(c, 422, "validation_error", err.Error())

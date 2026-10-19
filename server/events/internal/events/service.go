@@ -18,7 +18,12 @@ type Store interface {
 	GetEvent(ctx context.Context, a Actor, id string) (Event, error)
 	CreateEvent(ctx context.Context, a Actor, in EventInput) (Event, error)
 	CancelEvent(ctx context.Context, a Actor, id, reason string) (Event, error)
-	Join(ctx context.Context, a Actor, eventID, message string) (MyParticipation, error)
+	Join(ctx context.Context, a Actor, eventID, message string, firstTime bool) (MyParticipation, error)
+	SetBuddy(ctx context.Context, a Actor, eventID string, on bool) (MyParticipation, error)
+	FailQuorums(ctx context.Context) error
+	DueReminders(ctx context.Context) ([]ReminderTarget, error)
+	ReminderTargetFor(ctx context.Context, a Actor, eventID string) (ReminderTarget, error)
+	SendReminder(ctx context.Context, t ReminderTarget, kind, weatherLine string) (int, error)
 	Leave(ctx context.Context, a Actor, eventID string) error
 	Participants(ctx context.Context, a Actor, eventID string) ([]Participant, error)
 	Decide(ctx context.Context, a Actor, eventID, participationID string, approve bool, reason string) (Participant, error)
@@ -41,8 +46,11 @@ type Store interface {
 	Demand(ctx context.Context, a Actor, sportID, sportName, level string) (Demand, error)
 }
 
-// Service — валидация ввода поверх Store.
-type Service struct{ Store }
+// Service — валидация ввода поверх Store. Weather необязателен: без него погода не показывается.
+type Service struct {
+	Store
+	Weather Forecaster
+}
 
 func New(store Store) *Service { return &Service{Store: store} }
 
@@ -86,6 +94,43 @@ func ValidateEvent(in *EventInput, now time.Time) error {
 	case in.Capacity != nil && (*in.Capacity < 1 || *in.Capacity > 10000):
 		return FieldError{"capacity", "Мест — от 1 до 10000 или без ограничения"}
 	}
+	return validateQuorum(in, now)
+}
+
+// quorumLead — срок сбора состава по умолчанию: за 3 часа до начала успевают и отменить, и предупредить.
+// quorumMinLead — позже собирать бессмысленно: люди уже в пути.
+const (
+	quorumLead    = 3 * time.Hour
+	quorumMinLead = 30 * time.Minute
+)
+
+// validateQuorum проверяет «Соберём состав»: минимум не больше лимита мест, срок — между сейчас и началом.
+func validateQuorum(in *EventInput, now time.Time) error {
+	if in.MinParticipants == nil {
+		if in.QuorumDeadline != nil {
+			return FieldError{"min_participants", "Срок сбора состава задаётся вместе с минимумом участников"}
+		}
+		return nil
+	}
+	if *in.MinParticipants < 2 || *in.MinParticipants > 1000 {
+		return FieldError{"min_participants", "Минимум участников — от 2 до 1000"}
+	}
+	if in.Capacity != nil && *in.MinParticipants > *in.Capacity {
+		return FieldError{"min_participants", "Минимум не может быть больше числа мест"}
+	}
+	if in.QuorumDeadline == nil {
+		deadline := in.StartsAt.Add(-quorumLead)
+		if earliest := now.Add(quorumMinLead); deadline.Before(earliest) {
+			deadline = earliest
+		}
+		in.QuorumDeadline = &deadline
+	}
+	switch {
+	case !in.QuorumDeadline.After(now):
+		return FieldError{"quorum_deadline", "Срок сбора состава должен быть в будущем"}
+	case in.QuorumDeadline.After(in.StartsAt):
+		return FieldError{"quorum_deadline", "Состав нужно собрать до начала мероприятия"}
+	}
 	return nil
 }
 
@@ -117,12 +162,12 @@ func (s *Service) CreateEvent(ctx context.Context, a Actor, in EventInput) (Even
 	return s.Store.CreateEvent(ctx, a, in)
 }
 
-func (s *Service) Join(ctx context.Context, a Actor, eventID, message string) (MyParticipation, error) {
+func (s *Service) Join(ctx context.Context, a Actor, eventID, message string, firstTime bool) (MyParticipation, error) {
 	message = strings.TrimSpace(message)
 	if utf8.RuneCountInString(message) > 500 {
 		return MyParticipation{}, FieldError{"message", "Сообщение к заявке — не длиннее 500 символов"}
 	}
-	return s.Store.Join(ctx, a, eventID, message)
+	return s.Store.Join(ctx, a, eventID, message, firstTime)
 }
 
 func (s *Service) Decide(ctx context.Context, a Actor, eventID, pid string, approve bool, reason string) (Participant, error) {

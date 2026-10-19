@@ -45,7 +45,9 @@
       "price_note": "200 ₽ на призовой фонд",
       "private_info": "Вход со двора, код домофона 24. Регистрация участников с 10:30.",
       "join_mode": "request",
-      "capacity": 16
+      "capacity": 16,
+      "lat": 56.0128,
+      "lng": 92.8806
     },
     {
       "key": "chess-blitz",
@@ -62,7 +64,9 @@
       "requirements": "",
       "price_note": "Бесплатно",
       "private_info": "Зал № 4, после входа направо.",
-      "join_mode": "open"
+      "join_mode": "open",
+      "lat": 56.0128,
+      "lng": 92.8806
     },
     {
       "key": "morning-exercise",
@@ -78,7 +82,10 @@
       "requirements": "Удобная одежда. Коврик по желанию.",
       "price_note": "Бесплатно",
       "private_info": "",
-      "join_mode": "open"
+      "join_mode": "open",
+      "lat": 56.0156,
+      "lng": 92.8613,
+      "outdoor": true
     },
     {
       "key": "run",
@@ -95,7 +102,10 @@
       "price_note": "Бесплатно",
       "private_info": "Встречаемся у лестницы к воде, телефон организатора: +7 900 000-00-20",
       "join_mode": "open",
-      "capacity": 2
+      "capacity": 2,
+      "lat": 56.0089,
+      "lng": 92.8887,
+      "outdoor": true
     },
     {
       "key": "workout",
@@ -111,7 +121,10 @@
       "requirements": "Перчатки по желанию.",
       "price_note": "Бесплатно",
       "private_info": "",
-      "join_mode": "open"
+      "join_mode": "open",
+      "lat": 56.0285,
+      "lng": 92.9271,
+      "outdoor": true
     },
     {
       "key": "yoga",
@@ -128,7 +141,10 @@
       "price_note": "Бесплатно",
       "private_info": "Если дождь — переносимся в беседку у восточного входа.",
       "join_mode": "request",
-      "capacity": 8
+      "capacity": 8,
+      "lat": 56.0103,
+      "lng": 92.8538,
+      "outdoor": true
     },
     {
       "key": "basketball",
@@ -144,7 +160,11 @@
       "requirements": "Кроссовки. Мяч есть.",
       "price_note": "Бесплатно",
       "private_info": "",
-      "join_mode": "open"
+      "join_mode": "open",
+      "lat": 56.0034,
+      "lng": 92.7708,
+      "outdoor": true,
+      "min_participants": 6
     },
     {
       "key": "football",
@@ -161,7 +181,9 @@
       "price_note": "≈ 400 ₽ с человека за аренду",
       "private_info": "Перевод за аренду — организатору после игры.",
       "join_mode": "request",
-      "capacity": 14
+      "capacity": 14,
+      "lat": 56.0331,
+      "lng": 92.9093
     },
     {
       "key": "spam",
@@ -298,5 +320,40 @@
       "area": "Октябрьский район",
       "note": "Готовлюсь к полумарафону, нужен темп 5:30"
     }
-  ]
+  ],
+  "gatherings": {
+    "event": {
+      "key": "yard-football",
+      "user": "second",
+      "title": "Футбол 5×5 во дворе — соберём состав",
+      "description": "Играем, если наберётся хотя бы четверо. Мяч и манишки мои, новичкам рады: объясним правила и поставим в команду посильнее.",
+      "sport": "Футбол",
+      "day": 3,
+      "time": "18:00",
+      "hours": 2,
+      "location": "Красноярск, ул. Карла Маркса, 95, школьный стадион",
+      "lat": 56.0124,
+      "lng": 92.8649,
+      "outdoor": true,
+      "level": "beginner",
+      "requirements": "Удобная спортивная обувь, вода. Бутсы не нужны — покрытие резиновое.",
+      "price_note": "Бесплатно",
+      "private_info": "Вход на стадион с улицы Карла Маркса, калитка у трибуны. Игорь — в оранжевой манишке.",
+      "join_mode": "open",
+      "capacity": 10,
+      "min_participants": 4
+    },
+    "participants": [
+      {
+        "user": "org",
+        "buddy": true
+      },
+      {
+        "user": "org_pending"
+      },
+      {
+        "user": "org_rejected"
+      }
+    ]
+  }
 }

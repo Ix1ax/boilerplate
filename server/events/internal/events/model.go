@@ -73,6 +73,12 @@ type MyParticipation struct {
 	ID             string `json:"id"`
 	Status         string `json:"status"`
 	DecisionReason string `json:"decision_reason"`
+	// FirstTime — «иду впервые»; IsBuddy — «готов встретить новичка».
+	FirstTime bool `json:"first_time"`
+	IsBuddy   bool `json:"is_buddy"`
+	// Buddy — кто встретит меня, если я новичок; Newcomers — кого встречаю я (только в карточке).
+	Buddy     *Person  `json:"buddy"`
+	Newcomers []Person `json:"newcomers,omitempty"`
 }
 
 type Event struct {
@@ -97,7 +103,18 @@ type Event struct {
 	PendingCount   int    `json:"pending_count"`
 	WaitlistCount  int    `json:"waitlist_count"`
 	// CompanyMatches — сколько людей из «Ищу компанию» получили это событие в подборке.
-	CompanyMatches   int              `json:"company_matches"`
+	CompanyMatches int `json:"company_matches"`
+	// SpotsLeft — свободные места при лимите (nil — без ограничения).
+	SpotsLeft *int `json:"spots_left"`
+	// FirstTimersCount и BuddiesCount — подтверждённые новички и готовые их встретить.
+	FirstTimersCount int `json:"first_timers_count"`
+	BuddiesCount     int `json:"buddies_count"`
+	// «Соберём состав»: минимум подтверждённых участников к сроку, иначе автоотмена.
+	MinParticipants *int       `json:"min_participants"`
+	QuorumDeadline  *time.Time `json:"quorum_deadline"`
+	QuorumStatus    string     `json:"quorum_status"`
+	// Outdoor — занятие на улице: для него есть погода (GET /events/{id}/weather).
+	Outdoor          bool             `json:"outdoor"`
 	Status           string           `json:"status"`
 	ModerationReason string           `json:"moderation_reason"`
 	Organizer        Organizer        `json:"organizer"`
@@ -127,6 +144,10 @@ type Participant struct {
 	Message        string    `json:"message"`
 	DecisionReason string    `json:"decision_reason"`
 	CreatedAt      time.Time `json:"created_at"`
+	FirstTime      bool      `json:"first_time"`
+	IsBuddy        bool      `json:"is_buddy"`
+	// Buddy — кто встречает этого новичка (видит организатор).
+	Buddy *Person `json:"buddy"`
 }
 
 // MyEntry — запись пользователя вместе с кратким описанием события («Мои записи»).
@@ -204,6 +225,10 @@ type EventInput struct {
 	JoinMode       string     `json:"join_mode"`
 	Capacity       *int       `json:"capacity"`
 	AsOrganization bool       `json:"as_organization"`
+	// MinParticipants и QuorumDeadline — «Соберём состав»; срок по умолчанию — за 3 часа до начала.
+	MinParticipants *int       `json:"min_participants"`
+	QuorumDeadline  *time.Time `json:"quorum_deadline"`
+	Outdoor         bool       `json:"outdoor"`
 }
 
 type OrganizationInput struct {

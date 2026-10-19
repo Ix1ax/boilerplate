@@ -190,6 +190,10 @@ if ((await as('org', '/api/v1/my/organization')).status === 200) {
         join_mode: e.join_mode,
         capacity: e.capacity ?? null,
         as_organization: e.as_organization ?? false,
+        lat: e.lat ?? null,
+        lng: e.lng ?? null,
+        outdoor: e.outdoor ?? false,
+        min_participants: e.min_participants ?? null,
       }),
       201,
       `Мероприятие «${e.title}»`,
@@ -298,6 +302,67 @@ if (existing.items.length > 0) {
     );
   }
   console.log(`Запросов «Ищу компанию» — ${company.length}`);
+}
+// «Соберём состав» и «Встречу новичка» — тоже отдельно, чтобы досеять в заполненную базу.
+// Набрано трое из четырёх, Олег готов встречать новичков: на демо Анна жмёт «Записаться, иду впервые» —
+// всем приходит «Состав собран», а Анне — «Вас встретит Олег».
+const g = kase.gatherings;
+if (g) {
+  const mine = await json(
+    await as(g.event.user, '/api/v1/my/events'),
+    200,
+    'Мои мероприятия',
+  );
+  if (mine.items.some((e) => e.title === g.event.title)) {
+    console.log('Демо «Соберём состав» уже есть, пропускаем');
+  } else {
+    const sports = (
+      await json(await as('demo', '/api/v1/sports'), 200, 'Справочник')
+    ).items;
+    const id = sports.find((s) => s.name === g.event.sport)?.id;
+    const e = g.event;
+    const created = await json(
+      await as(e.user, '/api/v1/events', 'POST', {
+        title: e.title,
+        description: e.description,
+        ...(id ? { sport_id: id } : { sport_name: e.sport }),
+        starts_at: at(e.day, e.time),
+        ends_at: at(e.day, e.time, e.hours),
+        location: e.location,
+        lat: e.lat,
+        lng: e.lng,
+        outdoor: e.outdoor,
+        level: e.level,
+        requirements: e.requirements,
+        price_note: e.price_note,
+        private_info: e.private_info,
+        join_mode: e.join_mode,
+        capacity: e.capacity,
+        min_participants: e.min_participants,
+      }),
+      201,
+      `Мероприятие «${e.title}»`,
+    );
+    for (const p of g.participants) {
+      await json(
+        await as(p.user, `/api/v1/events/${created.id}/join`, 'POST', {
+          first_time: p.first_time ?? false,
+        }),
+        200,
+        `Запись ${p.user} на «${e.title}»`,
+      );
+      if (p.buddy) {
+        await json(
+          await as(p.user, `/api/v1/events/${created.id}/buddy`, 'POST'),
+          200,
+          `Проводник ${p.user}`,
+        );
+      }
+    }
+    console.log(
+      `Демо «Соберём состав»: записано ${g.participants.length} из ${e.min_participants}`,
+    );
+  }
 }
 console.log(
   'Пароли демопользователей — в локальном .env (make demo печатает их).',

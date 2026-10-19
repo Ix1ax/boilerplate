@@ -12,10 +12,12 @@ type Config struct {
 	Addr, DatabaseURL, InternalToken string
 	// AMQPURL необязателен: без брокера уведомления копятся в outbox и уйдут позже.
 	AMQPURL string
+	// WeatherURL — прогноз Open-Meteo для уличных встреч; пусто — публичный API, off — выключить.
+	WeatherURL string
 }
 
 func Load() (Config, error) {
-	c := Config{Addr: Value("HTTP_ADDR", ":8080"), DatabaseURL: os.Getenv("DATABASE_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"), AMQPURL: os.Getenv("AMQP_URL")}
+	c := Config{Addr: Value("HTTP_ADDR", ":8080"), DatabaseURL: os.Getenv("DATABASE_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"), AMQPURL: os.Getenv("AMQP_URL"), WeatherURL: os.Getenv("WEATHER_URL")}
 	for name, v := range map[string]string{"DATABASE_URL": c.DatabaseURL, "INTERNAL_TOKEN": c.InternalToken} {
 		if v == "" {
 			return c, fmt.Errorf("Не задана переменная %s; выполните make setup", name)

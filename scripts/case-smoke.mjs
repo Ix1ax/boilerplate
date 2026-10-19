@@ -451,7 +451,55 @@ try {
     '★ Ищу компанию: спрос виден организатору, новое событие пришло уведомлением и попало в подборку',
   );
 
-  console.log('Все шесть сценариев кейса и «Ищу компанию» пройдены.');
+  // Сверх минимума: «Соберём состав», «Встречу новичка», напоминание и погода.
+  const squad = await createEvent('anna', {
+    title: 'Волейбол на пляже',
+    sport_name: 'Волейбол',
+    join_mode: 'open',
+    outdoor: true,
+    lat: 56.0285,
+    lng: 92.9271,
+    min_participants: 2,
+    private_info: 'Сетка у спасательной вышки',
+  });
+  assert.equal(squad.quorum_status, 'gathering');
+  ok(await as.igor(`/events/${squad.id}/join`, 'POST', {}), 'запись Игоря');
+  ok(await as.igor(`/events/${squad.id}/buddy`, 'POST'), 'Игорь — проводник');
+  const newcomer = ok(
+    await as.petr(`/events/${squad.id}/join`, 'POST', { first_time: true }),
+    'запись новичка',
+  );
+  assert.ok(newcomer.first_time);
+  const petrCard = ok(await as.petr(`/events/${squad.id}`), 'карточка новичка');
+  assert.equal(
+    petrCard.quorum_status,
+    'reached',
+    'состав не собран после второго',
+  );
+  assert.equal(
+    petrCard.my_participation.buddy?.name?.startsWith('Игорь'),
+    true,
+    'новичку не назначен проводник',
+  );
+  const reminded = ok(
+    await as.anna(`/events/${squad.id}/remind`, 'POST'),
+    'напоминание',
+  );
+  assert.equal(reminded.sent, 2);
+  assert.equal(
+    (await as.anna(`/events/${squad.id}/remind`, 'POST')).status,
+    409,
+    'напоминание чаще раза в час',
+  );
+  const forecast = ok(await as.petr(`/events/${squad.id}/weather`), 'погода');
+  assert.equal(typeof forecast.available, 'boolean');
+  step(
+    `★ Соберём состав и встречу новичка: состав собран, проводник назначен, напоминание ушло; погода — ${forecast.available ? forecast.forecast.description : forecast.reason}`,
+  );
+
+  console.log(
+    'Все шесть сценариев кейса и дополнительные возможности пройдены.',
+  );
 } finally {
   for (const id of companyRequests) {
     await as.maria(`/my/company-requests/${id}`, 'DELETE');

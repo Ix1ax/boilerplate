@@ -247,6 +247,7 @@ services:
       DATABASE_URL: postgres://${EVENTS_DB_USER}:${EVENTS_DB_PASSWORD}@events-postgres:5432/${EVENTS_DB_NAME}?sslmode=disable
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      WEATHER_URL: ${WEATHER_URL:-}
     restart: on-failure:3
     depends_on:
       events-migrate: { condition: service_completed_successfully }
