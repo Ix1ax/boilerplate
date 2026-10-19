@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 K6_IMAGE := grafana/k6:0.54.0
 .DEFAULT_GOAL := help
-.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit events llm-svc llm help setup install infra up down logs api web migrate migrate-status test check fmt smoke case integration backup seed e2e docs-sync openapi
+.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit events llm-svc llm help setup install infra up down logs api web web-client web-admin migrate migrate-status test check fmt smoke case integration backup seed e2e docs-sync openapi
 help:
 	@echo "setup: настройки | install: зависимости | infra: инфраструктура | up: весь стек в Docker"
 	@echo "gateway/tasks/files/web: разработка | check: проверки и сборка | smoke: проверка API | backup: дамп базы"
@@ -78,6 +78,10 @@ llm-svc:
 	set -a; . ./.env; set +a; export HTTP_ADDR=:8083; cd server/llm && go run ./cmd/llm
 web:
 	npm run dev
+web-client:
+	npm run dev:client
+web-admin:
+	npm run dev:admin
 migrate:
 	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate up) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate up) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go run ./cmd/notifications migrate up) && (cd server/audit && DATABASE_URL=$$AUDIT_DATABASE_URL go run ./cmd/audit migrate up) && (cd server/events && DATABASE_URL=$$EVENTS_DATABASE_URL go run ./cmd/events migrate up)
 migrate-status:

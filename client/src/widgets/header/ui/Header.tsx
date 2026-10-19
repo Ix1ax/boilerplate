@@ -4,7 +4,7 @@ import { useLogout } from '@/features/auth';
 import { NotificationsBell } from '@/features/notifications';
 import { ThemeToggle } from '@/features/theme';
 
-import { useCurrentUser } from '@/entities/user';
+import { hasRole, useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { Button, Container, LogoIcon } from '@/shared/ui';
@@ -23,6 +23,12 @@ export const Header = () => {
         <span className="flex-1" />
 
         <ThemeToggle />
+
+        {hasRole(user ?? null, ['admin']) && (
+          <Button variant="outline" size="sm" render={<a href="/admin/" />}>
+            Администрирование
+          </Button>
+        )}
 
         {user ? (
           <div className="flex items-center gap-2">

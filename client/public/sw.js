@@ -33,7 +33,7 @@ self.addEventListener('fetch', (event) => {
     request.method !== 'GET' ||
     request.mode !== 'navigate' ||
     url.origin !== self.location.origin ||
-    /^\/(api|auth|healthz|readyz)(\/|$)/.test(url.pathname)
+    /^\/(admin|api|auth|healthz|readyz)(\/|$)/.test(url.pathname)
   )
     return;
 

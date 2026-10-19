@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:microfrontends": "playwright test --config playwright.microfrontends.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
