@@ -73,7 +73,7 @@ export const HomePage = () => {
   return (
     <>
       <section className="relative overflow-hidden bg-ink bg-[linear-gradient(rgb(238_240_234/5%)_1px,transparent_1px),linear-gradient(90deg,rgb(238_240_234/5%)_1px,transparent_1px)] bg-[size:80px_80px] text-paper">
-        <div className="relative mx-auto flex max-w-[1360px] flex-wrap items-center gap-10 px-4 pt-6 pb-16 sm:px-8">
+        <div className="relative mx-auto flex max-w-[1360px] flex-wrap items-center gap-10 px-4 pt-16 pb-24 sm:px-8 sm:pt-20 sm:pb-32">
           <div className="relative z-[2] min-w-0 flex-[1_1_620px]">
             <Eyebrow
               className="rise flex flex-wrap gap-x-5 gap-y-2 text-paper/80"
@@ -158,17 +158,19 @@ export const HomePage = () => {
               записаться и прийти.
             </p>
           </div>
-          <ol className="mt-16 grid grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] border-t-2 border-ink">
+          <ol className="mt-16 grid grid-cols-1 gap-x-10 gap-y-10 border-t-2 border-ink sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {STEPS.map(([n, title, text]) => (
               <li
                 key={n}
-                className="flex flex-col gap-3.5 border-b border-line-strong py-7 pr-6 pb-9"
+                className="flex flex-col gap-4 border-b border-line-strong pt-8 pb-10"
               >
                 <span className="font-display text-[56px] leading-none font-black text-blue">
                   {n}
                 </span>
                 <b className="text-[21px] leading-snug">{title}</b>
-                <span className="text-base text-ink-soft">{text}</span>
+                <span className="text-base leading-relaxed text-ink-soft">
+                  {text}
+                </span>
               </li>
             ))}
           </ol>
@@ -231,11 +233,11 @@ export const HomePage = () => {
           <h2 className="display-caps mt-4 max-w-[1060px] text-[clamp(36px,5vw,76px)] leading-[.94] tracking-[-0.035em]">
             Нет встречи? Соберём её из&nbsp;спроса
           </h2>
-          <ol className="mt-16 grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-4">
+          <ol className="mt-16 grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-5">
             {TOGETHER.map(([title, text, tag], i) => (
               <li
                 key={title}
-                className={`flex flex-col gap-3.5 rounded-3xl p-6 ${i === 3 ? 'bg-blue text-white' : 'border border-paper/15 bg-night'}`}
+                className={`flex flex-col gap-4 rounded-3xl p-7 ${i === 3 ? 'bg-blue text-white' : 'border border-paper/15 bg-night'}`}
               >
                 <span
                   className={`grid size-11 place-items-center rounded-full font-display font-extrabold ${i === 3 ? 'bg-white text-blue' : 'bg-gold text-ink'}`}
@@ -310,7 +312,7 @@ export const HomePage = () => {
           <h2 className="display-caps mt-3.5 max-w-[900px] text-[clamp(40px,5.2vw,80px)] leading-[.92] tracking-[-0.035em]">
             Собирайте своё сообщество
           </h2>
-          <div className="mt-14 grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-4">
+          <div className="mt-14 grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-5">
             {[
               [
                 '01 · заявка',
