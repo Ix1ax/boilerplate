@@ -1,9 +1,11 @@
+import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowRightIcon, PlusIcon, SearchIcon } from 'lucide-react';
+import { ArrowRightIcon, PlusIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 
-import { EventCard, useEvents } from '@/entities/event';
+import type { DayRange } from '@/entities/event';
+import { DAY_RANGE_LABELS, EventCard, useEvents } from '@/entities/event';
 import {
   getSportVisual,
   SportCoverArt,
@@ -18,13 +20,23 @@ import {
   DURATION,
   EASING,
   Lift,
-  Magnetic,
   MaskRise,
   Parallax,
   Reveal,
   staggerDelay,
 } from '@/shared/motion';
-import { Button, Eyebrow, RadarRings } from '@/shared/ui';
+import {
+  Button,
+  Eyebrow,
+  RadarRings,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui';
+
+const DAY_OPTIONS = Object.entries(DAY_RANGE_LABELS) as [DayRange, string][];
 
 const STEPS = [
   [
@@ -123,7 +135,8 @@ const FLOATERS = [
 export const HomePage = () => {
   useSmoothScroll();
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [heroSport, setHeroSport] = useState('all');
+  const [heroDay, setHeroDay] = useState<DayRange>('week');
   // Лендинг открыт гостю: защищённые запросы ждут завершения проверки сессии.
   const { data: user, isPending: userPending } = useCurrentUser();
   const signedIn = !userPending && Boolean(user);
@@ -131,22 +144,29 @@ export const HomePage = () => {
   const { data: allSports } = useSports({ enabled: signedIn });
   const sports = (allSports ?? []).filter((sport) => !sport.is_custom);
   // Направления из макета остаются доступны для поиска при недоступном справочнике.
-  const sportLinks =
+  const sportOptions =
     sports.length > 0
-      ? sports.map((sport) => ({
-          name: sport.name,
-          search: new URLSearchParams({
-            sport: sport.id,
-            day: 'all',
-          }).toString(),
-        }))
+      ? sports.map((sport) => ({ id: sport.id, name: sport.name }))
       : ['Шахматы', 'Бег', 'Зарядка', 'Футбол', 'Йога', 'Баскетбол'].map(
-          (name) => ({
-            name,
-            search: new URLSearchParams({ q: name, day: 'all' }).toString(),
-          }),
+          (name) => ({ id: name, name }),
         );
+  const sportLinks = sportOptions.map((sport) => ({
+    name: sport.name,
+    search: new URLSearchParams(
+      sports.length > 0 ? { sport: sport.id, day: 'all' } : { q: sport.id, day: 'all' },
+    ).toString(),
+  }));
   const events = data?.items ?? [];
+
+  const submitHeroSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const sportKey = sports.length > 0 ? 'sport' : 'q';
+    const params =
+      heroSport === 'all'
+        ? { day: heroDay }
+        : { [sportKey]: heroSport, day: heroDay };
+    navigate(`${STATIC_ROUTES.EVENTS}?${new URLSearchParams(params)}`);
+  };
 
   return (
     <>
@@ -182,74 +202,79 @@ export const HomePage = () => {
               <br />
               рядом с домом, сегодня
             </Reveal>
-            <Reveal immediate delay={0.45} className="mt-10 max-w-[640px]">
+            <Reveal immediate delay={0.45} className="mt-10 max-w-[740px]">
               <form
                 role="search"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  navigate(
-                    `${STATIC_ROUTES.EVENTS}?${new URLSearchParams({ q: query.trim(), day: 'all' })}`,
-                  );
-                }}
-                className="flex items-center gap-2 rounded-full border border-paper/25 bg-paper/10 p-2 pl-5"
+                onSubmit={submitHeroSearch}
+                className="flex flex-wrap items-stretch gap-2 rounded-[28px] bg-white p-2.5 text-ink"
               >
-                <SearchIcon aria-hidden className="size-5 shrink-0 text-gold" />
-                <label htmlFor="home-search" className="sr-only">
+                <div className="flex min-w-[150px] flex-1 flex-col justify-center gap-0.5 rounded-[20px] bg-paper px-4 py-2">
+                  <label
+                    htmlFor="home-sport"
+                    className="text-[13px] font-semibold text-[#4A505B]"
+                  >
+                    Вид спорта
+                  </label>
+                  <Select value={heroSport} onValueChange={setHeroSport}>
+                    <SelectTrigger
+                      id="home-sport"
+                      size="sm"
+                      className="min-h-8 border-0 bg-transparent p-0 font-semibold text-ink"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Любой</SelectItem>
+                      {sportOptions.map((sport) => (
+                        <SelectItem key={sport.id} value={sport.id}>
+                          {sport.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex min-w-[150px] flex-1 flex-col justify-center gap-0.5 rounded-[20px] bg-paper px-4 py-2">
+                  <label
+                    htmlFor="home-day"
+                    className="text-[13px] font-semibold text-[#4A505B]"
+                  >
+                    Когда
+                  </label>
+                  <Select
+                    value={heroDay}
+                    onValueChange={(value) => setHeroDay(value as DayRange)}
+                  >
+                    <SelectTrigger
+                      id="home-day"
+                      size="sm"
+                      className="min-h-8 border-0 bg-transparent p-0 font-semibold text-ink"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAY_OPTIONS.map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="submit"
+                  className="min-h-[68px] flex-1 basis-[170px] rounded-[20px]"
+                >
                   Найти встречу
-                </label>
-                <input
-                  id="home-search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Бег, шахматы или зарядка"
-                  className="min-h-12 min-w-0 flex-1 bg-transparent text-base text-paper outline-none placeholder:text-paper/60 focus-visible:ring-2 focus-visible:ring-gold"
-                />
-                <Button type="submit" className="shrink-0">
-                  Найти
+                  <ArrowRightIcon aria-hidden />
                 </Button>
               </form>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {['Бег', 'Шахматы', 'Зарядка'].map((name) => (
-                  <Link
-                    key={name}
-                    to={`${STATIC_ROUTES.EVENTS}?${new URLSearchParams({ q: name, day: 'all' })}`}
-                    className="rounded-full bg-gold/15 px-4 py-2 font-mono text-sm text-gold hover:bg-gold/25"
-                  >
-                    {name}
-                  </Link>
-                ))}
-              </div>
-            </Reveal>
-            <Reveal
-              immediate
-              delay={0.5}
-              y={16}
-              className="mt-9 flex flex-wrap gap-3"
-            >
-              <Magnetic>
-                <Lift>
-                  <Button
-                    size="xl"
-
-                    render={<Link to={STATIC_ROUTES.EVENTS} />}
-                  >
-                    Найти встречу
-                    <ArrowRightIcon aria-hidden />
-                  </Button>
-                </Lift>
-              </Magnetic>
-              <Magnetic>
-                <Lift>
-                  <Button
-                    size="xl"
-                    variant="gold"
-
-                    render={<Link to={STATIC_ROUTES.COMPANY} />}
-                  >
-                    Собрать компанию
-                  </Button>
-                </Lift>
-              </Magnetic>
+              <Link
+                to={STATIC_ROUTES.COMPANY}
+                className="mt-3.5 inline-flex min-h-11 items-center gap-2.5 font-semibold text-gold"
+              >
+                Не нашли подходящую? Соберите компанию с нуля
+                <ArrowRightIcon aria-hidden className="size-[18px]" />
+              </Link>
             </Reveal>
           </div>
 

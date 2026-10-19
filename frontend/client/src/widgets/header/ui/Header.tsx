@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { cn } from 'cn';
 import {
@@ -17,6 +18,7 @@ import { useTheme } from '@/features/theme';
 import { hasRole, useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
+import { useEventListener } from '@/shared/hooks';
 import { initialOf } from '@/shared/lib';
 import { Lift } from '@/shared/motion';
 import {
@@ -106,10 +108,25 @@ export const Header = ({ tone = 'light' }: HeaderProps) => {
   const { data: user, isLoading } = useCurrentUser();
   const dark = tone === 'dark';
 
+  // Шапка прячется при скролле вниз и возвращается, как только пользователь начинает скроллить вверх.
+  const [hidden, setHidden] = useState(false);
+  const lastY = useRef(0);
+  useEventListener('scroll', () => {
+    const y = window.scrollY;
+    const delta = y - lastY.current;
+    if (y < 80) {
+      setHidden(false);
+    } else if (Math.abs(delta) > 4) {
+      setHidden(delta > 0);
+    }
+    lastY.current = y;
+  });
+
   return (
     <header
       className={cn(
-        'relative z-10',
+        'sticky top-0 z-30 transition-transform duration-300 will-change-transform',
+        hidden && '-translate-y-full',
         dark
           ? 'bg-ink text-paper'
           : 'border-b border-line bg-card dark:border-border',
