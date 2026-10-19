@@ -641,6 +641,140 @@ try {
     '★ Админка: карточки с историей, модерация направлений, журнал и дашборд из moderation, CSV',
   );
 
+  // Жалобы, исключение участника, удаление и возврат сообщения.
+  {
+    const meet = await createEvent('igor', {
+      title: 'Воркаут на турниках',
+      sport_id: running.id,
+      join_mode: 'open',
+      capacity: 1,
+    });
+    const annaJoin = ok(
+      await as.anna(`/events/${meet.id}/join`, 'POST'),
+      'запись Анны',
+    );
+    const annaPid = annaJoin.id;
+    const petrJoin = ok(
+      await as.petr(`/events/${meet.id}/join`, 'POST'),
+      'запись Петра',
+    );
+    assert.equal(
+      petrJoin.status,
+      'waitlist',
+      'второй на одно место — в лист ожидания',
+    );
+    const spam = ok(
+      await as.anna(`/events/${meet.id}/comments`, 'POST', {
+        body: 'Продам протеин, пишите в личку',
+      }),
+      'сообщение Анны',
+    );
+    assert.equal(
+      (
+        await as.anna(`/events/${meet.id}/comments/${spam.id}/report`, 'POST', {
+          reason: 'spam',
+        })
+      ).status,
+      409,
+      'на своё сообщение жаловаться нельзя',
+    );
+    ok(
+      await as.maria(`/events/${meet.id}/comments/${spam.id}/report`, 'POST', {
+        reason: 'spam',
+      }),
+      'жалоба Марии',
+    );
+    assert.equal(
+      (
+        await as.maria(
+          `/events/${meet.id}/comments/${spam.id}/report`,
+          'POST',
+          { reason: 'spam' },
+        )
+      ).status,
+      409,
+      'повторная жалоба не создаёт дубль',
+    );
+    const queue = ok(
+      await as.admin(
+        '/admin/reports?status=open&target_type=comment&limit=100',
+      ),
+      'очередь жалоб',
+    );
+    const report = queue.items.find((r) => r.target_id === spam.id);
+    assert.ok(
+      report && report.target.text.includes('протеин'),
+      'админ видит текст сообщения в жалобе',
+    );
+    ok(
+      await as.admin(`/admin/comments/${spam.id}/hide`, 'POST', {
+        reason: 'Реклама',
+      }),
+      'скрытие',
+    );
+    const mine = ok(await as.maria('/my/reports'), 'мои жалобы');
+    assert.equal(
+      mine.items.find((r) => r.target_id === spam.id)?.status,
+      'resolved',
+      'жалоба закрыта скрытием',
+    );
+    ok(
+      await as.admin(`/admin/comments/${spam.id}/restore`, 'POST'),
+      'возврат сообщения',
+    );
+    ok(
+      await as.anna(`/events/${meet.id}/comments/${spam.id}`, 'DELETE'),
+      'автор удалил сообщение',
+    );
+    const thread = ok(
+      await as.maria(`/events/${meet.id}/comments`),
+      'обсуждение',
+    );
+    const gone = thread.items.find((c) => c.id === spam.id);
+    assert.ok(
+      gone.status === 'deleted' && gone.body === '',
+      'текст удалённого не виден',
+    );
+    ok(
+      await as.igor(
+        `/events/${meet.id}/participants/${annaPid}/remove`,
+        'POST',
+        { reason: 'Не по теме встречи' },
+      ),
+      'исключение участника',
+    );
+    const petrView = ok(
+      await as.petr(`/events/${meet.id}`),
+      'карточка у Петра',
+    );
+    assert.equal(
+      petrView.my_participation?.status,
+      'confirmed',
+      'место перешло первому из листа ожидания',
+    );
+    assert.equal(
+      (await as.anna(`/events/${meet.id}/join`, 'POST')).status,
+      409,
+      'исключённый не записывается снова',
+    );
+    const eventReport = ok(
+      await as.maria(`/events/${meet.id}/report`, 'POST', {
+        reason: 'wrong_info',
+        details: 'Турников там нет',
+      }),
+      'жалоба на событие',
+    );
+    ok(
+      await as.admin(`/admin/reports/${eventReport.id}/dismiss`, 'POST', {
+        resolution: 'Площадка на месте',
+      }),
+      'отказ по жалобе',
+    );
+    step(
+      '★ Модерация: жалобы, удаление и возврат сообщения, исключение участника с передачей места',
+    );
+  }
+
   console.log(
     'Все шесть сценариев кейса, дополнительные возможности и админка пройдены.',
   );

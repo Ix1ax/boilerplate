@@ -62,7 +62,7 @@ func parseGeo(near, radius, bbox string) (*Geo, error) {
 	g := &Geo{Lat: v[0], Lng: v[1], RadiusKm: defaultRadiusKm}
 	if radius != "" {
 		r, err := strconv.ParseFloat(radius, 64)
-		if err != nil || r <= 0 || r > maxRadiusKmGeo {
+		if err != nil || math.IsNaN(r) || math.IsInf(r, 0) || r <= 0 || r > maxRadiusKmGeo {
 			return nil, errors.New("radius_km: от 0 до 100")
 		}
 		g.RadiusKm = r
@@ -78,8 +78,11 @@ func floats(s string, n int) ([]float64, error) {
 	out := make([]float64, n)
 	for i, p := range parts {
 		v, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
-		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		if err != nil {
 			return nil, err
+		}
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, errors.New("координаты должны быть конечными числами")
 		}
 		out[i] = v
 	}

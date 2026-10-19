@@ -53,6 +53,13 @@ type Store interface {
 	MyCompanyRequests(ctx context.Context, a Actor) ([]CompanyRequest, error)
 	CloseCompanyRequest(ctx context.Context, a Actor, id string) error
 	Demand(ctx context.Context, a Actor, sportID, sportName, level string) (Demand, error)
+	CreateReport(ctx context.Context, a Actor, targetType, eventID, targetID string, in ReportInput) (MyReport, error)
+	MyReports(ctx context.Context, a Actor) ([]MyReport, error)
+	AdminReports(ctx context.Context, status, targetType string, limit, offset int) (Page[Report], error)
+	DismissReport(ctx context.Context, a Actor, id, resolution string) (Report, error)
+	DeleteComment(ctx context.Context, a Actor, eventID, id string) (Comment, error)
+	RestoreComment(ctx context.Context, a Actor, id string) (Comment, error)
+	RemoveParticipant(ctx context.Context, a Actor, eventID, participationID, reason string) (Participant, error)
 }
 
 // Service — валидация ввода поверх Store. Weather необязателен: без него погода не показывается.
@@ -67,6 +74,10 @@ var levels = map[string]bool{"any": true, "beginner": true, "amateur": true, "pr
 
 // ValidateEvent нормализует и проверяет форму события. now передаётся явно ради тестов.
 func ValidateEvent(in *EventInput, now time.Time) error {
+	return validateEvent(in, now, true)
+}
+
+func validateEvent(in *EventInput, now time.Time, checkQuorumDeadline bool) error {
 	in.Title, in.Description, in.Location = strings.TrimSpace(in.Title), strings.TrimSpace(in.Description), strings.TrimSpace(in.Location)
 	in.SportID, in.SportName = strings.TrimSpace(in.SportID), strings.Join(strings.Fields(in.SportName), " ")
 	in.Requirements, in.PriceNote, in.PrivateInfo = strings.TrimSpace(in.Requirements), strings.TrimSpace(in.PriceNote), strings.TrimSpace(in.PrivateInfo)
@@ -103,7 +114,7 @@ func ValidateEvent(in *EventInput, now time.Time) error {
 	case in.Capacity != nil && (*in.Capacity < 1 || *in.Capacity > 10000):
 		return FieldError{"capacity", "Мест — от 1 до 10000 или без ограничения"}
 	}
-	return validateQuorum(in, now)
+	return validateQuorumDeadline(in, now, checkQuorumDeadline)
 }
 
 // quorumLead — срок сбора состава по умолчанию: за 3 часа до начала успевают и отменить, и предупредить.
@@ -115,6 +126,10 @@ const (
 
 // validateQuorum проверяет «Соберём состав»: минимум не больше лимита мест, срок — между сейчас и началом.
 func validateQuorum(in *EventInput, now time.Time) error {
+	return validateQuorumDeadline(in, now, true)
+}
+
+func validateQuorumDeadline(in *EventInput, now time.Time, checkDeadline bool) error {
 	if in.MinParticipants == nil {
 		if in.QuorumDeadline != nil {
 			return FieldError{"min_participants", "Срок сбора состава задаётся вместе с минимумом участников"}
@@ -135,7 +150,7 @@ func validateQuorum(in *EventInput, now time.Time) error {
 		in.QuorumDeadline = &deadline
 	}
 	switch {
-	case !in.QuorumDeadline.After(now):
+	case checkDeadline && !in.QuorumDeadline.After(now):
 		return FieldError{"quorum_deadline", "Срок сбора состава должен быть в будущем"}
 	case in.QuorumDeadline.After(in.StartsAt):
 		return FieldError{"quorum_deadline", "Состав нужно собрать до начала мероприятия"}

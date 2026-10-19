@@ -5,6 +5,7 @@ use (
 	./server/events
 	./server/files
 	./server/gateway
+	./server/identity
 	./server/llm
 	./server/moderation
 	./server/notifications

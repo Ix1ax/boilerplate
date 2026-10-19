@@ -130,6 +130,8 @@ test('деплой собирает все приложения и ждёт уж
     'notifications-service',
     'audit-service',
     'events-service',
+    'moderation-service',
+    'identity-service',
     'realtime-service',
     'llm-service',
     'gateway-service',
@@ -144,7 +146,9 @@ test('деплой собирает все приложения и ждёт уж
     'audit.dump',
     'events.dump',
     'files.dump',
+    'identity.dump',
     'keycloak.dump',
+    'moderation.dump',
     'notifications.dump',
     'tasks.dump',
   ]);
@@ -173,6 +177,8 @@ test('деплой собирает все приложения и ждёт уж
     'notifications-migrate',
     'audit-migrate',
     'events-migrate',
+    'moderation-migrate',
+    'identity-migrate',
     'llm-ollama-pull',
   ]) {
     const recreateIndex = calls.findIndex(

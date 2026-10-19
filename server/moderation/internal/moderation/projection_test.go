@@ -63,7 +63,7 @@ func TestHandleEventSkipsBadMessages(t *testing.T) {
 
 func TestUpsertKeepsNewerSnapshot(t *testing.T) {
 	sql := upsertSQL("events", []string{"title", "status"})
-	for _, want := range []string{"jsonb_populate_record(NULL::events", "SET (title, status, changed_at) = ROW(EXCLUDED.title, EXCLUDED.status, EXCLUDED.changed_at)", "WHERE events.changed_at <= EXCLUDED.changed_at"} {
+	for _, want := range []string{"jsonb_populate_record(NULL::events", "SET (title, status, changed_at, domain_version) = ROW(EXCLUDED.title, EXCLUDED.status, EXCLUDED.changed_at, EXCLUDED.domain_version)", "WHERE events.domain_version < EXCLUDED.domain_version", "events.domain_version = 0 AND EXCLUDED.domain_version = 0 AND events.changed_at <= EXCLUDED.changed_at"} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("нет %q в\n%s", want, sql)
 		}

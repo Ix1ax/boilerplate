@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
-import { login } from './helpers';
+import { appReady, login, test } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await login(page);
@@ -56,6 +56,7 @@ test('лайв: сообщение в комнате доходит во вто�
   const second = await context.newPage();
   for (const p of [page, second]) {
     await p.goto('/dashboard/live');
+    await appReady(p);
     await expect(p.getByText('онлайн')).toBeVisible({ timeout: 15_000 });
   }
   const text = `Привет из e2e ${Date.now()}`;

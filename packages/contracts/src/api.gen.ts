@@ -55,7 +55,7 @@ export interface paths {
     put?: never;
     /**
      * Выйти
-     * @description Удаляет сессию на сервере (доступ из браузера пропадает сразу) и возвращает адрес выхода из Keycloak — фронтенд открывает его, чтобы завершить и единый вход. Нужен заголовок `Origin` приложения.
+     * @description Удаляет сессию на сервере (доступ из браузера пропадает сразу) и возвращает адрес, на который перейти. Для «Столото ID» это выход из Keycloak (завершает и единый вход), для обычной регистрации — главная страница приложения. Нужен заголовок `Origin` приложения.
      */
     post: operations['logout'];
     delete?: never;
@@ -64,7 +64,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/auth/demo': {
+  '/auth/providers': {
     parameters: {
       query?: never;
       header?: never;
@@ -72,10 +72,10 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Демо-аккаунты для быстрого входа
-     * @description Карточки «Войти как…» на экране входа. Маршрут есть, только если включён `DEMO_LOGIN=true`; иначе 404 и фронтенд показывает обычную форму. Почты и пароли не возвращаются.
+     * Способы входа
+     * @description Для экрана входа. «Столото ID» — единый вход через Keycloak (в этом контуре — тестовый стенд SSO); `local` — регистрация и вход по почте и паролю. `local.enabled=false`, если сервис учётных записей не подключён.
      */
-    get: operations['listDemoAccounts'];
+    get: operations['listAuthProviders'];
     put?: never;
     post?: never;
     delete?: never;
@@ -84,7 +84,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/auth/demo/{key}': {
+  '/auth/local/register': {
     parameters: {
       query?: never;
       header?: never;
@@ -94,10 +94,59 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Войти как демо-аккаунт
-     * @description Gateway входит в Keycloak по паролю аккаунта из окружения и ставит обычную cookie сессии — дальше всё работает как после входа через форму (роли, обновление токена, выход). Прежняя сессия заменяется, поэтому так же переключаются роли. Нужен заголовок `Origin` приложения.
+     * Зарегистрироваться по почте и паролю
+     * @description Создаёт учётную запись и сразу входит: ставит cookie сессии `starter_session` на 8 часов (прежняя
+     *     сессия браузера заменяется). Подтверждение почты не требуется (постановка его не просит).
+     *     Регистрация даёт роль `user`; модераторы входят через «Столото ID».
+     *
+     *     Пароль: 8–128 символов, буквы и цифры, не из списка распространённых и не совпадает с почтой.
+     *     Нужен заголовок `Origin` приложения. Не больше 120 регистраций в минуту на весь сервис.
      */
-    post: operations['demoLogin'];
+    post: operations['registerLocal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/local/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Войти по почте и паролю
+     * @description Проверяет пароль и ставит cookie сессии (прежняя сессия браузера заменяется — так же переключаются
+     *     пользователи). Неизвестная почта и неверный пароль неотличимы: оба — 401.
+     *
+     *     Защита от подбора: 10 попыток в минуту на одну почту (429), а после 10 неверных паролей подряд
+     *     учётная запись закрыта для входа на 15 минут (429 с `Retry-After`). Нужен заголовок `Origin` приложения.
+     */
+    post: operations['loginLocal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/local/password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Сменить пароль
+     * @description Только для сессии обычной регистрации (у «Столото ID» пароль меняется в SSO). Требует текущий пароль; после смены все остальные сессии пользователя закрываются, текущая остаётся.
+     */
+    post: operations['changeLocalPassword'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1172,6 +1221,217 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{id}/report': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Пожаловаться на мероприятие
+     * @description Жалоба уходит в очередь администратора; данные события сама по себе не меняет. Решение
+     *     и пояснение придут уведомлением. Одна открытая жалоба человека на цель (повтор — 409),
+     *     не больше 20 жалоб в час (429). На своё мероприятие пожаловаться нельзя (409).
+     */
+    post: operations['reportEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/comments/{cid}/report': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор сообщения (UUID) */
+        cid: components['parameters']['CommentID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Пожаловаться на сообщение
+     * @description Как жалоба на мероприятие; жаловаться можно только на видимое чужое сообщение этого обсуждения.
+     */
+    post: operations['reportComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/comments/{cid}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор сообщения (UUID) */
+        cid: components['parameters']['CommentID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Удалить своё сообщение
+     * @description Текст пропадает у всех (остаётся пометка «Сообщение удалено автором»), ответы сохраняются. Открытые жалобы на сообщение закрываются. Удалить можно только своё видимое сообщение.
+     */
+    delete: operations['deleteComment'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/reports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Мои жалобы
+     * @description Последние 100 жалоб с решением администратора.
+     */
+    get: operations['myReports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/participants/{pid}/remove': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор записи или заявки (UUID) */
+        pid: components['parameters']['ParticipationID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Исключить участника
+     * @description Только организатор, до окончания мероприятия. Исключить можно подтверждённого участника или человека
+     *     из листа ожидания (заявку — отклонить). Причина обязательна и видна человеку; освободившееся
+     *     место сразу получает первый из листа ожидания. Повторно записаться исключённый не сможет (409).
+     */
+    post: operations['removeParticipant'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/reports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Очередь жалоб
+     * @description Открытые жалобы первыми, среди них — цели с наибольшим числом жалоб. В каждой — краткое описание цели
+     *     (название и описание события или оригинальный текст сообщения, даже если оно уже скрыто) и автор.
+     *
+     *     **Как принять жалобу:** скрыть сообщение (`POST /admin/comments/{id}/hide`) или снять событие
+     *     (`POST /admin/events/{id}/unpublish|delete`) — все открытые жалобы на цель закроются в той же
+     *     транзакции, их авторы получат уведомление. **Отклонить** — `POST /admin/reports/{id}/dismiss`.
+     */
+    get: operations['adminReports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/reports/{id}/dismiss': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отклонить жалобы на цель
+     * @description Закрывает все открытые жалобы на ту же цель; пояснение обязательно и уходит авторам жалоб.
+     */
+    post: operations['dismissReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/comments/{id}/restore': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Вернуть скрытое сообщение
+     * @description Только для сообщения, скрытого модератором (удалённое автором не возвращается). Автор получит уведомление.
+     */
+    post: operations['restoreComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/files': {
     parameters: {
       query?: never;
@@ -1221,6 +1481,101 @@ export interface paths {
      * @description Удаляет содержимое из S3, затем метаданные. Если S3 недоступно — 503, повтор безопасен.
      */
     delete: operations['deleteFile'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/accounts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Учётные записи обычной регистрации
+     * @description Поиск по почте и имени среди пользователей, зарегистрированных по почте и паролю. Пользователи «Столото ID» живут в Keycloak и здесь не показываются.
+     */
+    get: operations['listAccounts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/accounts/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Карточка учётной записи
+     * @description Статус, последний вход и история — регистрация, блокировки, смены пароля.
+     */
+    get: operations['getAccount'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/accounts/{id}/block': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Заблокировать учётную запись
+     * @description Вход по паролю закрывается сразу; уже открытые сессии gateway закрывает при следующей сверке статуса (не дольше 30 секунд). Причину пользователь увидит при попытке входа.
+     */
+    post: operations['blockAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/accounts/{id}/unblock': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Разблокировать учётную запись */
+    post: operations['unblockAccount'];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1716,8 +2071,13 @@ export interface components {
         request_id?: string;
       };
     };
-    /** @description Пользователь из Keycloak */
+    /** @description Текущий пользователь — из «Столото ID» (Keycloak) или обычной регистрации */
     User: {
+      /**
+       * @description Способ входа: sso — «Столото ID», local — почта и пароль (доступна смена пароля)
+       * @enum {string}
+       */
+      provider: 'sso' | 'local';
       /** @description Постоянный идентификатор (sub) — владелец записей во всех сервисах */
       id: string;
       /** Format: email */
@@ -1725,6 +2085,10 @@ export interface components {
       name: string;
       /** @description Роли Keycloak; доступ проверяется на сервере, на клиенте роли только для интерфейса */
       roles: ('user' | 'admin')[];
+    };
+    /** @description Результат входа или регистрации; cookie сессии уже установлена */
+    Session: {
+      user: components['schemas']['User'];
     };
     Health: {
       /** @enum {string} */
@@ -1962,10 +2326,13 @@ export interface components {
       is_organizer: boolean;
       /** @description От имени какой организации отвечает организатор */
       organization_name: string;
-      /** @description Пусто для скрытого сообщения (кроме админа) */
+      /** @description Пусто для скрытого или удалённого сообщения (кроме админа) */
       body: string;
-      /** @enum {string} */
-      status: 'visible' | 'hidden';
+      /**
+       * @description visible — видно; hidden — скрыто модератором (причина в hidden_reason); deleted — удалено автором
+       * @enum {string}
+       */
+      status: 'visible' | 'hidden' | 'deleted';
       hidden_reason: string;
       /** Format: date-time */
       created_at: string;
@@ -2166,6 +2533,79 @@ export interface components {
       /** @description Причина решения — её увидит другая сторона */
       reason?: string;
     };
+    ReportInput: {
+      /**
+       * @description spam — реклама и спам; offensive — оскорбления; fraud — мошенничество; wrong_info — неверные сведения (место, время); dangerous — угроза безопасности; other — другое (пояснение обязательно)
+       * @enum {string}
+       */
+      reason:
+        'spam' | 'offensive' | 'fraud' | 'wrong_info' | 'dangerous' | 'other';
+      /** @description Пояснение для модератора */
+      details?: string;
+    };
+    MyReport: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      target_type: 'event' | 'comment';
+      /** Format: uuid */
+      target_id: string;
+      /** Format: uuid */
+      event_id: string;
+      event_title: string;
+      reason: string;
+      /**
+       * @description open — ждёт решения; resolved — меры приняты; dismissed — нарушений не нашли
+       * @enum {string}
+       */
+      status: 'open' | 'resolved' | 'dismissed';
+      /** @description Пояснение администратора */
+      resolution: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      resolved_at: string | null;
+    };
+    Report: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      target_type: 'event' | 'comment';
+      /** Format: uuid */
+      target_id: string;
+      /**
+       * Format: uuid
+       * @description Мероприятие — из жалобы на сообщение сразу видно обсуждение
+       */
+      event_id: string;
+      reason: string;
+      details: string;
+      /** @enum {string} */
+      status: 'open' | 'resolved' | 'dismissed';
+      resolution: string;
+      reporter: components['schemas']['Person'];
+      target: {
+        /** @description Название мероприятия */
+        title: string;
+        /** @description Текст сообщения или начало описания события (до 500 символов) */
+        text: string;
+        author: components['schemas']['Person'];
+        /** @description Текущий статус цели — видно */
+        status: string;
+      };
+      /** @description Сколько открытых жалоб на ту же цель */
+      open_on_target: number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      resolved_at: string | null;
+    };
+    ReportPage: {
+      items: components['schemas']['Report'][];
+      total: number;
+      limit: number;
+      offset: number;
+    };
     /** @description Метаданные файла */
     File: {
       /** Format: uuid */
@@ -2193,6 +2633,52 @@ export interface components {
       total: number;
       limit: number;
       offset: number;
+    };
+    /** @description Учётная запись обычной регистрации (без пароля) */
+    Account: {
+      /**
+       * Format: uuid
+       * @description Тот же идентификатор, что X-User-ID в сервисах
+       */
+      id: string;
+      /**
+       * Format: email
+       * @example anna@example.ru
+       */
+      email: string;
+      /** @example Анна Смирнова */
+      name: string;
+      /** @enum {string} */
+      status: 'active' | 'blocked';
+      /** @description Причина блокировки; пусто у активной */
+      block_reason: string;
+      /**
+       * @description Регистрация даёт только роль user — модераторы входят через «Столото ID»
+       * @example [
+       *       "user"
+       *     ]
+       */
+      roles: string[];
+      /** Format: date-time */
+      last_login_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    AccountPage: {
+      items: components['schemas']['Account'][];
+      /** @description Сколько всего подходит под фильтр */
+      total: number;
+    };
+    AccountDetail: components['schemas']['Account'] & {
+      history: {
+        /** @enum {string} */
+        action: 'registered' | 'blocked' | 'unblocked' | 'password_changed';
+        /** @description self или имя администратора */
+        actor: string;
+        comment: string;
+        /** Format: date-time */
+        created_at: string;
+      }[];
     };
     LlmPrompt: {
       /** @description Запрос пользователя */
@@ -2631,6 +3117,8 @@ export interface components {
     IdempotencyKey: string;
     /** @description Идентификатор записи или заявки (UUID) */
     ParticipationID: string;
+    /** @description Идентификатор сообщения (UUID) */
+    CommentID: string;
   };
   requestBodies: never;
   headers: never;
@@ -2744,7 +3232,7 @@ export interface operations {
           'application/json': {
             /**
              * Format: uri
-             * @description Адрес выхода из Keycloak
+             * @description Куда перейти после выхода
              */
             url: string;
           };
@@ -2754,7 +3242,7 @@ export interface operations {
       503: components['responses']['Unavailable'];
     };
   };
-  listDemoAccounts: {
+  listAuthProviders: {
     parameters: {
       query?: never;
       header?: never;
@@ -2763,7 +3251,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Аккаунты в порядке показа */
+      /** @description Доступные способы */
       200: {
         headers: {
           [name: string]: unknown;
@@ -2771,71 +3259,215 @@ export interface operations {
         content: {
           /**
            * @example {
-           *       "items": [
-           *         {
-           *           "key": "anna",
-           *           "name": "Анна Смирнова",
-           *           "role": "Пользователь",
-           *           "hint": "Найти событие, записаться, создать своё, задать вопрос"
-           *         },
-           *         {
-           *           "key": "admin",
-           *           "name": "Модератор Платформы",
-           *           "role": "Администратор",
-           *           "hint": "Допуск организаций, снятие событий, скрытие сообщений"
-           *         }
-           *       ]
+           *       "sso": {
+           *         "enabled": true,
+           *         "title": "Столото ID",
+           *         "login_url": "/auth/login"
+           *       },
+           *       "local": {
+           *         "enabled": true,
+           *         "register_url": "/auth/local/register",
+           *         "login_url": "/auth/local/login"
+           *       }
            *     }
            */
           'application/json': {
-            items: {
-              /** @description Идентификатор для `POST /auth/demo/{key}` */
-              key: string;
-              name: string;
-              /** @description Роль простыми словами */
-              role: string;
-              /** @description Что проверить под этим аккаунтом */
-              hint: string;
-            }[];
+            sso: {
+              enabled: boolean;
+              title: string;
+              /** @description Перейти по адресу, добавив ?next=/куда-вернуть */
+              login_url: string;
+            };
+            local: {
+              enabled: boolean;
+              register_url: string;
+              login_url: string;
+            };
           };
         };
       };
     };
   };
-  demoLogin: {
+  registerLocal: {
     parameters: {
       query?: never;
       header?: never;
-      path: {
-        /** @example anna */
-        key: string;
-      };
+      path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "email": "anna@example.ru",
+         *       "password": "ЗарядкаВоДворе7",
+         *       "name": "Анна Смирнова"
+         *     }
+         */
+        'application/json': {
+          /** Format: email */
+          email: string;
+          /** Format: password */
+          password: string;
+          /** @description Имя, которое видят другие участники */
+          name: string;
+        };
+      };
+    };
     responses: {
-      /** @description Сессия создана, cookie `starter_session` установлена */
-      200: {
+      /** @description Учётная запись создана, вход выполнен */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Session'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
+      /** @description Почта уже зарегистрирована */
+      409: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           /**
            * @example {
-           *       "key": "anna",
-           *       "name": "Анна Смирнова"
+           *       "error": {
+           *         "code": "email_taken",
+           *         "message": "Эта почта уже зарегистрирована. Войдите или используйте другую"
+           *       }
            *     }
            */
-          'application/json': {
-            key: string;
-            name: string;
-          };
+          'application/json': components['schemas']['Error'];
         };
       };
+      /** @description Ошибка поля формы — `field` указывает, какое (email, password, name) */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "validation_error",
+           *         "field": "password",
+           *         "message": "Пароль должен содержать буквы и цифры"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  loginLocal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "email": "anna@example.ru",
+         *       "password": "ЗарядкаВоДворе7"
+         *     }
+         */
+        'application/json': {
+          /** Format: email */
+          email: string;
+          /** Format: password */
+          password: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Вход выполнен */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Session'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /** @description Неверная почта или пароль */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "invalid_credentials",
+           *         "message": "Неверная почта или пароль"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Учётная запись заблокирована администратором (`reason` — причина) или чужой Origin */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "account_blocked",
+           *         "message": "Учётная запись заблокирована: Спам в обсуждениях",
+           *         "reason": "Спам в обсуждениях"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  changeLocalPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: password */
+          current_password: string;
+          /** Format: password */
+          new_password: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Пароль изменён */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      404: components['responses']['NotFound'];
-      /** @description Keycloak отклонил вход демо-аккаунтом — realm не обновлён после `make setup` */
-      409: {
+      /** @description Неверный текущий пароль (`field=current_password`) или слабый новый (`field=new_password`) */
+      422: {
         headers: {
           [name: string]: unknown;
         };
@@ -2843,15 +3475,7 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
-      /** @description Keycloak недоступен или ответил ошибкой */
-      502: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
+      429: components['responses']['TooManyRequests'];
       503: components['responses']['Unavailable'];
     };
   };
@@ -2877,7 +3501,8 @@ export interface operations {
            *       "name": "Демо Пользователь",
            *       "roles": [
            *         "user"
-           *       ]
+           *       ],
+           *       "provider": "sso"
            *     }
            */
           'application/json': components['schemas']['User'];
@@ -4807,6 +5432,302 @@ export interface operations {
       500: components['responses']['InternalError'];
     };
   };
+  reportEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "wrong_info",
+         *       "details": "По этому адресу нет спортплощадки"
+         *     }
+         */
+        'application/json': components['schemas']['ReportInput'];
+      };
+    };
+    responses: {
+      /** @description Жалоба принята */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MyReport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  reportComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор сообщения (UUID) */
+        cid: components['parameters']['CommentID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "spam"
+         *     }
+         */
+        'application/json': components['schemas']['ReportInput'];
+      };
+    };
+    responses: {
+      /** @description Жалоба принята */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MyReport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  deleteComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор сообщения (UUID) */
+        cid: components['parameters']['CommentID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сообщение удалено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Comment'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  myReports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Жалобы */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['MyReport'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  removeParticipant: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор записи или заявки (UUID) */
+        pid: components['parameters']['ParticipationID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Грубил другим участникам в обсуждении"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Участник исключён */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Participant'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminReports: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        status?: 'open' | 'resolved' | 'dismissed';
+        target_type?: 'event' | 'comment';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница жалоб */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  dismissReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "resolution": "Место проведения проверили — площадка существует"
+         *     }
+         */
+        'application/json': {
+          resolution: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Жалоба отклонена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Report'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  restoreComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сообщение снова видно */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Comment'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
   listFiles: {
     parameters: {
       query?: {
@@ -5016,6 +5937,147 @@ export interface operations {
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
       503: components['responses']['Unavailable'];
+    };
+  };
+  listAccounts: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /**
+         * @description Часть почты или имени (до 100 символов)
+         * @example anna
+         */
+        q?: string;
+        /** @description Фильтр по статусу */
+        status?: 'active' | 'blocked';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница учётных записей */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AccountPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Карточка */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AccountDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  blockAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Массовая рассылка рекламы в обсуждениях"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Заблокирована */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Account'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  unblockAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Разблокирована */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Account'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
     };
   };
   getLlmStatus: {

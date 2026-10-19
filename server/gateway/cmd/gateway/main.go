@@ -1,5 +1,5 @@
 // Gateway — единственная публичная точка входа в бэкенд (порт 8080).
-// Отвечает за вход через Keycloak и серверные сессии, проверку пользователя и ролей,
+// Отвечает за вход («Столото ID» через Keycloak и обычная регистрация через identity) и серверные сессии, проверку пользователя и ролей,
 // лимиты запросов, журнал действий и проксирует /api/v1/... во внутренние сервисы.
 // Настройки — переменные окружения (см. .env.example); вне Docker: make gateway.
 package main
@@ -64,13 +64,14 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	var demo []auth.DemoAccount
-	if c.DemoLogin {
-		demo = auth.DemoAccountsFromEnv()
-		log.Info("Быстрый вход демо-аккаунтами включён", "accounts", len(demo))
-	}
 	sessions := auth.NewSessions(deps.Cache, verifier, c.OIDCIssuer, c.OIDCInternalURL, c.OIDCWebClientID, c.AppOrigin, c.SessionCookieSecure)
-	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL, Realtime: realtimeURL, Events: eventsURL, Moderation: moderationURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder, AppOrigin: c.AppOrigin, OIDCIssuer: c.OIDCIssuer, DemoAccounts: demo}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	identityURL := optional(c.IdentityURL)
+	if identityURL != nil {
+		sessions.EnableLocal(auth.NewHTTPAccounts(identityURL, c.InternalToken))
+	} else {
+		log.Info("IDENTITY_URL не задан: обычная регистрация выключена, вход только через «Столото ID»")
+	}
+	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL, Realtime: realtimeURL, Events: eventsURL, Moderation: moderationURL, Identity: identityURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder, AppOrigin: c.AppOrigin, OIDCIssuer: c.OIDCIssuer}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		log.Info("API принимает запросы", "addr", c.Addr)

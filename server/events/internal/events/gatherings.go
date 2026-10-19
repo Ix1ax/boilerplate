@@ -263,8 +263,8 @@ AND quorum_deadline <= now() ORDER BY quorum_deadline LIMIT 100`)
 
 func failQuorum(ctx context.Context, tx pgx.Tx, id string) error {
 	e, err := lockEvent(ctx, tx, id)
-	if err != nil || e.Status != "published" || e.QuorumStatus != "gathering" || e.MinParticipants == nil {
-		return err // уже решено другой транзакцией
+	if err != nil || e.Status != "published" || e.QuorumStatus != "gathering" || e.MinParticipants == nil || e.QuorumDeadline == nil || e.QuorumDeadline.After(time.Now()) {
+		return err // срок или состояние могли измениться после выборки задания
 	}
 	n, err := confirmedCount(ctx, tx, id)
 	if err != nil {

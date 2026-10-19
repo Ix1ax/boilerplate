@@ -47,9 +47,15 @@ tags:
   - name: Профили и справочники
     description: Направления спорта и публичные профили организаторов.
   - name: Ищу компанию
-    description: Запросы людей, которым не с кем заниматься, подбор подходящих событий и обезличенный спрос для организаторов.
+    description:
+      Запросы людей, которым не с кем заниматься, подбор подходящих событий и обезличенный спрос для
+      организаторов.
   - name: Модерация (админ)
     description: Допуск организаций, снятие мероприятий, скрытие сообщений. Только роль `admin`.
+  - name: Жалобы
+    description:
+      Сигнал модератору о нарушении в мероприятии или сообщении. Решение принимает администратор, автор
+      жалобы получает результат.
 paths:
   /api/v1/sports:
     get:
@@ -57,8 +63,8 @@ paths:
       operationId: listSports
       summary: Справочник направлений
       description:
-        Базовые направления и добавленные пользователями (`is_custom`). Своё направление
-        появляется здесь сразу после создания события с `sport_name` — правка кода не нужна.
+        Базовые направления и добавленные пользователями (`is_custom`). Своё направление появляется здесь
+        сразу после создания события с `sport_name` — правка кода не нужна.
       responses:
         '200':
           description: Направления, сначала базовые
@@ -90,10 +96,10 @@ paths:
       operationId: getDemand
       summary: Спрос на направление
       description:
-        Для формы создания события — «12 человек ищут компанию на бег, чаще утром в выходные».
-        Только числа, без имён. Считаются чужие активные запросы с совместимым уровнем; человек без
-        предпочтений по времени учитывается в каждой части дня и каждом дне. Направление, которого ещё
-        нет в справочнике, — нулевой спрос и пустой `sport_id`.
+        Для формы создания события — «12 человек ищут компанию на бег, чаще утром в выходные». Только
+        числа, без имён. Считаются чужие активные запросы с совместимым уровнем; человек без предпочтений по
+        времени учитывается в каждой части дня и каждом дне. Направление, которого ещё нет в справочнике, —
+        нулевой спрос и пустой `sport_id`.
       parameters:
         - name: sport_id
           in: query
@@ -133,8 +139,8 @@ paths:
       operationId: listEvents
       summary: Выдача мероприятий
       description:
-        Только опубликованные и ещё не закончившиеся, ближайшие первыми. Поиск `q`
-        учитывает словоформы и ищет также по названию направления и организации.
+        Только опубликованные и ещё не закончившиеся, ближайшие первыми. Поиск `q` учитывает словоформы и
+        ищет также по названию направления и организации.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -169,7 +175,9 @@ paths:
           schema: { type: string, format: uuid }
         - name: near
           in: query
-          description: 'Рядом с точкой «широта,долгота» — только события с координатами, ближайшие первыми, в ответе distance_km'
+          description:
+            'Рядом с точкой «широта,долгота» — только события с координатами, ближайшие первыми, в ответе
+            distance_km'
           schema: { type: string }
           example: '56.0106,92.8710'
         - name: radius_km
@@ -199,9 +207,9 @@ paths:
       operationId: createEvent
       summary: Создать мероприятие
       description:
-        Публикуется сразу. `as_organization=true` — от имени своей организации; если она
-        ещё не допущена, ответ 403 (проверка на сервере). Направление — `sport_id` из справочника
-        или `sport_name` (своё, будет добавлено в справочник).
+        Публикуется сразу. `as_organization=true` — от имени своей организации; если она ещё не допущена,
+        ответ 403 (проверка на сервере). Направление — `sport_id` из справочника или `sport_name` (своё, будет
+        добавлено в справочник).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -261,9 +269,9 @@ paths:
       operationId: getEvent
       summary: Карточка мероприятия
       description:
-        Опубликованное видят все. Снятое, удалённое или отменённое — организатор, записавшиеся
-        (с причиной в `moderation_reason`) и админ; остальным — 404. `private_info` заполнено только
-        для организатора, подтверждённых участников и админа.
+        Опубликованное видят все. Снятое, удалённое или отменённое — организатор, записавшиеся (с
+        причиной в `moderation_reason`) и админ; остальным — 404. `private_info` заполнено только для
+        организатора, подтверждённых участников и админа.
       responses:
         '200':
           description: Мероприятие
@@ -284,10 +292,11 @@ paths:
       operationId: updateEvent
       summary: Изменить мероприятие
       description:
-        Только организатор, только опубликованное и ещё не начавшееся. Передаются только меняемые поля; режим записи,
-        направление и «от чьего имени» не меняются. Перенос времени или места — уведомление всем записавшимся
-        «было → стало», напоминания придут заново от нового времени; правка условий (что взять, точка сбора,
-        стоимость, уровень) — уведомление «проверьте, что изменилось». Мест не может стать меньше, чем уже записано (422).
+        Только организатор, только опубликованное и ещё не начавшееся. Передаются только меняемые поля;
+        режим записи, направление и «от чьего имени» не меняются. Перенос времени или места — уведомление всем
+        записавшимся «было → стало», напоминания придут заново от нового времени; правка условий (что взять,
+        точка сбора, стоимость, уровень) — уведомление «проверьте, что изменилось». Мест не может стать
+        меньше, чем уже записано (422).
       requestBody:
         required: true
         content:
@@ -361,9 +370,9 @@ paths:
       operationId: joinEvent
       summary: Записаться или подать заявку
       description:
-        '`open` — сразу `confirmed` (или `waitlist`, если мест нет); `request` — `pending`.
-        Повторный вызов возвращает текущую запись. После отказа или отмены можно записаться снова.
-        Неопубликованное или прошедшее событие и собственное событие — 409.'
+        '`open` — сразу `confirmed` (или `waitlist`, если мест нет); `request` — `pending`. Повторный
+        вызов возвращает текущую запись. После отказа или отмены можно записаться снова. Неопубликованное или
+        прошедшее событие и собственное событие — 409.'
       requestBody:
         required: false
         content:
@@ -456,8 +465,8 @@ paths:
       operationId: stopBeingBuddy
       summary: Больше не встречаю
       description:
-        Подопечные передаются другим проводникам. Кому пары не нашлось — получает уведомление, а организатор —
-        просьбу встретить самому. То же происходит, если проводник отменяет запись.
+        Подопечные передаются другим проводникам. Кому пары не нашлось — получает уведомление, а
+        организатор — просьбу встретить самому. То же происходит, если проводник отменяет запись.
       responses:
         '200':
           description: Моя запись
@@ -481,9 +490,9 @@ paths:
       operationId: remindParticipants
       summary: Напомнить участникам сейчас
       description:
-        Только организатор, не чаще раза в час, до начала события. Каждый подтверждённый участник получает время,
-        адрес, точку сбора, что взять, погоду (для уличной встречи с точкой на карте) и имя проводника.
-        Такие же напоминания платформа отправляет сама — за сутки и за два часа до начала.
+        Только организатор, не чаще раза в час, до начала события. Каждый подтверждённый участник
+        получает время, адрес, точку сбора, что взять, погоду (для уличной встречи с точкой на карте) и имя
+        проводника. Такие же напоминания платформа отправляет сама — за сутки и за два часа до начала.
       responses:
         '200':
           description: Сколько участников получили напоминание
@@ -514,9 +523,9 @@ paths:
       operationId: getEventWeather
       summary: Погода на время встречи
       description:
-        Прогноз Open-Meteo на час начала уличной (`outdoor`) встречи с точкой на карте и совет, что надеть и взять.
-        Если прогноза нет (встреча в помещении, нет точки, больше двух недель до начала, сервис недоступен),
-        `available` — false, а `reason` объясняет почему. Ошибкой это не считается.
+        Прогноз Open-Meteo на час начала уличной (`outdoor`) встречи с точкой на карте и совет, что
+        надеть и взять. Если прогноза нет (встреча в помещении, нет точки, больше двух недель до начала,
+        сервис недоступен), `available` — false, а `reason` объясняет почему. Ошибкой это не считается.
       responses:
         '200':
           description: Прогноз или причина его отсутствия
@@ -548,9 +557,9 @@ paths:
       operationId: eventAlternatives
       summary: Найти другую встречу
       description:
-        Если событие отменили или сняли, места кончились или заявку отклонили, путь не обрывается. То же направление,
-        опубликованные предстоящие события со свободными местами, кроме своих; сначала в пределах 15 км (если у события есть
-        точка), затем ближайшие по времени к исходному.
+        Если событие отменили или сняли, места кончились или заявку отклонили, путь не обрывается. То же
+        направление, опубликованные предстоящие события со свободными местами, кроме своих; сначала в пределах
+        15 км (если у события есть точка), затем ближайшие по времени к исходному.
       parameters:
         - name: limit
           in: query
@@ -638,8 +647,8 @@ paths:
       operationId: approveParticipant
       summary: Принять заявку
       description:
-        Только организатор события (админ — нет). Заявка должна быть `pending`;
-        при заполненном лимите мест — 409. Участник получит уведомление.
+        Только организатор события (админ — нет). Заявка должна быть `pending`; при заполненном лимите
+        мест — 409. Участник получит уведомление.
       responses:
         '200':
           description: Заявка принята
@@ -704,9 +713,7 @@ paths:
       tags: [Обсуждение]
       operationId: listComments
       summary: Обсуждение мероприятия
-      description:
-        Сообщения по времени. Скрытые модератором показываются пометкой без текста
-        (текст видит только админ).
+      description: Сообщения по времени. Скрытые модератором показываются пометкой без текста (текст видит только админ).
       responses:
         '200':
           description: Сообщения
@@ -733,9 +740,9 @@ paths:
       operationId: addComment
       summary: Задать вопрос или ответить
       description:
-        Писать может любой вошедший пользователь, пока событие опубликовано. `parent_id` —
-        ответ на сообщение верхнего уровня. Организатор получает уведомление о вопросе, автор вопроса —
-        об ответе; открытые страницы обновляются через WebSocket-канал `room:event:{id}`.
+        Писать может любой вошедший пользователь, пока событие опубликовано. `parent_id` — ответ на
+        сообщение верхнего уровня. Организатор получает уведомление о вопросе, автор вопроса — об ответе;
+        открытые страницы обновляются через WebSocket-канал `room:event:{id}`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -841,8 +848,8 @@ paths:
       operationId: submitOrganization
       summary: Подать заявку организации
       description:
-        Создаёт профиль со статусом `pending`. До одобрения администратором публиковать
-        события от имени организации нельзя. Одна организация на представителя (повтор — 409).
+        Создаёт профиль со статусом `pending`. До одобрения администратором публиковать события от имени
+        организации нельзя. Одна организация на представителя (повтор — 409).
       requestBody:
         required: true
         content:
@@ -877,8 +884,8 @@ paths:
       operationId: updateMyOrganization
       summary: Исправить профиль организации
       description:
-        После отказа правка означает повторную подачу — статус снова `pending`.
-        Допущенная организация остаётся допущенной.
+        После отказа правка означает повторную подачу — статус снова `pending`. Допущенная организация
+        остаётся допущенной.
       requestBody:
         required: true
         content:
@@ -907,7 +914,9 @@ paths:
       tags: [Ищу компанию]
       operationId: listMyCompanyRequests
       summary: Мои запросы «Ищу компанию»
-      description: Активные первыми. Истёкший запрос (старше 30 дней) возвращается со статусом `expired` и уведомлений больше не присылает.
+      description:
+        Активные первыми. Истёкший запрос (старше 30 дней) возвращается со статусом `expired` и
+        уведомлений больше не присылает.
       responses:
         '200':
           description: Запросы
@@ -930,12 +939,12 @@ paths:
       operationId: createCompanyRequest
       summary: Ищу компанию
       description:
-        Человек описывает, чем и когда хочет заниматься. Уже опубликованные подходящие события
-        сразу попадают в подборку (`matches_count`, `GET …/matches`). Когда кто-то опубликует новое
-        подходящее событие, придёт уведомление «Нашлась компания». Подходит, если совпадает
-        направление, уровень совместим («не важно» с любой стороны или точное совпадение), время суток
-        и день недели — по местному времени события, а при заданной точке — событие в радиусе.
-        Один активный запрос на направление (повтор — 409). Своё направление заводится в справочнике.
+        Человек описывает, чем и когда хочет заниматься. Уже опубликованные подходящие события сразу
+        попадают в подборку (`matches_count`, `GET …/matches`). Когда кто-то опубликует новое подходящее
+        событие, придёт уведомление «Нашлась компания». Подходит, если совпадает направление, уровень
+        совместим («не важно» с любой стороны или точное совпадение), время суток и день недели — по местному
+        времени события, а при заданной точке — событие в радиусе. Один активный запрос на направление (повтор
+        — 409). Своё направление заводится в справочнике.
       requestBody:
         required: true
         content:
@@ -1010,7 +1019,9 @@ paths:
       tags: [Ищу компанию]
       operationId: listCompanyMatches
       summary: Подобранные события
-      description: Предстоящие опубликованные события, подобранные под запрос, — ближайшие первыми. Снятые и прошедшие сюда не попадают.
+      description:
+        Предстоящие опубликованные события, подобранные под запрос, — ближайшие первыми. Снятые и
+        прошедшие сюда не попадают.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -1202,7 +1213,9 @@ paths:
       tags: [Модерация (админ)]
       operationId: adminGetOrganization
       summary: Карточка организации для админа
-      description: Организация в любом статусе, её представитель, история допуска с причинами и все события (во всех статусах).
+      description:
+        Организация в любом статусе, её представитель, история допуска с причинами и все события (во всех
+        статусах).
       responses:
         '200':
           description: Карточка
@@ -1225,9 +1238,7 @@ paths:
       tags: [Модерация (админ)]
       operationId: approveOrganization
       summary: Допустить организацию
-      description:
-        После допуска организация публикует события без повторной модерации. Представитель
-        получит уведомление.
+      description: После допуска организация публикует события без повторной модерации. Представитель получит уведомление.
       responses:
         '200':
           description: Организация допущена
@@ -1324,8 +1335,8 @@ paths:
       operationId: unpublishEvent
       summary: Снять мероприятие с публикации
       description:
-        Событие пропадает из выдачи, запись закрывается (в том числе по прямой ссылке).
-        Существующие записи сохраняются; организатор и участники видят плашку с причиной и получают уведомление.
+        Событие пропадает из выдачи, запись закрывается (в том числе по прямой ссылке). Существующие
+        записи сохраняются; организатор и участники видят плашку с причиной и получают уведомление.
       requestBody:
         required: true
         content:
@@ -1423,7 +1434,9 @@ paths:
       tags: [Модерация (админ)]
       operationId: adminEventHistory
       summary: История события
-      description: Публикация, снятие, удаление, отмена и сбор состава — кто, когда и с какой причиной. `kind` — event или event_quorum.
+      description:
+        Публикация, снятие, удаление, отмена и сбор состава — кто, когда и с какой причиной. `kind` —
+        event или event_quorum.
       responses:
         '200':
           description: Переходы от старых к новым
@@ -1450,7 +1463,9 @@ paths:
       tags: [Модерация (админ)]
       operationId: adminListSports
       summary: Справочник направлений для модерации
-      description: Все направления, пользовательские и скрытые первыми; кто добавил, сколько событий и активных запросов «Ищу компанию».
+      description:
+        Все направления, пользовательские и скрытые первыми; кто добавил, сколько событий и активных
+        запросов «Ищу компанию».
       responses:
         '200':
           description: Направления
@@ -1478,8 +1493,9 @@ paths:
       operationId: adminHideSport
       summary: Скрыть пользовательское направление
       description:
-        Спам, оскорбление или дубль. Направление пропадает из справочника, новые события и запросы с ним создать нельзя;
-        уже созданные события остаются (их снимают отдельно). Базовые направления не скрываются — 409. Причина обязательна.
+        Спам, оскорбление или дубль. Направление пропадает из справочника, новые события и запросы с ним
+        создать нельзя; уже созданные события остаются (их снимают отдельно). Базовые направления не
+        скрываются — 409. Причина обязательна.
       requestBody:
         required: true
         content:
@@ -1540,7 +1556,8 @@ paths:
       summary: Переотправить снимки в moderation
       description:
         Ставит в outbox снимки всех организаций, событий, записей, сообщений и запросов «Ищу компанию»
-        (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор безопасен.
+        (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор
+        безопасен.
       responses:
         '202':
           description: Сколько снимков поставлено в очередь
@@ -1565,8 +1582,8 @@ paths:
       operationId: hideComment
       summary: Скрыть сообщение
       description:
-        Скрывается одно сообщение; мероприятие и остальное обсуждение остаются. Автор получит
-        уведомление с причиной.
+        Скрывается одно сообщение; мероприятие и остальное обсуждение остаются. Автор получит уведомление
+        с причиной.
       requestBody:
         required: true
         content:
@@ -1594,6 +1611,306 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/report:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Жалобы
+      operationId: reportEvent
+      summary: Пожаловаться на мероприятие
+      description: |
+        Жалоба уходит в очередь администратора; данные события сама по себе не меняет. Решение
+        и пояснение придут уведомлением. Одна открытая жалоба человека на цель (повтор — 409),
+        не больше 20 жалоб в час (429). На своё мероприятие пожаловаться нельзя (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInput'
+            example:
+              reason: wrong_info
+              details: По этому адресу нет спортплощадки
+      responses:
+        '201':
+          description: Жалоба принята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/comments/{cid}/report:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/CommentID'
+    post:
+      tags:
+        - Жалобы
+      operationId: reportComment
+      summary: Пожаловаться на сообщение
+      description: Как жалоба на мероприятие; жаловаться можно только на видимое чужое сообщение этого обсуждения.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInput'
+            example:
+              reason: spam
+      responses:
+        '201':
+          description: Жалоба принята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/comments/{cid}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/CommentID'
+    delete:
+      tags:
+        - Обсуждение
+      operationId: deleteComment
+      summary: Удалить своё сообщение
+      description:
+        Текст пропадает у всех (остаётся пометка «Сообщение удалено автором»), ответы сохраняются.
+        Открытые жалобы на сообщение закрываются. Удалить можно только своё видимое сообщение.
+      responses:
+        '200':
+          description: Сообщение удалено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/reports:
+    get:
+      tags:
+        - Жалобы
+      operationId: myReports
+      summary: Мои жалобы
+      description: Последние 100 жалоб с решением администратора.
+      responses:
+        '200':
+          description: Жалобы
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MyReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/participants/{pid}/remove:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/ParticipationID'
+    post:
+      tags:
+        - Запись
+      operationId: removeParticipant
+      summary: Исключить участника
+      description: |
+        Только организатор, до окончания мероприятия. Исключить можно подтверждённого участника или человека
+        из листа ожидания (заявку — отклонить). Причина обязательна и видна человеку; освободившееся
+        место сразу получает первый из листа ожидания. Повторно записаться исключённый не сможет (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Грубил другим участникам в обсуждении
+      responses:
+        '200':
+          description: Участник исключён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/reports:
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminReports
+      summary: Очередь жалоб
+      description: |
+        Открытые жалобы первыми, среди них — цели с наибольшим числом жалоб. В каждой — краткое описание цели
+        (название и описание события или оригинальный текст сообщения, даже если оно уже скрыто) и автор.
+
+        **Как принять жалобу:** скрыть сообщение (`POST /admin/comments/{id}/hide`) или снять событие
+        (`POST /admin/events/{id}/unpublish|delete`) — все открытые жалобы на цель закроются в той же
+        транзакции, их авторы получат уведомление. **Отклонить** — `POST /admin/reports/{id}/dismiss`.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - open
+              - resolved
+              - dismissed
+        - name: target_type
+          in: query
+          schema:
+            type: string
+            enum:
+              - event
+              - comment
+      responses:
+        '200':
+          description: Страница жалоб
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/reports/{id}/dismiss:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: dismissReport
+      summary: Отклонить жалобы на цель
+      description: Закрывает все открытые жалобы на ту же цель; пояснение обязательно и уходит авторам жалоб.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - resolution
+              properties:
+                resolution:
+                  type: string
+                  maxLength: 1000
+            example:
+              resolution: Место проведения проверили — площадка существует
+      responses:
+        '200':
+          description: Жалоба отклонена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/comments/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: restoreComment
+      summary: Вернуть скрытое сообщение
+      description:
+        Только для сообщения, скрытого модератором (удалённое автором не возвращается). Автор получит
+        уведомление.
+      responses:
+        '200':
+          description: Сообщение снова видно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
 components:
@@ -1677,6 +1994,14 @@ components:
       schema:
         type: string
         format: uuid
+    CommentID:
+      name: cid
+      in: path
+      required: true
+      description: Идентификатор сообщения (UUID)
+      schema:
+        type: string
+        format: uuid
   schemas:
     Error:
       type: object
@@ -1729,8 +2054,8 @@ components:
           type: string
           enum: [confirmed, pending, rejected, cancelled, waitlist]
           description:
-            'confirmed — участвует; pending — ждёт решения организатора; rejected — отказ;
-            cancelled — отменил сам; waitlist — лист ожидания'
+            'confirmed — участвует; pending — ждёт решения организатора; rejected — отказ; cancelled —
+            отменил сам; waitlist — лист ожидания'
         decision_reason:
           type: string
           description: Комментарий организатора при отказе
@@ -1840,8 +2165,8 @@ components:
           type: string
           enum: [none, gathering, reached, failed]
           description:
-            'none — без минимума; gathering — набираем состав; reached — собран, встреча состоится;
-            failed — не набрали к сроку, событие отменено автоматически'
+            'none — без минимума; gathering — набираем состав; reached — собран, встреча состоится; failed —
+            не набрали к сроку, событие отменено автоматически'
         outdoor: { type: boolean }
         status:
           type: string
@@ -2007,8 +2332,14 @@ components:
           description: От имени какой организации отвечает организатор
         body:
           type: string
-          description: Пусто для скрытого сообщения (кроме админа)
-        status: { type: string, enum: [visible, hidden] }
+          description: Пусто для скрытого или удалённого сообщения (кроме админа)
+        status:
+          type: string
+          enum:
+            - visible
+            - hidden
+            - deleted
+          description: visible — видно; hidden — скрыто модератором (причина в hidden_reason); deleted — удалено автором
         hidden_reason: { type: string }
         created_at: { type: string, format: date-time }
     Organization:
@@ -2090,7 +2421,9 @@ components:
             $ref: '#/components/schemas/Event'
     CompanyRequestInput:
       type: object
-      description: Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней — «когда угодно».
+      description:
+        Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней —
+        «когда угодно».
       properties:
         sport_id: { type: string, format: uuid }
         sport_name: { type: string, minLength: 2, maxLength: 60 }
@@ -2275,7 +2608,9 @@ components:
             created_at: { type: string, format: date-time }
     OrganizerStats:
       type: object
-      description: Факты из данных платформы, без оценок. Посещение не проверяется, поэтому people_came — подтверждённые записи на прошедшие встречи.
+      description:
+        Факты из данных платформы, без оценок. Посещение не проверяется, поэтому people_came —
+        подтверждённые записи на прошедшие встречи.
       required: [events_held, people_came, upcoming_events, since]
       properties:
         events_held:
@@ -2319,6 +2654,171 @@ components:
           type: string
           maxLength: 1000
           description: Причина решения — её увидит другая сторона
+    ReportInput:
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          enum:
+            - spam
+            - offensive
+            - fraud
+            - wrong_info
+            - dangerous
+            - other
+          description:
+            spam — реклама и спам; offensive — оскорбления; fraud — мошенничество; wrong_info — неверные
+            сведения (место, время); dangerous — угроза безопасности; other — другое (пояснение обязательно)
+        details:
+          type: string
+          maxLength: 1000
+          description: Пояснение для модератора
+    MyReport:
+      type: object
+      required:
+        - id
+        - target_type
+        - target_id
+        - event_id
+        - event_title
+        - reason
+        - status
+        - resolution
+        - created_at
+        - resolved_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+          enum:
+            - event
+            - comment
+        target_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        event_title:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+          description: open — ждёт решения; resolved — меры приняты; dismissed — нарушений не нашли
+        resolution:
+          type: string
+          description: Пояснение администратора
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+    Report:
+      type: object
+      required:
+        - id
+        - target_type
+        - target_id
+        - event_id
+        - reason
+        - details
+        - status
+        - resolution
+        - reporter
+        - target
+        - open_on_target
+        - created_at
+        - resolved_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+          enum:
+            - event
+            - comment
+        target_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+          description: Мероприятие — из жалобы на сообщение сразу видно обсуждение
+        reason:
+          type: string
+        details:
+          type: string
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+        resolution:
+          type: string
+        reporter:
+          $ref: '#/components/schemas/Person'
+        target:
+          type: object
+          required:
+            - title
+            - text
+            - author
+            - status
+          properties:
+            title:
+              type: string
+              description: Название мероприятия
+            text:
+              type: string
+              description: Текст сообщения или начало описания события (до 500 символов)
+            author:
+              $ref: '#/components/schemas/Person'
+            status:
+              type: string
+              description: Текущий статус цели — видно
+              принято ли уже решение: null
+        open_on_target:
+          type: integer
+          description: Сколько открытых жалоб на ту же цель
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+    ReportPage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Report'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
   responses:
     BadRequest:
       description: Некорректные входные данные (код ошибки и понятное сообщение в теле)

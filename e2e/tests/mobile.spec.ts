@@ -1,6 +1,6 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
-import { login, loginAsAdmin } from './helpers';
+import { appReady, login, loginAsAdmin, test } from './helpers';
 
 const expectNoHorizontalOverflow = async (page: Page) => {
   const overflow = await page.evaluate(
@@ -31,6 +31,7 @@ test('список задач и визард на мобильной ширин
 test('админский дашборд на мобильной ширине', async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto('/dashboard/admin');
+  await appReady(page);
   await expect(page.getByText('Всего задач')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

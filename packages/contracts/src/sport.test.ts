@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type SportEvent,
+  changePasswordSchema,
   companyRequestSchema,
   eventInputSchema,
   eventPatchSchema,
   joinAction,
   joinSchema,
+  loginSchema,
   profilePatchSchema,
+  registerSchema,
+  reportSchema,
 } from './sport';
 
 const future = new Date(Date.now() + 48 * 3600_000).toISOString();
@@ -107,8 +111,54 @@ describe('joinAction', () => {
     expect(joinAction(with_({ my_participation: { status: 'pending' } }))).toBe(
       'leave',
     );
+    // Отказ окончателен на сервере: кнопки «записаться снова» быть не должно.
     expect(
       joinAction(with_({ my_participation: { status: 'rejected' } })),
+    ).toBe('refused');
+    expect(
+      joinAction(with_({ my_participation: { status: 'cancelled' } })),
     ).toBe('rejoin');
+  });
+});
+
+describe('вход и регистрация', () => {
+  it('нормализует почту и проверяет пароль как identity', () => {
+    const v = registerSchema.parse({
+      email: '  Anna@Example.RU ',
+      password: 'Зарядка2026',
+      name: ' Анна ',
+    });
+    expect(v.email).toBe('anna@example.ru');
+    expect(v.name).toBe('Анна');
+    for (const bad of ['короткий1', 'onlyletters', '1234567890']) {
+      const r = registerSchema.safeParse({
+        email: 'a@b.ru',
+        password: bad,
+        name: 'Анна',
+      });
+      if (bad === 'короткий1') expect(r.success).toBe(true);
+      else expect(r.error?.issues[0]?.path).toEqual(['password']);
+    }
+    expect(
+      loginSchema.safeParse({ email: 'nope', password: 'x' }).success,
+    ).toBe(false);
+    expect(
+      changePasswordSchema.safeParse({
+        current_password: 'Зарядка2026',
+        new_password: 'Зарядка2026',
+      }).error?.issues[0]?.path,
+    ).toEqual(['new_password']);
+  });
+});
+
+describe('reportSchema', () => {
+  it('для «другое» требует пояснение', () => {
+    expect(reportSchema.safeParse({ reason: 'spam' }).success).toBe(true);
+    expect(
+      reportSchema.safeParse({ reason: 'other' }).error?.issues[0]?.path,
+    ).toEqual(['details']);
+    expect(
+      reportSchema.safeParse({ reason: 'other', details: 'Фейк' }).success,
+    ).toBe(true);
   });
 });

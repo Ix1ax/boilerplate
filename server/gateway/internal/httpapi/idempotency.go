@@ -91,7 +91,13 @@ func idempotency(d *platform.Dependencies) gin.HandlerFunc {
 		status := tee.Status()
 		// Ошибку сервера можно повторить: ключ освобождаем. Слишком большой ответ не кешируем.
 		if status >= 500 || tee.overflow {
-			d.Cache.Del(ctx, redisKey)
+			// Клиент мог отключиться: отменённый контекст не должен оставлять
+			// завершённый запрос в состоянии pending на сутки.
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			defer cancel()
+			if err := d.Cache.Del(cleanup, redisKey).Err(); err != nil {
+				_ = c.Error(err)
+			}
 			return
 		}
 		done, _ := json.Marshal(storedResponse{Fingerprint: fingerprint, Status: status, ContentType: tee.Header().Get("Content-Type"), Body: tee.buf.Bytes()})

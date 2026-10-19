@@ -40,13 +40,17 @@ export type ModerationLogPage = Schemas['LogPage'];
 export type ModerationComment = Schemas['ModerationComment'];
 export type ModerationCommentPage = Schemas['CommentPage'];
 
-/** Карточка «Войти как…» (GET /auth/demo). */
-export type DemoAccount = {
-  key: string;
-  name: string;
-  role: string;
-  hint: string;
-};
+export type Report = Schemas['Report'];
+export type ReportPage = Schemas['ReportPage'];
+export type MyReport = Schemas['MyReport'];
+export type ReportReason = Schemas['ReportInput']['reason'];
+export type ReportStatus = MyReport['status'];
+export type Account = Schemas['Account'];
+export type AccountPage = Schemas['AccountPage'];
+export type AccountDetail = Schemas['AccountDetail'];
+/** Текущий пользователь (GET /api/v1/me); provider — способ входа. */
+export type CurrentUser = Schemas['User'];
+export type AuthProvider = CurrentUser['provider'];
 
 // ── Подписи для интерфейса ─────────────────────────────────────────────────
 // Одни и те же слова на всех экранах: человек не должен гадать, «ожидает» и «на рассмотрении» — это одно и то же или нет.
@@ -66,7 +70,8 @@ export const joinModeLabels: Record<JoinMode, string> = {
 export const participationLabels: Record<ParticipationStatus, string> = {
   confirmed: 'Вы участвуете',
   pending: 'Заявка на рассмотрении',
-  rejected: 'Заявка отклонена',
+  // rejected — и отказ по заявке, и исключение организатором: в обоих случаях повторная запись закрыта.
+  rejected: 'Организатор отказал в участии',
   cancelled: 'Вы отменили запись',
   waitlist: 'Вы в листе ожидания',
 };
@@ -82,6 +87,26 @@ export const organizationStatusLabels: Record<OrganizationStatus, string> = {
   pending: 'На рассмотрении',
   approved: 'Проверенная организация',
   rejected: 'Заявка отклонена',
+};
+
+export const reportReasonLabels: Record<ReportReason, string> = {
+  spam: 'Спам или реклама',
+  offensive: 'Оскорбления',
+  fraud: 'Мошенничество',
+  wrong_info: 'Неверные сведения: место, время, условия',
+  dangerous: 'Угроза безопасности',
+  other: 'Другое',
+};
+
+export const reportStatusLabels: Record<ReportStatus, string> = {
+  open: 'На рассмотрении',
+  resolved: 'Меры приняты',
+  dismissed: 'Нарушений не нашли',
+};
+
+export const authProviderLabels: Record<AuthProvider, string> = {
+  sso: 'Столото ID',
+  local: 'Почта и пароль',
 };
 
 export const quorumLabels: Record<QuorumStatus, string> = {
@@ -114,7 +139,8 @@ export type JoinAction =
   | 'apply' // Подать заявку
   | 'manage' // Вы организатор → «Управлять»
   | 'leave' // Вы участвуете / в листе ожидания / заявка ждёт → можно отменить
-  | 'rejoin' // Отклонили или сами отменили → можно снова
+  | 'rejoin' // Сами отменили запись → можно снова
+  | 'refused' // Организатор отказал или исключил → повторно нельзя (сервер ответит 409): показать причину и «другие встречи»
   | 'waitlist' // Мест нет → встать в лист ожидания (свободная запись)
   | 'closed'; // Снято, отменено или уже началось — записи нет
 
@@ -129,7 +155,8 @@ export function joinAction(e: SportEvent, now: Date = new Date()): JoinAction {
   const mine = e.my_participation?.status;
   if (mine === 'confirmed' || mine === 'pending' || mine === 'waitlist')
     return 'leave';
-  if (mine === 'rejected' || mine === 'cancelled') return 'rejoin';
+  if (mine === 'rejected') return 'refused';
+  if (mine === 'cancelled') return 'rejoin';
   if (e.join_mode === 'request') return 'apply';
   return e.spots_left === 0 ? 'waitlist' : 'join';
 }
@@ -347,3 +374,64 @@ export const profilePatchSchema = z.object({
   level: z.enum(['', 'beginner', 'amateur', 'pro']).optional(),
 });
 export type ProfilePatchValues = z.output<typeof profilePatchSchema>;
+
+/** Жалоба на мероприятие или сообщение. Для «Другое» пояснение обязательно, как на сервере. */
+export const reportSchema = z
+  .object({
+    reason: z.enum(
+      ['spam', 'offensive', 'fraud', 'wrong_info', 'dangerous', 'other'],
+      'Выберите причину жалобы',
+    ),
+    details: optionalText(1000, 'Пояснение — не длиннее 1000 символов'),
+  })
+  .refine((v) => v.reason !== 'other' || v.details !== '', {
+    path: ['details'],
+    message: 'Опишите, что не так: для причины «другое» пояснение обязательно',
+  });
+export type ReportValues = z.output<typeof reportSchema>;
+
+/** Отклонение жалобы админом: пояснение увидит её автор. */
+export const reportResolutionSchema = z.object({
+  resolution: chars(1, 1000, 'Поясните решение: его увидит автор жалобы'),
+});
+
+// ── Вход по почте и паролю (сервис identity) ─────────────────────────────────
+// Правила пароля повторяют identity: 8–128 символов, буквы и цифры. Список частых паролей
+// проверяет только сервер — клиент узнает о нём по 422 с field=password.
+
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email('Укажите почту в формате name@example.ru').max(254));
+const password = chars(8, 128, 'Пароль — от 8 до 128 символов').refine(
+  (v) => /\p{L}/u.test(v) && /\p{N}/u.test(v),
+  'Пароль должен содержать буквы и цифры',
+);
+
+/** Регистрация (POST /auth/local/register). */
+export const registerSchema = z.object({
+  email,
+  password,
+  name: chars(2, 100, 'Имя — от 2 до 100 символов'),
+});
+export type RegisterValues = z.output<typeof registerSchema>;
+
+/** Вход (POST /auth/local/login): формат пароля не проверяем — иначе подсказали бы правила старым пользователям. */
+export const loginSchema = z.object({
+  email,
+  password: z.string().min(1, 'Введите пароль'),
+});
+export type LoginValues = z.output<typeof loginSchema>;
+
+/** Смена пароля (POST /auth/local/password). */
+export const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, 'Введите текущий пароль'),
+    new_password: password,
+  })
+  .refine((v) => v.current_password !== v.new_password, {
+    path: ['new_password'],
+    message: 'Новый пароль совпадает с текущим',
+  });
+export type ChangePasswordValues = z.output<typeof changePasswordSchema>;

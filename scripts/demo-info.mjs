@@ -16,7 +16,8 @@ Keycloak        http://localhost:8180   (admin: ${env.KEYCLOAK_ADMIN})
 RabbitMQ        http://localhost:15672  (${env.RABBITMQ_USER})
 Почта (тест)    http://localhost:8025
 
-Тестовые пользователи:
+Учётные записи «Столото ID» (кнопка «Войти через Столото ID»). Свою учётную запись
+любой может завести регистрацией по почте и паролю на экране входа.
   Роль                          Email                         Пароль
   пользователь (Анна)           ${env.DEMO_EMAIL.padEnd(29)} ${env.DEMO_PASSWORD}
   пользователь (Игорь)          ${env.SECOND_DEMO_EMAIL.padEnd(29)} ${env.SECOND_DEMO_PASSWORD}

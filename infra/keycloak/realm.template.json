@@ -1,8 +1,9 @@
 {
   "realm": "hackathon",
   "enabled": true,
-  "displayName": "Hackathon starter",
-  "registrationAllowed": true,
+  "displayName": "Столото ID",
+  "displayNameHtml": "<b>Столото ID</b> · тестовый контур единого входа",
+  "registrationAllowed": false,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,

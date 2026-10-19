@@ -121,15 +121,14 @@ export const Header = ({ tone = 'light' }: HeaderProps) => {
           dark ? 'max-w-[1360px] py-5' : 'py-3',
         )}
       >
-        <Link
-          to={STATIC_ROUTES.HOME}
-          aria-label="Вместе — на главную"
-          className="flex min-h-11 items-center"
-        >
+        <Link to={STATIC_ROUTES.HOME} className="flex min-h-11 items-center">
           <BrandMark
             tone={dark ? 'dark' : 'light'}
             tagline={dark ? 'компания для спорта рядом' : undefined}
           />
+          {/* Доступное имя должно начинаться с видимого текста логотипа (WCAG 2.5.3), поэтому
+              пояснение — скрытым текстом после него, а не aria-label. */}
+          <span className="sr-only"> — на главную</span>
         </Link>
 
         <nav

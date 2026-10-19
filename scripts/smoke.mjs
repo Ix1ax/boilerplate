@@ -53,6 +53,84 @@ const invalidLogout = await fetch(`${env.APP_ORIGIN}/auth/logout`, {
   headers: { Origin: 'https://untrusted.example' },
 });
 assert.equal(invalidLogout.status, 403);
+// Второй способ входа: регистрация по почте и паролю (identity) с обычной cookie-сессией.
+const localEmail = `smoke-${Date.now()}@example.test`;
+const localPassword = `Smoke${Date.now()}x`;
+const authPost = (path, body, cookie) =>
+  fetch(`${env.APP_ORIGIN}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: env.APP_ORIGIN,
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  });
+const sessionCookie = (response) =>
+  response.headers.get('set-cookie')?.match(/starter_session=[^;]+/)?.[0];
+{
+  const providers = await (
+    await fetch(`${env.APP_ORIGIN}/auth/providers`)
+  ).json();
+  assert.equal(providers.local.enabled, true, 'Обычная регистрация включена');
+  assert.equal(providers.sso.title, 'Столото ID');
+  const registered = await authPost('/auth/local/register', {
+    email: localEmail,
+    password: localPassword,
+    name: 'Проверка Смоук',
+  });
+  assert.equal(registered.status, 201, 'Регистрация по почте и паролю');
+  const cookie = sessionCookie(registered);
+  assert.ok(cookie, 'После регистрации выдана cookie сессии');
+  const me = await fetch(`${env.APP_ORIGIN}/api/v1/me`, {
+    headers: { Cookie: cookie },
+  });
+  assert.equal(me.status, 200);
+  const meBody = await me.json();
+  assert.equal(meBody.provider, 'local');
+  assert.deepEqual(meBody.roles, ['user'], 'Регистрация не выдаёт admin');
+  const profile = await fetch(`${env.APP_ORIGIN}/api/v1/my/profile`, {
+    headers: { Cookie: cookie },
+  });
+  assert.equal(
+    profile.status,
+    200,
+    'Локальный пользователь работает с доменом',
+  );
+  assert.equal(
+    (
+      await authPost('/auth/local/register', {
+        email: localEmail.toUpperCase(),
+        password: localPassword,
+        name: 'Дубль',
+      })
+    ).status,
+    409,
+    'Почта уникальна без учёта регистра',
+  );
+  assert.equal(
+    (
+      await authPost('/auth/local/login', {
+        email: localEmail,
+        password: 'wrong-pass-1',
+      })
+    ).status,
+    401,
+  );
+  const logout = await authPost('/auth/logout', {}, cookie);
+  assert.equal(logout.status, 200);
+  assert.equal((await logout.json()).url, `${env.APP_ORIGIN}/`);
+  const after = await fetch(`${env.APP_ORIGIN}/api/v1/me`, {
+    headers: { Cookie: cookie },
+  });
+  assert.equal(after.status, 401, 'После выхода сессия закрыта');
+  const again = await authPost('/auth/local/login', {
+    email: localEmail,
+    password: localPassword,
+  });
+  assert.equal(again.status, 200, 'Повторный вход по паролю');
+}
 const owner = await login(env.DEMO_EMAIL, env.DEMO_PASSWORD);
 const other = await login(env.SECOND_DEMO_EMAIL, env.SECOND_DEMO_PASSWORD);
 const request = (path, token, init = {}) =>
@@ -70,6 +148,40 @@ const request = (path, token, init = {}) =>
 assert.equal((await request('/readyz')).status, 200);
 assert.equal((await request('/api/v1/me')).status, 401);
 assert.equal((await request('/api/v1/me', owner)).status, 200);
+{
+  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+  assert.equal((await request('/api/v1/admin/accounts', owner)).status, 403);
+  const found = await request(
+    `/api/v1/admin/accounts?q=${encodeURIComponent(localEmail)}`,
+    admin,
+  );
+  assert.equal(found.status, 200);
+  const [account] = (await found.json()).items;
+  assert.equal(account?.email, localEmail);
+  const blocked = await request(
+    `/api/v1/admin/accounts/${account.id}/block`,
+    admin,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Проверка блокировки' }),
+    },
+  );
+  assert.equal(blocked.status, 200);
+  const denied = await authPost('/auth/local/login', {
+    email: localEmail,
+    password: localPassword,
+  });
+  assert.equal(denied.status, 403, 'Заблокированный не входит');
+  assert.equal((await denied.json()).error.code, 'account_blocked');
+  assert.equal(
+    (
+      await request(`/api/v1/admin/accounts/${account.id}/unblock`, admin, {
+        method: 'POST',
+      })
+    ).status,
+    200,
+  );
+}
 assert.equal((await request('/api/v1/files?limit=0', owner)).status, 400);
 // LLM-шлюз: статус доступен всегда, генерация без модели даёт 503, но не 5xx-падение.
 assert.equal((await request('/api/v1/llm/status', owner)).status, 200);
@@ -250,7 +362,8 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
     await request('/api/v1/admin/tasks/stats', admin)
   ).json();
   assert.equal(stats.by_day.length, 14);
-  assert.ok(stats.total >= 1);
+  // Свои задачи smoke удаляет выше, поэтому проверяем форму ответа, а не наличие чужих данных.
+  assert.ok(Number.isInteger(stats.total) && stats.total >= 0);
   assert.equal((await request('/api/v1/admin/audit', owner)).status, 403);
   let audited = 0;
   for (let i = 0; i < 15 && !audited; i++) {

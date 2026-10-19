@@ -70,3 +70,19 @@ func TestValidateProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestParseGeoRejectsNonFiniteNumbers(t *testing.T) {
+	for _, value := range []string{"NaN", "+Inf", "-Inf", "Infinity"} {
+		for _, args := range [][3]string{
+			{value + ",92", "", ""}, {"56," + value, "", ""},
+			{"56,92", value, ""}, {"", "", value + ",55,93,57"},
+			{"", "", "92,55,93," + value},
+		} {
+			t.Run(strings.Join(args[:], "/"), func(t *testing.T) {
+				if got, err := parseGeo(args[0], args[1], args[2]); err == nil || got != nil {
+					t.Fatalf("нечисловой фильтр принят: %+v, %v", got, err)
+				}
+			})
+		}
+	}
+}
