@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(git push:*)",
       "Bash(make test)",
       "Bash(make check)",
       "Bash(make smoke)",
