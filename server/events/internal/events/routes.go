@@ -26,6 +26,7 @@ import (
 //	GET    /my/organization, POST, PUT                   заявка организации
 //	GET    /organizations, /organizations/:id            каталог и страница организации
 //	GET    /profiles/:id                                 профиль организатора
+//	… /my/company-requests, /sports/demand               «Ищу компанию» (company_routes.go)
 func Register(parent *gin.RouterGroup, s *Service) {
 	g := parent.Group("", profileSync(s))
 	g.GET("/sports", func(c *gin.Context) {
@@ -242,6 +243,7 @@ func Register(parent *gin.RouterGroup, s *Service) {
 		}
 		c.JSON(200, p)
 	})
+	registerCompany(g, s)
 }
 
 // RegisterAdmin — модерация. Роль admin проверяется и в gateway, и здесь.
@@ -436,7 +438,7 @@ func handle(c *gin.Context, err error) bool {
 	case errors.Is(err, ErrOrgNotApproved), errors.Is(err, ErrNotOrganizer):
 		fail(c, 403, "forbidden", err.Error())
 	case errors.Is(err, ErrEventClosed), errors.Is(err, ErrEventPast), errors.Is(err, ErrOwnEvent),
-		errors.Is(err, ErrFull), errors.Is(err, ErrOrgExists), errors.Is(err, ErrNotParticipant), errors.Is(err, ErrSportHidden):
+		errors.Is(err, ErrFull), errors.Is(err, ErrOrgExists), errors.Is(err, ErrRequestExists), errors.Is(err, ErrNotParticipant), errors.Is(err, ErrSportHidden):
 		fail(c, 409, "conflict", err.Error())
 	case errors.Is(err, ErrBadParent):
 		fail(c, 422, "validation_error", err.Error())

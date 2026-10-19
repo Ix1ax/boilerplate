@@ -41,7 +41,9 @@
 - [ ] В выдаче и карточке: `confirmed_count`, `first_timers_count`, `spots_left`, `waitlist_position` для меня.
 - [ ] Фильтр выдачи «можно впервые» (`level in (any, beginner)`).
 
-### Б2. «Ищу компанию» — главная фича
+### Б2. «Ищу компанию» — главная фича ✅
+
+Готово: миграция `00002`, подбор при публикации в той же транзакции, уведомления через outbox, API (`/my/company-requests`, `/sports/demand`, `company_matches` у события), сиды, unit- и интеграционные тесты, сценарий в `make case`. Подробности — [data-model.md](data-model.md#company_requests-company_matches--ищу-компанию).
 
 - Таблица `company_requests`: направление (или своё), уровень, время суток (утро/день/вечер), дни недели, район или точка с радиусом, комментарий, статус `active | closed`, срок жизни 30 дней.
 - Таблица `company_matches (request_id, event_id)` — чтобы не уведомлять дважды и показывать «Подходящие события».

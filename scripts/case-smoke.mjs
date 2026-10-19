@@ -73,6 +73,7 @@ const inSaturday = (hour) => {
   return d.toISOString();
 };
 const created = [];
+const companyRequests = [];
 const createEvent = async (who, input) => {
   const event = ok(
     await as[who]('/events', 'POST', {
@@ -388,8 +389,73 @@ try {
     '6. Снятое событие пропало из выдачи, записаться нельзя; участник и организатор видят причину',
   );
 
-  console.log('Все шесть сценариев кейса пройдены.');
+  // Сверх минимума: «Ищу компанию». Мария ищет компанию — организатор видит спрос — публикует
+  // подходящее событие — Марии приходит «Нашлась компания», событие появляется в её подборке.
+  const wanted = 'Ультимат-фрисби';
+  const before = ok(await as.maria('/my/company-requests'), 'запросы Марии');
+  for (const r of before.items.filter(
+    (r) => r.sport.name === wanted && r.status === 'active',
+  )) {
+    ok(
+      await as.maria(`/my/company-requests/${r.id}`, 'DELETE'),
+      'закрытие старого запроса',
+    );
+  }
+  const wish = ok(
+    await as.maria('/my/company-requests', 'POST', {
+      sport_name: wanted,
+      day_parts: ['morning'],
+      note: 'Хочу попробовать',
+    }),
+    'запрос «Ищу компанию»',
+  );
+  companyRequests.push(wish.id);
+  const demand = ok(
+    await as.igor(`/sports/demand?sport_name=${encodeURIComponent(wanted)}`),
+    'спрос у организатора',
+  );
+  assert.ok(
+    demand.count >= 1 && demand.by_day_part.morning >= 1,
+    'организатор не видит спрос',
+  );
+  const offer = await createEvent('igor', {
+    title: 'Фрисби для новичков',
+    sport_name: wanted,
+    starts_at: inSaturday(10),
+    join_mode: 'open',
+  });
+  assert.ok(
+    offer.company_matches >= 1,
+    'событие не подобралось ищущим компанию',
+  );
+  let invited = false;
+  for (let i = 0; i < 20 && !invited; i++) {
+    const bell = ok(await as.maria('/notifications'), 'колокольчик Марии');
+    invited = bell.items.some(
+      (n) =>
+        n.title.startsWith('Нашлась компания') &&
+        n.link === `/events/${offer.id}`,
+    );
+    if (!invited) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(invited, 'уведомление «Нашлась компания» не пришло за 20 секунд');
+  const picked = ok(
+    await as.maria(`/my/company-requests/${wish.id}/matches`),
+    'подборка Марии',
+  );
+  assert.ok(
+    picked.items.some((e) => e.id === offer.id),
+    'событие не попало в подборку',
+  );
+  step(
+    '★ Ищу компанию: спрос виден организатору, новое событие пришло уведомлением и попало в подборку',
+  );
+
+  console.log('Все шесть сценариев кейса и «Ищу компанию» пройдены.');
 } finally {
+  for (const id of companyRequests) {
+    await as.maria(`/my/company-requests/${id}`, 'DELETE');
+  }
   // Убираем за собой: созданные события удаляем с причиной, чтобы они не мешали демо.
   for (const id of created) {
     await as.admin(`/admin/events/${id}/delete`, 'POST', {

@@ -60,6 +60,10 @@ tags:
     description: Заявка на допуск, каталог и страницы допущенных организаций. (сервис events)
   - name: Профили и справочники
     description: Направления спорта и публичные профили организаторов. (сервис events)
+  - name: Ищу компанию
+    description:
+      Запросы людей, которым не с кем заниматься, подбор подходящих событий и обезличенный спрос для
+      организаторов. (сервис events)
   - name: Модерация (админ)
     description: Допуск организаций, снятие мероприятий, скрытие сообщений. Только роль `admin`. (сервис events)
   - name: Файлы
@@ -485,6 +489,68 @@ paths:
                     is_custom: true
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/sports/demand:
+    get:
+      tags:
+        - Ищу компанию
+      operationId: getDemand
+      summary: Спрос на направление
+      description:
+        Для формы создания события — «12 человек ищут компанию на бег, чаще утром в выходные». Только
+        числа, без имён. Считаются чужие активные запросы с совместимым уровнем; человек без предпочтений по
+        времени учитывается в каждой части дня и каждом дне. Направление, которого ещё нет в справочнике, —
+        нулевой спрос и пустой `sport_id`.
+      parameters:
+        - name: sport_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: sport_name
+          in: query
+          description: Своё направление, если его выбирают не из справочника
+          schema:
+            type: string
+            maxLength: 60
+          example: Бег
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum:
+              - any
+              - beginner
+              - amateur
+              - pro
+            default: any
+      responses:
+        '200':
+          description: Спрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Demand'
+              example:
+                sport_id: 3f1c7c2e-6d5a-4c3e-9a51-0b2d9e1f4a10
+                count: 4
+                by_day_part:
+                  morning: 3
+                  day: 1
+                  evening: 2
+                by_weekday:
+                  - 1
+                  - 1
+                  - 1
+                  - 1
+                  - 1
+                  - 4
+                  - 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/events:
@@ -1064,6 +1130,146 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/company-requests:
+    get:
+      tags:
+        - Ищу компанию
+      operationId: listMyCompanyRequests
+      summary: Мои запросы «Ищу компанию»
+      description:
+        Активные первыми. Истёкший запрос (старше 30 дней) возвращается со статусом `expired` и
+        уведомлений больше не присылает.
+      responses:
+        '200':
+          description: Запросы
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CompanyRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - Ищу компанию
+      operationId: createCompanyRequest
+      summary: Ищу компанию
+      description:
+        Человек описывает, чем и когда хочет заниматься. Уже опубликованные подходящие события сразу
+        попадают в подборку (`matches_count`, `GET …/matches`). Когда кто-то опубликует новое подходящее
+        событие, придёт уведомление «Нашлась компания». Подходит, если совпадает направление, уровень
+        совместим («не важно» с любой стороны или точное совпадение), время суток и день недели — по местному
+        времени события, а при заданной точке — событие в радиусе. Один активный запрос на направление (повтор
+        — 409). Своё направление заводится в справочнике.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRequestInput'
+            example:
+              sport_name: Бег
+              level: beginner
+              day_parts:
+                - morning
+              weekdays:
+                - 6
+                - 7
+              area: Рядом с Октябрьским районом
+              lat: 56.0153
+              lng: 92.8932
+              radius_km: 5
+              note: Бегаю 3–5 км, хочу компанию, чтобы не бросить
+      responses:
+        '201':
+          description: Запрос создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/company-requests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Ищу компанию
+      operationId: getMyCompanyRequest
+      summary: Мой запрос «Ищу компанию»
+      responses:
+        '200':
+          description: Запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Ищу компанию
+      operationId: closeCompanyRequest
+      summary: Закрыть запрос
+      description: «Нашёл компанию» или «больше не ищу» — уведомления прекращаются. Уже закрытый или чужой запрос — 404.
+      responses:
+        '204':
+          description: Запрос закрыт
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/company-requests/{id}/matches:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Ищу компанию
+      operationId: listCompanyMatches
+      summary: Подобранные события
+      description:
+        Предстоящие опубликованные события, подобранные под запрос, — ближайшие первыми. Снятые и
+        прошедшие сюда не попадают.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: События
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/organizations:
@@ -2531,6 +2737,7 @@ components:
         - confirmed_count
         - pending_count
         - waitlist_count
+        - company_matches
         - status
         - moderation_reason
         - organizer
@@ -2599,6 +2806,9 @@ components:
           type: integer
         waitlist_count:
           type: integer
+        company_matches:
+          type: integer
+          description: Сколько людей из «Ищу компанию» получили это событие в подборке
         status:
           type: string
           enum:
@@ -2967,6 +3177,172 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Event'
+    CompanyRequestInput:
+      type: object
+      description:
+        Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней —
+        «когда угодно».
+      properties:
+        sport_id:
+          type: string
+          format: uuid
+        sport_name:
+          type: string
+          minLength: 2
+          maxLength: 60
+        level:
+          type: string
+          enum:
+            - any
+            - beginner
+            - amateur
+            - pro
+          default: any
+          description: Мой уровень; any — не важно
+        day_parts:
+          type: array
+          items:
+            type: string
+            enum:
+              - morning
+              - day
+              - evening
+          description: Утро — до 12:00, день — до 17:00, вечер — позже (по Красноярску)
+        weekdays:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+          description: 1 — понедельник … 7 — воскресенье
+        area:
+          type: string
+          maxLength: 200
+          description: Район словами — для человека
+          в подборе не участвует: null
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        radius_km:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 100
+          description: Только вместе с точкой
+        note:
+          type: string
+          maxLength: 500
+    CompanyRequest:
+      type: object
+      required:
+        - id
+        - sport
+        - level
+        - day_parts
+        - weekdays
+        - area
+        - lat
+        - lng
+        - radius_km
+        - note
+        - status
+        - expires_at
+        - created_at
+        - matches_count
+        - others_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        sport:
+          $ref: '#/components/schemas/Sport'
+        level:
+          type: string
+          enum:
+            - any
+            - beginner
+            - amateur
+            - pro
+        day_parts:
+          type: array
+          items:
+            type: string
+            enum:
+              - morning
+              - day
+              - evening
+        weekdays:
+          type: array
+          items:
+            type: integer
+        area:
+          type: string
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        radius_km:
+          type: integer
+          nullable: true
+        note:
+          type: string
+        status:
+          type: string
+          enum:
+            - active
+            - closed
+            - expired
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        matches_count:
+          type: integer
+          description: Подходящие предстоящие события
+        others_count:
+          type: integer
+          description: Сколько ещё людей ищут компанию на это направление (без имён)
+    Demand:
+      type: object
+      required:
+        - sport_id
+        - count
+        - by_day_part
+        - by_weekday
+      properties:
+        sport_id:
+          type: string
+          format: uuid
+          nullable: true
+        count:
+          type: integer
+        by_day_part:
+          type: object
+          required:
+            - morning
+            - day
+            - evening
+          properties:
+            morning:
+              type: integer
+            day:
+              type: integer
+            evening:
+              type: integer
+        by_weekday:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            type: integer
+          description: С понедельника по воскресенье
     Reason:
       type: object
       properties:

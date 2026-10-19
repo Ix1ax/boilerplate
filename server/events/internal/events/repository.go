@@ -83,6 +83,7 @@ e.level,e.requirements,e.price_note,e.private_info,e.join_mode,e.capacity,
 (SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='confirmed'),
 (SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='pending'),
 (SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='waitlist'),
+(SELECT count(*) FROM company_matches cm WHERE cm.event_id=e.id),
 e.status,e.moderation_reason,e.organizer_id,COALESCE(pr.display_name,''),o.id,COALESCE(o.name,''),
 mp.id,mp.status,mp.decision_reason,e.created_at
 FROM events e
@@ -101,7 +102,7 @@ func scanEvent(row pgx.Row, a Actor) (Event, error) {
 	var orgID, mpID, mpStatus, mpReason *string
 	err := row.Scan(&e.ID, &e.Title, &e.Description, &e.Sport.ID, &e.Sport.Name, &e.Sport.IsCustom, &e.StartsAt, &e.EndsAt, &e.Location, &e.Lat, &e.Lng,
 		&e.Level, &e.Requirements, &e.PriceNote, &e.PrivateInfo, &e.JoinMode, &e.Capacity,
-		&e.ConfirmedCount, &e.PendingCount, &e.WaitlistCount,
+		&e.ConfirmedCount, &e.PendingCount, &e.WaitlistCount, &e.CompanyMatches,
 		&e.Status, &e.ModerationReason, &organizerID, &organizerName, &orgID, &orgName,
 		&mpID, &mpStatus, &mpReason, &e.CreatedAt)
 	if err != nil {
@@ -165,6 +166,10 @@ func (r *Repository) ListEvents(ctx context.Context, a Actor, f EventFilter) (Pa
 	if len(f.SportIDs) > 0 {
 		where = append(where, "e.sport_id = ANY("+arg(f.SportIDs)+"::uuid[])")
 	}
+	if f.MatchedFor != "" {
+		// Только события, подобранные под мой запрос «Ищу компанию»: чужой запрос даёт пустой список.
+		where = append(where, "e.id IN (SELECT m.event_id FROM company_matches m JOIN company_requests cr ON cr.id=m.request_id WHERE m.request_id="+arg(f.MatchedFor)+"::uuid AND cr.user_id=$1)")
+	}
 	if f.Mode != "" {
 		where = append(where, "e.join_mode = "+arg(f.Mode))
 	}
@@ -209,7 +214,7 @@ func (r *Repository) ListEvents(ctx context.Context, a Actor, f EventFilter) (Pa
 func (r *Repository) CreateEvent(ctx context.Context, a Actor, in EventInput) (Event, error) {
 	id := uuid.NewString()
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
-		sportID, err := resolveSport(ctx, tx, a, in)
+		sportID, err := resolveSport(ctx, tx, a, in.SportID, in.SportName)
 		if err != nil {
 			return err
 		}
@@ -232,7 +237,10 @@ level,requirements,price_note,private_info,join_mode,capacity) VALUES($1,$2,$3,$
 		if err != nil {
 			return err
 		}
-		return platform.RecordTransition(ctx, tx, "event", id, platform.Transition{From: "none", To: "published", Actor: actorLabel(a)})
+		if err = platform.RecordTransition(ctx, tx, "event", id, platform.Transition{From: "none", To: "published", Actor: actorLabel(a)}); err != nil {
+			return err
+		}
+		return matchNewEvent(ctx, tx, id)
 	})
 	if err != nil {
 		return Event{}, err
@@ -242,11 +250,11 @@ level,requirements,price_note,private_info,join_mode,capacity) VALUES($1,$2,$3,$
 
 // resolveSport возвращает направление из справочника или заводит своё. Повтор с другим
 // регистром или пробелами попадает в существующую запись (уникальный индекс по lower(btrim)).
-func resolveSport(ctx context.Context, tx pgx.Tx, a Actor, in EventInput) (string, error) {
+func resolveSport(ctx context.Context, tx pgx.Tx, a Actor, sportID, sportName string) (string, error) {
 	var id string
 	var hidden bool
-	if in.SportID != "" {
-		err := tx.QueryRow(ctx, "SELECT id,hidden FROM sports WHERE id=$1", in.SportID).Scan(&id, &hidden)
+	if sportID != "" {
+		err := tx.QueryRow(ctx, "SELECT id,hidden FROM sports WHERE id=$1", sportID).Scan(&id, &hidden)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", FieldError{"sport", "Неизвестное направление"}
 		}
@@ -256,7 +264,7 @@ func resolveSport(ctx context.Context, tx pgx.Tx, a Actor, in EventInput) (strin
 		return id, err
 	}
 	err := tx.QueryRow(ctx, `INSERT INTO sports(id,name,is_custom,created_by) VALUES($1,$2,true,$3)
-ON CONFLICT (lower(btrim(name))) DO UPDATE SET name=sports.name RETURNING id,hidden`, uuid.NewString(), in.SportName, a.ID).Scan(&id, &hidden)
+ON CONFLICT (lower(btrim(name))) DO UPDATE SET name=sports.name RETURNING id,hidden`, uuid.NewString(), sportName, a.ID).Scan(&id, &hidden)
 	if err == nil && hidden {
 		return "", ErrSportHidden
 	}

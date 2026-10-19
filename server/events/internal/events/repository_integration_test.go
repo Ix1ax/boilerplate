@@ -5,33 +5,19 @@ package events
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
-	"example.com/hackathon/server/events/internal/database"
 	"example.com/hackathon/server/events/internal/platform"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Шесть базовых сценариев кейса (docs/case.md) на уровне хранилища: правила доступа живут в SQL,
 // поэтому проверяем их на настоящем Postgres, а не на фейке.
 func TestCaseScenarios(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Fatal("Укажите DATABASE_URL для интеграционного теста")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := database.Migrate(ctx, dsn, "up"); err != nil {
-		t.Fatal(err)
-	}
-	db, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := isolatedDB(t, ctx)
 	s := New(NewRepository(db))
 	person := func(name string) Actor {
 		a := Actor{ID: "it-" + uuid.NewString(), Name: name}

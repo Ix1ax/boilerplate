@@ -89,13 +89,15 @@ type Event struct {
 	Requirements string     `json:"requirements"`
 	PriceNote    string     `json:"price_note"`
 	// PrivateInfo видят только организатор, подтверждённые участники и админ (иначе пусто).
-	PrivateInfo      string           `json:"private_info"`
-	HasPrivateInfo   bool             `json:"has_private_info"`
-	JoinMode         string           `json:"join_mode"`
-	Capacity         *int             `json:"capacity"`
-	ConfirmedCount   int              `json:"confirmed_count"`
-	PendingCount     int              `json:"pending_count"`
-	WaitlistCount    int              `json:"waitlist_count"`
+	PrivateInfo    string `json:"private_info"`
+	HasPrivateInfo bool   `json:"has_private_info"`
+	JoinMode       string `json:"join_mode"`
+	Capacity       *int   `json:"capacity"`
+	ConfirmedCount int    `json:"confirmed_count"`
+	PendingCount   int    `json:"pending_count"`
+	WaitlistCount  int    `json:"waitlist_count"`
+	// CompanyMatches — сколько людей из «Ищу компанию» получили это событие в подборке.
+	CompanyMatches   int              `json:"company_matches"`
 	Status           string           `json:"status"`
 	ModerationReason string           `json:"moderation_reason"`
 	Organizer        Organizer        `json:"organizer"`
@@ -215,8 +217,10 @@ type OrganizationInput struct {
 // EventFilter — параметры выдачи. Level «beginner» показывает и события «для всех».
 type EventFilter struct {
 	Query, Level, Mode, OrganizationID, OrganizerID string
-	SportIDs                                        []string
-	From, To                                        *time.Time
+	// MatchedFor — id моего запроса «Ищу компанию»: только подобранные под него события.
+	MatchedFor string
+	SportIDs   []string
+	From, To   *time.Time
 	// Statuses пусто — только опубликованные будущие (пользовательская выдача).
 	Statuses      []string
 	Limit, Offset int

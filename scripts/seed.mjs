@@ -267,6 +267,38 @@ if ((await as('org', '/api/v1/my/organization')).status === 200) {
     `Кейс: организаций — ${kase.organizations.length}, мероприятий — ${kase.events.length}, записей — ${kase.participations.length}, сообщений — ${kase.comments.length}`,
   );
 }
+// «Ищу компанию» — отдельно от мероприятий, чтобы досеять и в уже заполненную базу. Запросы создаются
+// после событий: уже опубликованные подходящие сразу попадают в подборку, а новое событие на демо
+// присылает уведомление «Нашлась компания».
+const company = kase.company_requests ?? [];
+const existing = await json(
+  await as('demo', '/api/v1/my/company-requests'),
+  200,
+  'Запросы «Ищу компанию»',
+);
+if (existing.items.length > 0) {
+  console.log('Запросы «Ищу компанию» уже есть, пропускаем');
+} else {
+  const sports = (
+    await json(await as('demo', '/api/v1/sports'), 200, 'Справочник')
+  ).items;
+  for (const r of company) {
+    const id = sports.find((s) => s.name === r.sport)?.id;
+    await json(
+      await as(r.user, '/api/v1/my/company-requests', 'POST', {
+        ...(id ? { sport_id: id } : { sport_name: r.sport }),
+        level: r.level,
+        day_parts: r.day_parts,
+        weekdays: r.weekdays ?? [],
+        area: r.area,
+        note: r.note,
+      }),
+      201,
+      `Ищу компанию: ${r.user}, «${r.sport}»`,
+    );
+  }
+  console.log(`Запросов «Ищу компанию» — ${company.length}`);
+}
 console.log(
   'Пароли демопользователей — в локальном .env (make demo печатает их).',
 );
