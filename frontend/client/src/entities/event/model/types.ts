@@ -9,6 +9,7 @@ export type {
   MyParticipation,
   Organizer,
   ParticipationStatus,
+  Participant,
 } from '@starter/contracts';
 
 export type EventListParams = {

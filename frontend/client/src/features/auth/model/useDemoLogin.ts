@@ -10,15 +10,15 @@ export const useDemoAccounts = () =>
     meta: { silent: true },
   });
 
-export const useDemoLogin = (next: string) => {
+export const useDemoLogin = (next: string | ((key: string) => string)) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: demoLogin,
     meta: { silent: true },
-    onSuccess: () => {
+    onSuccess: (_, key) => {
       // Сессия заменена: данные прежнего пользователя не должны мелькнуть.
       queryClient.clear();
-      window.location.assign(next);
+      window.location.assign(typeof next === 'function' ? next(key) : next);
     },
   });
 };

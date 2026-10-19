@@ -1,0 +1,1 @@
+export { EventManagePage } from './EventManagePage';

@@ -1,4 +1,10 @@
 export {
+  createEvent,
+  listParticipants,
+  approveParticipant,
+  rejectParticipant,
+  remindParticipants,
+  cancelEvent,
   getEvent,
   getEvents,
   getEventWeather,

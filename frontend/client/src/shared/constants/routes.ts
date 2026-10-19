@@ -1,6 +1,5 @@
 export const STATIC_ROUTES = {
   HOME: '/',
-  PROFILE: '/profile',
   LOGIN: '/login',
   EVENTS: '/events',
   EVENT_NEW: '/events/new',

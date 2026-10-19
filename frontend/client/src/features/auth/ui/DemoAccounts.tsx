@@ -1,3 +1,4 @@
+import { STATIC_ROUTES } from '@/shared/constants';
 import { Button } from '@/shared/ui';
 
 import { useDemoAccounts, useDemoLogin, useLoginTarget } from '../model';
@@ -5,8 +6,15 @@ import { useDemoAccounts, useDemoLogin, useLoginTarget } from '../model';
 /** «Демодоступы для жюри»: обычные учётные записи с выданными правами, вход в одно нажатие. */
 export const DemoAccounts = () => {
   const target = useLoginTarget();
+  const clubTarget = useLoginTarget(STATIC_ROUTES.CLUB);
   const { data: accounts = [] } = useDemoAccounts();
-  const demo = useDemoLogin(target);
+  const demo = useDemoLogin((key) =>
+    accounts
+      .find((account) => account.key === key)
+      ?.role.startsWith('Организация')
+      ? clubTarget
+      : target,
+  );
 
   if (!accounts.length) return null;
 

@@ -12,6 +12,10 @@ export type {
   Organizer,
   ParticipationStatus,
 } from './types';
-export { useEvent, useEventWeather } from './useEvent';
-export { useEvents } from './useEvents';
-export { useMyEvents, useMyParticipations } from './useMyParticipations';
+export {
+  useEvent,
+  useEventWeather,
+  useEvents,
+  useMyEvents,
+  useMyParticipations,
+} from './hooks';
