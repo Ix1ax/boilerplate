@@ -70,7 +70,8 @@ export const joinModeLabels: Record<JoinMode, string> = {
 export const participationLabels: Record<ParticipationStatus, string> = {
   confirmed: 'Вы участвуете',
   pending: 'Заявка на рассмотрении',
-  rejected: 'Заявка отклонена',
+  // rejected — и отказ по заявке, и исключение организатором: в обоих случаях повторная запись закрыта.
+  rejected: 'Организатор отказал в участии',
   cancelled: 'Вы отменили запись',
   waitlist: 'Вы в листе ожидания',
 };
@@ -138,7 +139,8 @@ export type JoinAction =
   | 'apply' // Подать заявку
   | 'manage' // Вы организатор → «Управлять»
   | 'leave' // Вы участвуете / в листе ожидания / заявка ждёт → можно отменить
-  | 'rejoin' // Отклонили или сами отменили → можно снова
+  | 'rejoin' // Сами отменили запись → можно снова
+  | 'refused' // Организатор отказал или исключил → повторно нельзя (сервер ответит 409): показать причину и «другие встречи»
   | 'waitlist' // Мест нет → встать в лист ожидания (свободная запись)
   | 'closed'; // Снято, отменено или уже началось — записи нет
 
@@ -153,7 +155,8 @@ export function joinAction(e: SportEvent, now: Date = new Date()): JoinAction {
   const mine = e.my_participation?.status;
   if (mine === 'confirmed' || mine === 'pending' || mine === 'waitlist')
     return 'leave';
-  if (mine === 'rejected' || mine === 'cancelled') return 'rejoin';
+  if (mine === 'rejected') return 'refused';
+  if (mine === 'cancelled') return 'rejoin';
   if (e.join_mode === 'request') return 'apply';
   return e.spots_left === 0 ? 'waitlist' : 'join';
 }

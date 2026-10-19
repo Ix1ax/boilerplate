@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 
 import { EventCard, useEvents } from '@/entities/event';
 import { useSports } from '@/entities/sport';
+import { useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { useSmoothScroll } from '@/shared/hooks';
@@ -115,8 +116,12 @@ const FLOATERS = [
 
 export const HomePage = () => {
   useSmoothScroll();
-  const { data } = useEvents({ limit: 6 });
-  const { data: allSports } = useSports();
+  // Лендинг открыт гостю: каталог и направления доступны только после входа, а любой 401
+  // уводит на страницу входа. Поэтому гостю показываем лендинг без живых данных.
+  const { data: user, isPending: userPending } = useCurrentUser();
+  const signedIn = !userPending && Boolean(user);
+  const { data } = useEvents({ limit: 6 }, { enabled: signedIn });
+  const { data: allSports } = useSports({ enabled: signedIn });
   const sports = (allSports ?? []).filter((sport) => !sport.is_custom);
   const events = data?.items ?? [];
 
@@ -291,7 +296,7 @@ export const HomePage = () => {
       >
         <div className="mx-auto max-w-[1360px]">
           <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-            <h2 className="display-caps max-w-[920px] text-[clamp(40px,5.6vw,84px)] leading-[.92] tracking-[-0.035em]">
+            <h2 className="display-caps max-w-[920px] text-[clamp(32px,5.6vw,84px)] leading-[.92] tracking-[-0.035em]">
               <MaskRise inView>
                 От «не&nbsp;с&nbsp;кем» до&nbsp;«я&nbsp;в&nbsp;деле»
               </MaskRise>

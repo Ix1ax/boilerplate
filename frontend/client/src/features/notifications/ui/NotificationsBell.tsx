@@ -17,6 +17,8 @@ export const NotificationsBell = () => {
   const markRead = useMarkRead();
   const max = useMax();
   const unread = data?.unread ?? 0;
+  // Одна строка для значка и имени кнопки: доступное имя должно содержать видимый текст (WCAG 2.5.3).
+  const badge = unread > 9 ? '9+' : String(unread);
 
   return (
     <Popover>
@@ -26,7 +28,7 @@ export const NotificationsBell = () => {
             variant="ghost"
             size="icon"
             aria-label={
-              unread ? `Уведомления, непрочитанных: ${unread}` : 'Уведомления'
+              unread ? `Уведомления, непрочитанных: ${badge}` : 'Уведомления'
             }
             className="relative"
           />
@@ -35,7 +37,7 @@ export const NotificationsBell = () => {
         <BellIcon />
         {unread > 0 && (
           <span className="absolute top-0.5 right-0.5 min-w-5 rounded-full bg-gold px-1 text-xs leading-5 font-bold text-ink">
-            {unread > 9 ? '9+' : unread}
+            {badge}
           </span>
         )}
       </PopoverTrigger>
