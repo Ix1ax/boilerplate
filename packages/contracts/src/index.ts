@@ -31,6 +31,30 @@ export type TaskStats = Schemas['TaskStats'];
 export type AuditRecord = Schemas['AuditRecord'];
 export type AuditPage = Schemas['AuditPage'];
 
+// Домен «Вместе»: события, запись, обсуждение, организации и «Собрать компанию».
+export type Sport = Schemas['Sport'];
+export type Organizer = Schemas['Organizer'];
+export type Event = Schemas['Event'];
+export type EventPage = Schemas['EventPage'];
+export type EventInput = Schemas['EventInput'];
+export type EventLevel = Event['level'];
+export type JoinMode = Event['join_mode'];
+export type MyParticipation = Schemas['MyParticipation'];
+export type ParticipationStatus = MyParticipation['status'];
+export type MyEntry = Schemas['MyEntry'];
+export type Person = Schemas['Person'];
+export type Participant = Schemas['Participant'];
+export type EventComment = Schemas['Comment'];
+export type EventWeather = Schemas['EventWeather'];
+export type Organization = Schemas['Organization'];
+export type OrganizationPage = Schemas['OrganizationPage'];
+export type OrganizationInput = Schemas['OrganizationInput'];
+export type OrganizationDetail = Schemas['OrganizationDetail'];
+export type Profile = Schemas['Profile'];
+export type CompanyRequest = Schemas['CompanyRequest'];
+export type CompanyRequestInput = Schemas['CompanyRequestInput'];
+export type Demand = Schemas['Demand'];
+
 // Запрос к LLM-шлюзу. Пределы совпадают с проверкой в Go (server/llm): длина считается в символах.
 export const llmPromptSchema = z.object({
   prompt: z.string().trim().min(1, 'Введите запрос').max(8000),

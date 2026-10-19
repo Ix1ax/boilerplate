@@ -315,7 +315,7 @@ function setupFixture(t) {
   for (const file of [
     'scripts/setup.mjs',
     '.env.example',
-    'client/.env.example',
+    'frontend/client/.env.example',
     'infra/keycloak/realm.template.json',
   ]) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });

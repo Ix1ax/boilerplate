@@ -15,7 +15,7 @@ const stop = (exitCode) => {
 };
 
 for (const app of ['admin', 'client']) {
-  const directory = path.join(root, app);
+  const directory = path.join(root, 'frontend', app);
   const require = createRequire(path.join(directory, 'package.json'));
   const vite = path.join(
     path.dirname(require.resolve('vite/package.json')),

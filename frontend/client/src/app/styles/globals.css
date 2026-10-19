@@ -1,0 +1,338 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import './base-variants.css';
+@import '@fontsource-variable/golos-text';
+@import '@fontsource-variable/unbounded';
+@import '@fontsource-variable/jetbrains-mono';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  /* Статусы записи: текст и фон, контраст не ниже 4,5:1. */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-interest: var(--interest);
+  --color-interest-soft: var(--interest-soft);
+  --font-heading: var(--font-display);
+  --font-sans: 'Golos Text Variable', system-ui, sans-serif;
+  --font-display: 'Unbounded Variable', 'Arial Black', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+/* Фирменная палитра «Вместе» не зависит от темы: тёмные и цветные секции заданы явно. */
+@theme {
+  --color-ink: #121212;
+  --color-ink-soft: #3d424c;
+  --color-night: #1a1d24;
+  --color-paper: #eef0ea;
+  --color-stone: #e3e6de;
+  --color-line: #daddd4;
+  --color-line-strong: #c9cdc3;
+  --color-field: #7a7f76;
+  --color-blue: #2340d8;
+  --color-blue-hover: #1a2fa3;
+  --color-blue-soft: #e8e8fe;
+  --color-blue-pale: #c8cff6;
+  --color-gold: #fad553;
+  --color-gold-soft: #fff3c4;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2.25rem;
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  --radius: 0.875rem;
+  --background: #eef0ea;
+  --foreground: #121212;
+  --card: #ffffff;
+  --card-foreground: #121212;
+  --popover: #ffffff;
+  --popover-foreground: #121212;
+  --primary: #2340d8;
+  --primary-foreground: #ffffff;
+  --secondary: #e3e6de;
+  --secondary-foreground: #121212;
+  --muted: #e3e6de;
+  --muted-foreground: #4a505b;
+  --accent: #fad553;
+  --accent-foreground: #121212;
+  --destructive: #8a1f0b;
+  --border: #daddd4;
+  --input: #7a7f76;
+  --ring: #121212;
+  --success: #0e5a33;
+  --success-soft: #d6f2e1;
+  --warning: #6e4700;
+  --warning-soft: #ffedb8;
+  --danger: #8a1f0b;
+  --danger-soft: #ffe1da;
+  --neutral: #3d414a;
+  --neutral-soft: #e4e5e8;
+  --interest: #2340d8;
+  --interest-soft: #e8e8fe;
+  --chart-1: #2340d8;
+  --chart-2: #fad553;
+  --chart-3: #121212;
+  --chart-4: #7a7f76;
+  --chart-5: #c8cff6;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #121212;
+  --sidebar-primary: #2340d8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fad553;
+  --sidebar-accent-foreground: #121212;
+  --sidebar-border: #daddd4;
+  --sidebar-ring: #121212;
+}
+
+.dark {
+  --background: #121212;
+  --foreground: #eef0ea;
+  --card: #1a1d24;
+  --card-foreground: #eef0ea;
+  --popover: #1a1d24;
+  --popover-foreground: #eef0ea;
+  --primary: #2340d8;
+  --primary-foreground: #ffffff;
+  --secondary: #2b2f37;
+  --secondary-foreground: #eef0ea;
+  --muted: #2b2f37;
+  --muted-foreground: #b9bdb4;
+  --accent: #fad553;
+  --accent-foreground: #121212;
+  --destructive: #ff8f78;
+  --border: rgb(238 240 234 / 14%);
+  --input: rgb(238 240 234 / 45%);
+  --ring: #fad553;
+  --success: #8fe0b0;
+  --success-soft: rgb(14 90 51 / 45%);
+  --warning: #ffd580;
+  --warning-soft: rgb(110 71 0 / 45%);
+  --danger: #ffb4a3;
+  --danger-soft: rgb(138 31 11 / 45%);
+  --neutral: #d4d6db;
+  --neutral-soft: rgb(61 65 74 / 60%);
+  --interest: #aab6ff;
+  --interest-soft: rgb(35 64 216 / 30%);
+  --chart-1: #6b82ff;
+  --chart-2: #fad553;
+  --chart-3: #eef0ea;
+  --chart-4: #7a7f76;
+  --chart-5: #2b2f37;
+  --sidebar: #1a1d24;
+  --sidebar-foreground: #eef0ea;
+  --sidebar-primary: #fad553;
+  --sidebar-primary-foreground: #121212;
+  --sidebar-accent: #2b2f37;
+  --sidebar-accent-foreground: #eef0ea;
+  --sidebar-border: rgb(238 240 234 / 14%);
+  --sidebar-ring: #fad553;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-[17px] leading-normal text-foreground;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  /* Фокус виден на любом фоне: чёрная рамка и золотой ореол. */
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6px var(--color-gold);
+  }
+}
+
+/* Заголовки разделов: Unbounded 900, капс, плотная разрядка. */
+@utility display-caps {
+  font-family: var(--font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+}
+
+/* Заголовки экранов и карточек: Unbounded 800. */
+@utility title-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+@theme {
+  --color-intro-yellow: oklch(0.868 0.174 90.4);
+  --ease-intro: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-intro-exit: intro-exit 500ms var(--ease-intro) 3100ms both;
+  --animate-intro-move: intro-move 650ms var(--ease-intro) 1850ms both;
+  --animate-intro-drop: intro-drop 1000ms linear 100ms both;
+  --animate-intro-person: intro-person-toss 800ms cubic-bezier(0.65, 0, 0.35, 1)
+    760ms both;
+  --animate-intro-ticket: intro-ticket-toss 850ms linear 760ms both;
+  --animate-intro-letter: intro-letter 400ms var(--ease-intro) both;
+  --animate-intro-assembled: intro-clear 1ms steps(1, end) 2750ms both;
+  --animate-intro-settled: intro-appear 1ms steps(1, end) 2750ms both;
+
+  @keyframes intro-drop {
+    0% {
+      opacity: 0;
+      transform: translateY(-220px) rotate(-8deg);
+      animation-timing-function: cubic-bezier(0.55, 0.05, 0.9, 0.5);
+    }
+    62% {
+      opacity: 1;
+      transform: translateY(0) rotate(1deg);
+      animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+    }
+    70% {
+      opacity: 1;
+      transform: scale(1.07, 0.9);
+      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    84% {
+      opacity: 1;
+      transform: translateY(-2px) scale(0.99, 1.02);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes intro-appear {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes intro-move {
+    from {
+      transform: translateX(58px);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes intro-letter {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes intro-person-toss {
+    0%,
+    100% {
+      transform: none;
+    }
+    20% {
+      transform: translateY(0.6px) rotate(7deg);
+    }
+    42% {
+      transform: translateY(-0.8px) rotate(-9deg);
+    }
+    75% {
+      transform: rotate(3deg);
+    }
+  }
+
+  @keyframes intro-ticket-toss {
+    0%,
+    100% {
+      transform: none;
+    }
+    15% {
+      transform: translateY(0.4px) rotate(10deg);
+    }
+    35% {
+      transform: translate(1px, -6px) rotate(95deg);
+    }
+    50% {
+      transform: translate(1.5px, -7.5px) rotate(175deg);
+    }
+    65% {
+      transform: translate(1px, -6px) rotate(255deg);
+    }
+    85% {
+      transform: translate(0, -1px) rotate(345deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes intro-clear {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes intro-exit {
+    to {
+      opacity: 0;
+    }
+  }
+}
