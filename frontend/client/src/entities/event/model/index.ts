@@ -22,6 +22,7 @@ export {
   useEvent,
   useEventWeather,
   useEvents,
+  useEventPages,
   useMyEvents,
   useMyParticipations,
 } from './hooks';

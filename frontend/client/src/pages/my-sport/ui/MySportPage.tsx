@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 
+import { MaxConnectCard } from '@/features/notifications';
+
+import { useCompanyRequests } from '@/entities/company';
 import {
   formatDayShort,
   formatTime,
@@ -23,7 +26,7 @@ import {
   TabsTrigger,
 } from '@/shared/ui';
 
-type Tab = 'part' | 'org';
+type Tab = 'part' | 'org' | 'requests';
 
 const STATUS = {
   confirmed: <Badge variant="success">✓ Вы записаны</Badge>,
@@ -50,8 +53,7 @@ const EntryRow = ({ entry }: { entry: MyEntry }) => {
       <span className="flex min-w-0 flex-col gap-1">
         <b className="text-xl">{e.title}</b>
         <span className="text-ink-soft dark:text-muted-foreground">
-          {formatDayShort(e.startsAt)}, {formatTime(e.startsAt)} ·{' '}
-          {e.location}
+          {formatDayShort(e.startsAt)}, {formatTime(e.startsAt)} · {e.location}
         </span>
         {entry.status === 'rejected' && entry.decisionReason && (
           <span className="text-[15px] text-danger">
@@ -78,6 +80,7 @@ export const MySportPage = () => {
   const { data: user } = useCurrentUser();
   const part = useMyParticipations();
   const mine = useMyEvents();
+  const requests = useCompanyRequests();
   const active = tab === 'part' ? part : mine;
 
   const entries = (part.data ?? []).filter((x) => x.status !== 'cancelled');
@@ -89,6 +92,53 @@ export const MySportPage = () => {
   );
 
   const renderList = () => {
+    if (tab === 'requests')
+      return (
+        <div className="grid gap-4">
+          <Button render={<Link to={STATIC_ROUTES.COMPANY} />}>
+            Новый запрос и подбор встреч
+          </Button>
+          {requests.isPending && <p role="status">Загружаем запросы…</p>}
+          {requests.isError && (
+            <div role="alert">
+              Не удалось загрузить запросы.{' '}
+              <Button onClick={() => void requests.refetch()}>Повторить</Button>
+            </div>
+          )}
+          {requests.data?.items.length === 0 && (
+            <p>
+              Вы пока не ищете компанию. Создайте запрос, чтобы получать
+              подходящие встречи.
+            </p>
+          )}
+          {requests.data?.items.map((item) => (
+            <Link
+              key={item.id}
+              className="grid gap-2 rounded-3xl bg-card p-6"
+              to={STATIC_ROUTES.COMPANY}
+            >
+              <b>
+                {item.sport.name}
+                {item.area && ` · ${item.area}`}
+              </b>
+              <span>
+                {
+                  {
+                    active: 'Запрос сохранён',
+                    closed: 'Запрос закрыт',
+                    expired: 'Срок истёк',
+                  }[item.status]
+                }{' '}
+                · подходящих встреч: {item.matchesCount}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Это ещё не запись на встречу.
+              </span>
+            </Link>
+          ))}
+        </div>
+      );
+
     if (active.isPending)
       return (
         <>
@@ -149,8 +199,8 @@ export const MySportPage = () => {
             {e.pendingCount > 0 && ` · заявок: ${e.pendingCount}`}
           </span>
         </div>
-        <Button render={<Link to={DYNAMIC_ROUTES.EVENT(e.id)} />}>
-          Открыть
+        <Button render={<Link to={DYNAMIC_ROUTES.EVENT_MANAGE(e.id)} />}>
+          Управлять
         </Button>
       </div>
     ));
@@ -176,6 +226,9 @@ export const MySportPage = () => {
               className="text-white data-active:text-ink data-active:bg-white dark:data-active:bg-white"
             >
               Организую · {mine.data?.total ?? 0}
+            </TabsTrigger>
+            <TabsTrigger value="requests">
+              Мои запросы · {requests.data?.items.length ?? 0}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -206,6 +259,7 @@ export const MySportPage = () => {
               </Button>
             </div>
           )}
+          <MaxConnectCard />
         </aside>
       </div>
     </>

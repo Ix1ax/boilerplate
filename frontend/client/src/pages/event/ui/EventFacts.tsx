@@ -45,8 +45,7 @@ export const EventFacts = ({ event }: { event: Event }) => {
         <b className="text-xl leading-snug">{formatDayLong(event.startsAt)}</b>
         <span>
           начало в {formatTime(event.startsAt)}
-          {event.endsAt && `, до ${formatTime(event.endsAt)}`} · по
-          Красноярску
+          {event.endsAt && `, до ${formatTime(event.endsAt)}`} · по Красноярску
         </span>
       </Tile>
       <Tile label="Где">

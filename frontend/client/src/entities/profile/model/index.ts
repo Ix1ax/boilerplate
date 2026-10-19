@@ -1,2 +1,2 @@
 export type { Profile } from './types';
-export { usePersonProfile } from './hooks';
+export { usePersonProfile, useMyProfile, useUpdateMyProfile } from './hooks';

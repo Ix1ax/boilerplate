@@ -81,10 +81,11 @@ export const ClubForm = ({ organization }: ClubFormProps) => {
           name="contacts"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Контакты</FormLabel>
+              <FormLabel>Контакт для администратора</FormLabel>
               <FormControl>
                 <Textarea {...field} value={field.value ?? ''} />
               </FormControl>
+              <FormDescription>Не публикуется в профиле клуба.</FormDescription>
               <FormMessage role="alert" />
             </FormItem>
           )}
@@ -138,6 +139,98 @@ export const ClubForm = ({ organization }: ClubFormProps) => {
                   </Button>
                 </Notice>
               )}
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="site"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Сайт или страница — необязательно</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  type="url"
+                  placeholder="https://"
+                />
+              </FormControl>
+              <FormMessage role="alert" />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="zones"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Районы, где проводите встречи</FormLabel>
+              <FormControl>
+                <Textarea
+                  value={field.value?.join('\n') ?? ''}
+                  onChange={(event) =>
+                    field.onChange(
+                      event.target.value ? event.target.value.split('\n') : [],
+                    )
+                  }
+                  onBlur={field.onBlur}
+                  ref={field.ref}
+                  name={field.name}
+                  placeholder="Каждый район с новой строки"
+                />
+              </FormControl>
+              <FormDescription>
+                До 20 районов, каждый с новой строки.
+              </FormDescription>
+              <FormMessage role="alert" />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="venues"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Где проводите встречи</FormLabel>
+              <FormControl>
+                <Textarea
+                  value={field.value?.join('\n') ?? ''}
+                  onChange={(event) =>
+                    field.onChange(
+                      event.target.value ? event.target.value.split('\n') : [],
+                    )
+                  }
+                  onBlur={field.onBlur}
+                  ref={field.ref}
+                  name={field.name}
+                  placeholder="Название площадки и адрес"
+                />
+              </FormControl>
+              <FormDescription>
+                Укажите названия и адреса, каждое место с новой строки.
+              </FormDescription>
+              <FormMessage role="alert" />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="representative"
+          render={({ field }) => (
+            <FormItem>
+              <label className="flex min-h-11 items-start gap-3 rounded-2xl border p-4">
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={(checked) =>
+                    field.onChange(checked === true)
+                  }
+                />
+                <span>
+                  Я представляю это сообщество и отвечаю за встречи от его имени
+                </span>
+              </label>
+              <FormMessage role="alert" />
             </FormItem>
           )}
         />

@@ -5,6 +5,7 @@ import {
   changePasswordSchema,
   companyRequestSchema,
   eventInputSchema,
+  eventEditSchema,
   eventPatchSchema,
   joinAction,
   joinSchema,
@@ -45,6 +46,36 @@ describe('eventInputSchema', () => {
     );
     expect(issues({ lat: 56 })).toContain('location');
     expect(issues({ title: 'Йо' })).toContain('title');
+  });
+});
+
+describe('проверка временных границ встречи', () => {
+  it('отклоняет прошедший срок сбора и срок после начала', () => {
+    for (const deadline of [
+      new Date(Date.now() - 60_000),
+      new Date(new Date(future).getTime() + 60_000),
+    ]) {
+      const result = eventInputSchema.safeParse({
+        ...valid,
+        min_participants: 2,
+        quorum_deadline: deadline.toISOString(),
+      });
+      expect(
+        result.error?.issues.map((issue) => issue.path.join('.')),
+      ).toContain('quorum_deadline');
+    }
+  });
+  it('не даёт очистить начало в форме правки и переставить окончание раньше него', () => {
+    expect(eventEditSchema.safeParse({ starts_at: undefined }).success).toBe(
+      false,
+    );
+    const result = eventEditSchema.safeParse({
+      starts_at: future,
+      ends_at: new Date(new Date(future).getTime() - 60_000).toISOString(),
+    });
+    expect(result.error?.issues.map((issue) => issue.path.join('.'))).toContain(
+      'ends_at',
+    );
   });
 });
 

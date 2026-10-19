@@ -1,8 +1,16 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 
+import {
+  COMMENT_KEYS,
+  Discussion,
+  getComments,
+} from '@/features/event-discussion';
 import { EventEditForm } from '@/features/event-edit';
 
 import { toApiError } from '@/shared/api';
+import { DYNAMIC_ROUTES } from '@/shared/constants';
 import { Badge, Button, Label, Notice, Textarea } from '@/shared/ui';
 
 import { useEventManage } from '../model';
@@ -17,7 +25,16 @@ export const EventManagement = ({
   eventId: routeEventId,
   onConfirmCancel,
 }: EventManagementProps) => {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(
+    new URLSearchParams(window.location.search).get('edit') === '1',
+  );
+  const [tab, setTab] = useState('pending');
+  const [draft, setDraft] = useState('');
+  const comments = useQuery({
+    queryKey: COMMENT_KEYS.LIST(routeEventId),
+    queryFn: () => getComments(routeEventId),
+    meta: { silent: true },
+  });
   const {
     event,
     participants,
@@ -52,12 +69,50 @@ export const EventManagement = ({
   const closed =
     event.data.status !== 'published' ||
     new Date(event.data.startsAt) <= new Date();
+  const unanswered = (comments.data ?? []).filter(
+    (comment) =>
+      comment.status === 'visible' &&
+      !comment.parentId &&
+      !comment.isOrganizer &&
+      !(comments.data ?? []).some(
+        (reply) =>
+          reply.status === 'visible' &&
+          reply.parentId === comment.id &&
+          reply.isOrganizer,
+      ),
+  ).length;
+  const visibleParticipants = (participants.data ?? []).filter(
+    (participant) => participant.status === tab,
+  );
   return (
     <>
       <div className="w-full">
         <div className="max-w-[960px]">
           <h2 className="title-display text-[26px]">{event.data.title}</h2>
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              ['В составе', event.data.confirmedCount],
+              ['Ждут решения', event.data.pendingCount],
+              ['В листе ожидания', event.data.waitlistCount],
+              ['Вопросы без ответа', unanswered],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-3xl bg-card p-5">
+                <b className="text-3xl">{value}</b>
+                <p>{label}</p>
+              </div>
+            ))}
+          </div>
           <div className="mt-6 flex flex-wrap items-center gap-4">
+            <Button
+              variant="outline"
+              render={
+                <Link
+                  to={`${DYNAMIC_ROUTES.EVENT(event.data.id)}#discussion`}
+                />
+              }
+            >
+              Открыть обсуждение
+            </Button>
             <Badge>В составе: {event.data.confirmedCount}</Badge>
             <Badge>В очереди: {event.data.waitlistCount}</Badge>
             {!closed && (
@@ -105,49 +160,89 @@ export const EventManagement = ({
               {toApiError(action.error).message}
             </Notice>
           )}
-          <section className="mt-8">
-            <h2 className="title-display text-[26px]">Участники и заявки</h2>
-            {participants.isPending && (
-              <p className="mt-4" aria-busy="true">
-                Загружаем состав…
-              </p>
-            )}
-            {participants.isError && (
-              <div className="mt-4">
-                <p role="alert">Не удалось загрузить участников.</p>
-                <Button onClick={() => void participants.refetch()}>
-                  Повторить
-                </Button>
-              </div>
-            )}
-            {!participants.isPending &&
-              !participants.isError &&
-              Boolean(participants.data?.length) && (
-                <ul className="mt-5 grid gap-4">
-                  {participants.data?.map((participant) => (
-                    <ParticipantRow
-                      key={participant.id}
-                      participant={participant}
-                      busy={action.isPending || closed}
-                      onDecision={(participantId, accept, comment) =>
-                        action.mutate({
-                          kind: accept ? 'approve' : 'reject',
-                          participantId,
-                          reason: comment,
-                        })
-                      }
-                    />
-                  ))}
-                </ul>
-              )}
-            {!participants.isPending &&
-              !participants.isError &&
-              !participants.data?.length && (
-                <p className="mt-4 rounded-3xl bg-card p-6">
-                  Пока никто не записался. Поделитесь ссылкой на встречу.
+          <nav
+            className="mt-8 flex flex-wrap gap-3"
+            aria-label="Разделы управления"
+          >
+            {[
+              ['pending', 'Заявки'],
+              ['confirmed', 'Состав'],
+              ['waitlist', 'Лист ожидания'],
+              ['rejected', 'Отклонённые'],
+              ['discussion', 'Обсуждение'],
+            ].map(([value, label]) => (
+              <Button
+                key={value}
+                variant={tab === value ? 'default' : 'outline'}
+                onClick={() => setTab(value)}
+                aria-pressed={tab === value}
+              >
+                {label}
+              </Button>
+            ))}
+          </nav>
+          {tab === 'discussion' ? (
+            <section className="mt-5">
+              <Discussion
+                eventId={routeEventId}
+                isOrganizer
+                closed={closed}
+                draft={draft}
+                onDraftChange={setDraft}
+              />
+            </section>
+          ) : (
+            <section className="mt-8">
+              <h2 className="title-display text-[26px]">Участники и заявки</h2>
+              {participants.isPending && (
+                <p className="mt-4" aria-busy="true">
+                  Загружаем состав…
                 </p>
               )}
-          </section>
+              {participants.isError && (
+                <div className="mt-4">
+                  <p role="alert">Не удалось загрузить участников.</p>
+                  <Button onClick={() => void participants.refetch()}>
+                    Повторить
+                  </Button>
+                </div>
+              )}
+              {!participants.isPending &&
+                !participants.isError &&
+                visibleParticipants.length > 0 && (
+                  <ul className="mt-5 grid gap-4">
+                    {visibleParticipants.map((participant) => (
+                      <ParticipantRow
+                        key={participant.id}
+                        participant={participant}
+                        busy={action.isPending || closed}
+                        onRemove={(participantId, reason) =>
+                          action.mutate({
+                            kind: 'remove',
+                            participantId,
+                            reason,
+                          })
+                        }
+                        onDecision={(participantId, accept, comment) =>
+                          action.mutate({
+                            kind: accept ? 'approve' : 'reject',
+                            participantId,
+                            reason: comment,
+                          })
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}
+              {!participants.isPending &&
+                !participants.isError &&
+                visibleParticipants.length === 0 && (
+                  <p className="mt-4 rounded-3xl bg-card p-6">
+                    В этой вкладке пока нет участников или заявок.
+                  </p>
+                )}
+            </section>
+          )}
           {!closed && (
             <section className="mt-10 grid gap-4 rounded-3xl bg-card p-6">
               <h2 className="title-display text-[26px]">Отменить встречу</h2>

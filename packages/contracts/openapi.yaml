@@ -22,6 +22,19 @@ info:
     Для внешних клиентов и скриптов — Bearer-токен (как получить — в описании схемы bearerAuth).
 
 
+    **Гостевой просмотр.** Без входа доступны только GET справочника `/api/v1/sports`,
+
+    каталога и карточек `/api/v1/events`, `/api/v1/events/{id}`, их `/comments`, `/participants`,
+
+    `/weather`, `/calendar.ics`, `/alternatives`, каталога и карточек `/api/v1/organizations`,
+
+    `/api/v1/organizations/{id}` и `/api/v1/profiles/{id}`. Закрытые контакты и неподтверждённые
+
+    заявки гостю не выдаются. Запись, обсуждение, личный кабинет и административные операции требуют
+
+    входа (401). При наличии действующей сессии сохраняются её права; недействительный Bearer даёт 401.
+
+
     **Общие правила для всех сервисов:**
 
     - Ошибки приходят в едином формате `{"error": {"code", "message", "request_id"}}`.
@@ -648,6 +661,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
   /api/v1/sports:
     get:
+      security: []
       tags:
         - Профили и справочники
       operationId: listSports
@@ -745,6 +759,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /api/v1/events:
     get:
+      security: []
       tags:
         - Мероприятия
       operationId: listEvents
@@ -753,6 +768,17 @@ paths:
         Только опубликованные и ещё не закончившиеся, ближайшие первыми. Поиск `q` учитывает словоформы и
         ищет также по названию направления и организации.
       parameters:
+        - name: zone
+          in: query
+          description: Точное название зоны
+          schema:
+            type: string
+            maxLength: 100
+        - name: step_free
+          in: query
+          description: Только площадки без ступеней или с пандусом
+          schema:
+            type: boolean
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
         - name: q
@@ -900,6 +926,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
+      security: []
       tags:
         - Мероприятия
       operationId: getEvent
@@ -1164,6 +1191,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
+      security: []
       tags:
         - Мероприятия
       operationId: getEventWeather
@@ -1199,6 +1227,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
+      security: []
       tags:
         - Мероприятия
       operationId: eventAlternatives
@@ -1265,6 +1294,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
+      security: []
       tags:
         - Запись
       operationId: listParticipants
@@ -1368,6 +1398,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
+      security: []
       tags:
         - Обсуждение
       operationId: listComments
@@ -1655,6 +1686,41 @@ paths:
   /api/v1/my/company-requests/{id}:
     parameters:
       - $ref: '#/components/parameters/ID'
+    patch:
+      tags:
+        - Ищу компанию
+      operationId: updateCompanyRequest
+      summary: Изменить собственный активный запрос
+      description:
+        Полная замена условий; новая редакция отменяет ответы на прежний общий вариант. Чужой или
+        истёкший запрос — 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRequestInput'
+      responses:
+        '200':
+          description: Актуальный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     get:
       tags:
         - Ищу компанию
@@ -1719,6 +1785,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /api/v1/organizations:
     get:
+      security: []
       tags:
         - Организации
       operationId: listOrganizations
@@ -1749,6 +1816,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ID'
     get:
+      security: []
       tags:
         - Организации
       operationId: getOrganization
@@ -1841,6 +1909,7 @@ paths:
           type: string
           maxLength: 100
     get:
+      security: []
       tags:
         - Профили и справочники
       operationId: getProfile
@@ -2624,6 +2693,118 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/my/company-requests/{id}/proposal:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Ищу компанию
+      operationId: getCompanyProposal
+      summary: Общий час по реальным запросам
+      description:
+        Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба
+        только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+      responses:
+        '200':
+          description: Результат подбора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyProposalEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/my/company-requests/{id}/proposal/response:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Ищу компанию
+      operationId: respondCompanyProposal
+      summary: Ответить на актуальную версию общего варианта
+      description:
+        Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба
+        только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - interested
+              properties:
+                version:
+                  type: string
+                  maxLength: 100
+                interested:
+                  type: boolean
+            example:
+              version: abc123
+              interested: true
+      responses:
+        '200':
+          description: Результат подбора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyProposalEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/sports/company-demand:
+    get:
+      tags:
+        - Ищу компанию
+      operationId: companyDemand
+      summary: Обезличенные группы спроса для допущенного клуба
+      description:
+        Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба
+        только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+      responses:
+        '200':
+          description: Результат подбора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDemandPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/files:
     get:
       tags:
@@ -3993,6 +4174,92 @@ components:
           type: integer
         offset:
           type: integer
+    CompanyWindow:
+      type: object
+      required:
+        - starts_at
+        - ends_at
+      description: Конкретное будущее окно от часа до суток; не повторяется еженедельно.
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+          example: 2026-10-24T12:00:00+07:00
+        ends_at:
+          type: string
+          format: date-time
+          example: 2026-10-24T14:00:00+07:00
+    CompanyProposal:
+      type: object
+      required:
+        - version
+        - sport_id
+        - sport_name
+        - zone
+        - level
+        - starts_at
+        - ends_at
+        - count
+        - interested
+        - response
+        - event_id
+        - enrolled
+      properties:
+        version:
+          type: string
+        sport_id:
+          type: string
+          format: uuid
+        sport_name:
+          type: string
+        zone:
+          type: string
+        level:
+          type: string
+          enum:
+            - any
+            - beginner
+            - amateur
+            - pro
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        count:
+          type: integer
+          description: Число реальных активных запросов
+        interested:
+          type: integer
+        response:
+          type: boolean
+          nullable: true
+        event_id:
+          type: string
+          format: uuid
+          nullable: true
+        enrolled:
+          type: integer
+          description: Число подтверждённых записей опубликованной встречи
+    CompanyProposalEnvelope:
+      type: object
+      required:
+        - proposal
+      properties:
+        proposal:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CompanyProposal'
+    CompanyDemandPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompanyProposal'
     Sport:
       type: object
       required:
@@ -4071,6 +4338,10 @@ components:
     Event:
       type: object
       required:
+        - zone
+        - meeting_host
+        - step_free
+        - companion_allowed
         - id
         - title
         - description
@@ -4100,6 +4371,20 @@ components:
         - is_organizer
         - created_at
       properties:
+        zone:
+          type: string
+          maxLength: 100
+          default: ''
+        meeting_host:
+          type: string
+          maxLength: 200
+          default: ''
+        step_free:
+          type: boolean
+          default: false
+        companion_allowed:
+          type: boolean
+          default: false
         id:
           type: string
           format: uuid
@@ -4245,6 +4530,16 @@ components:
         - location
         - join_mode
       properties:
+        zone:
+          type: string
+          maxLength: 100
+        meeting_host:
+          type: string
+          maxLength: 200
+        step_free:
+          type: boolean
+        companion_allowed:
+          type: boolean
         title:
           type: string
           minLength: 3
@@ -4578,6 +4873,30 @@ components:
         - events
         - stats
       properties:
+        interests:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 2
+            maxLength: 60
+        preferences:
+          type: object
+          description: Личные настройки возвращаются только владельцу
+          properties:
+            notify_reminders:
+              type: boolean
+              default: true
+            notify_decisions:
+              type: boolean
+              default: true
+            notify_replies:
+              type: boolean
+              default: true
+            large_text:
+              type: boolean
+            reduced_motion:
+              type: boolean
         id:
           type: string
         name:
@@ -4600,6 +4919,22 @@ components:
         Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней —
         «когда угодно».
       properties:
+        zones:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        windows:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CompanyWindow'
+        expires_at:
+          type: string
+          format: date-time
+          description: Срок в пределах 30 дней; окна заканчиваются до него
         sport_id:
           type: string
           format: uuid
@@ -4671,6 +5006,21 @@ components:
         - matches_count
         - others_count
       properties:
+        zones:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        windows:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CompanyWindow'
+        revision:
+          type: integer
+          minimum: 1
         id:
           type: string
           format: uuid
@@ -4901,6 +5251,30 @@ components:
     ProfilePatch:
       type: object
       properties:
+        interests:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 2
+            maxLength: 60
+        preferences:
+          type: object
+          description: Личные настройки возвращаются только владельцу
+          properties:
+            notify_reminders:
+              type: boolean
+              default: true
+            notify_decisions:
+              type: boolean
+              default: true
+            notify_replies:
+              type: boolean
+              default: true
+            large_text:
+              type: boolean
+            reduced_motion:
+              type: boolean
         about:
           type: string
           maxLength: 1000
@@ -4916,8 +5290,21 @@ components:
             - pro
     EventPatch:
       type: object
-      description: Только меняемые поля. Режим записи, направление и организатор не меняются.
+      description:
+        Только меняемые поля. Режим записи, направление и организатор не меняются. Отсутствующее поле
+        сохраняет значение; null для ends_at, capacity очищает его. Координаты lat/lng очищаются только парой
+        null.
       properties:
+        zone:
+          type: string
+          maxLength: 100
+        meeting_host:
+          type: string
+          maxLength: 200
+        step_free:
+          type: boolean
+        companion_allowed:
+          type: boolean
         title:
           type: string
           minLength: 3

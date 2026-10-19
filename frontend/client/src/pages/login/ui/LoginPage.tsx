@@ -35,8 +35,8 @@ export const LoginPage = () => {
             <span className="text-gold">своих</span>
           </p>
           <p className="mt-5 max-w-[440px] text-[19px] text-paper/85">
-            Аккаунт нужен, чтобы смотреть встречи, записываться, задавать
-            вопросы и создавать свои.
+            Смотреть встречи можно без аккаунта. Войдите, чтобы записываться,
+            задавать вопросы и создавать свои.
           </p>
         </div>
         <span className="relative text-[15px] text-paper/70">

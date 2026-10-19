@@ -13,10 +13,12 @@ import {
 import { useMarkRead, useMax, useNotifications } from '../model';
 
 export const NotificationsBell = () => {
-  const { data } = useNotifications();
+  const notifications = useNotifications();
+  const data = notifications.data;
+  const items = data?.pages.flatMap((page) => page.items) ?? [];
   const markRead = useMarkRead();
   const max = useMax();
-  const unread = data?.unread ?? 0;
+  const unread = data?.pages[0]?.unread ?? 0;
   // Одна строка для значка и имени кнопки: доступное имя должно содержать видимый текст (WCAG 2.5.3).
   const badge = unread > 9 ? '9+' : String(unread);
 
@@ -54,20 +56,32 @@ export const NotificationsBell = () => {
             </Button>
           )}
         </PopoverHeader>
-        {!data?.items.length ? (
-          <p className="text-muted-foreground py-4 text-center text-sm">
-            Пока ничего нет
-          </p>
-        ) : (
+        {notifications.isPending && <p role="status">Загружаем уведомления…</p>}
+        {notifications.isError && (
+          <div role="alert">
+            Не удалось загрузить уведомления.{' '}
+            <Button onClick={() => void notifications.refetch()}>
+              Повторить
+            </Button>
+          </div>
+        )}
+        {!notifications.isPending &&
+          !notifications.isError &&
+          !items.length && (
+            <p className="text-muted-foreground py-4 text-center text-sm">
+              Пока ничего нет
+            </p>
+          )}
+        {items.length > 0 && (
           <ul className="max-h-80 space-y-1 overflow-y-auto">
-            {data.items.map((item) => (
+            {items.map((item) => (
               <li key={item.id}>
                 <Link
                   to={item.link || '#'}
-                  onClick={() => !item.read_at && markRead.mutate(item.id)}
+                  onClick={() => !item.readAt && markRead.mutate(item.id)}
                   className="hover:bg-muted block rounded-md p-2 text-sm"
                 >
-                  <span className={item.read_at ? '' : 'font-semibold'}>
+                  <span className={item.readAt ? '' : 'font-semibold'}>
                     {item.title}
                   </span>
                   {item.body && (
@@ -79,6 +93,15 @@ export const NotificationsBell = () => {
               </li>
             ))}
           </ul>
+        )}
+        {notifications.hasNextPage && (
+          <Button
+            className="w-full"
+            disabled={notifications.isFetchingNextPage}
+            onClick={() => void notifications.fetchNextPage()}
+          >
+            {notifications.isFetchingNextPage ? 'Загружаем…' : 'Показать ещё'}
+          </Button>
         )}
         {max.status?.enabled && (
           <div className="flex items-center justify-between border-t pt-2 text-sm">

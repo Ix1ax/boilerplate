@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   type EventFormInput,
@@ -8,15 +9,15 @@ import {
 } from '@starter/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { createEvent, EVENT_KEYS } from '@/entities/event';
+import { createEvent, type Event, EVENT_KEYS } from '@/entities/event';
 import { useMyOrganization } from '@/entities/organization';
 import { SPORT_KEYS, useSports } from '@/entities/sport';
 
 import { toApiError } from '@/shared/api';
-import { DYNAMIC_ROUTES } from '@/shared/constants';
 
 export const useEventCreate = () => {
-  const navigate = useNavigate();
+  const [search] = useSearchParams();
+  const [created, setCreated] = useState<Event | null>(null);
   const cache = useQueryClient();
   const sportsQuery = useSports();
   const sports = sportsQuery.data ?? [];
@@ -27,13 +28,23 @@ export const useEventCreate = () => {
       title: '',
       description: '',
       location: '',
-      level: 'any',
+      level: (['any', 'beginner', 'amateur', 'pro'].find(
+        (v) => v === search.get('level'),
+      ) ?? 'any') as EventFormInput['level'],
       requirements: '',
       price_note: '',
       private_info: '',
       join_mode: 'open',
-      as_organization: false,
+      as_organization: search.get('as_organization') === '1',
       outdoor: false,
+      sport_id: search.get('sport_id') || undefined,
+      sport_name: search.get('sport_name') || undefined,
+      starts_at: search.get('starts_at') || undefined,
+      ends_at: search.get('ends_at') || undefined,
+      zone: search.get('zone') || '',
+      meeting_host: '',
+      step_free: false,
+      companion_allowed: false,
     },
   });
   const {
@@ -48,13 +59,14 @@ export const useEventCreate = () => {
         cache.invalidateQueries({ queryKey: EVENT_KEYS.ALL }),
         cache.invalidateQueries({ queryKey: SPORT_KEYS.LIST }),
       ]);
-      void navigate(DYNAMIC_ROUTES.EVENT(event.id));
+      setCreated(event);
     } catch (error) {
       setError('root', { message: toApiError(error).message });
     }
   });
   return {
     form,
+    created,
     submit,
     errors,
     isSubmitting,

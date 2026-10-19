@@ -31,7 +31,11 @@ export const ChangePasswordForm = () => {
             <FormItem>
               <FormLabel>Текущий пароль</FormLabel>
               <FormControl>
-                <Input type="password" autoComplete="current-password" {...field} />
+                <Input
+                  type="password"
+                  autoComplete="current-password"
+                  {...field}
+                />
               </FormControl>
               <FormMessage role="alert" />
             </FormItem>

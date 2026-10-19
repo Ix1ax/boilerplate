@@ -12,7 +12,11 @@ test.beforeEach(async ({ page }) => {
     id: 'event-1',
     title: 'Совместная пробежка',
     sport,
-    organizer: { id: 'user-1', name: 'Анна', kind: 'person' },
+    organizer: { id: 'user-1', name: 'Анна', type: 'person' },
+    zone: 'Север',
+    meeting_host: '',
+    step_free: false,
+    companion_allowed: false,
     starts_at: '2099-01-20T03:00:00Z',
     description: 'Пробежка в парке',
     location: 'Парк',
@@ -84,6 +88,8 @@ test.beforeEach(async ({ page }) => {
     ) {
       requests = [];
       status = 204;
+    } else if (path.endsWith('/proposal')) {
+      body = { proposal: null };
     } else if (path === '/events' && method === 'POST') {
       body = event;
     } else if (path === '/events/event-1') {
@@ -125,7 +131,9 @@ test.beforeEach(async ({ page }) => {
 
 test('запрос компании создаётся и закрывается', async ({ page }) => {
   await page.goto('/company');
-  await page.getByLabel('Направление', { exact: true }).fill('Бег');
+  await page.getByLabel('Вид спорта', { exact: true }).fill('Бег');
+  await page.getByLabel('Север', { exact: true }).check();
+  await page.getByRole('button', { name: '+ Ещё окно', exact: true }).click();
   await page
     .getByRole('button', { name: 'Искать компанию', exact: true })
     .click();
@@ -175,6 +183,8 @@ test('встреча создаётся с новым направлением �
     (request) =>
       request.url().endsWith('/api/v1/events') && request.method() === 'POST',
   );
+  await page.getByRole('button', { name: 'Далее', exact: true }).click();
+  await page.getByRole('button', { name: 'Далее', exact: true }).click();
   await page
     .getByRole('button', { name: 'Опубликовать встречу', exact: true })
     .click();
@@ -183,6 +193,12 @@ test('встреча создаётся с новым направлением �
   expect(new Date(payload.starts_at).toISOString()).toBe(
     '2099-01-20T03:00:00.000Z',
   );
+  await expect(
+    page.getByRole('heading', { name: 'Встреча опубликована', exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('link', { name: 'Открыть встречу', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/events\/event-1$/);
 });
 

@@ -24,10 +24,10 @@ export const DemandHint = ({ sportId, sportName }: DemandHintProps) => {
 
   return (
     <p className="rounded-2xl bg-blue-soft px-4 py-3 text-sm text-blue">
-      {data.count}{' '}
-      {data.count === 1 ? 'человек ищет' : 'человек ищут'} компанию на это
-      направление
-      {busiestPart[1] > 0 && `, чаще ${dayPartLabels[busiestPart[0]].toLowerCase()}`}
+      {data.count} {data.count === 1 ? 'человек ищет' : 'человек ищут'} компанию
+      на это направление
+      {busiestPart[1] > 0 &&
+        `, чаще ${dayPartLabels[busiestPart[0]].toLowerCase()}`}
       {busiestWeekday.count > 0 &&
         ` (особенно в ${weekdayLabels[busiestWeekday.index]})`}
       .

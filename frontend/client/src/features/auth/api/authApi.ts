@@ -21,3 +21,18 @@ export const changeLocalPassword = (data: {
     method: 'POST',
     data,
   });
+
+export interface AuthProviders {
+  sso: { enabled: boolean; title: string };
+  local: { enabled: boolean };
+}
+export const getAuthProviders = () =>
+  request<AuthProviders>({ url: '/auth/providers', baseURL: '/' });
+export const localLogin = (data: { email: string; password: string }) =>
+  request({ url: '/auth/local/login', baseURL: '/', method: 'POST', data });
+export const localRegister = (data: {
+  name: string;
+  email: string;
+  password: string;
+}) =>
+  request({ url: '/auth/local/register', baseURL: '/', method: 'POST', data });

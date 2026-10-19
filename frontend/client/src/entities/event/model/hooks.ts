@@ -1,4 +1,8 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query';
 
 import {
   adminEventHistory,
@@ -68,5 +72,18 @@ export const useAdminEventHistory = (id: string, enabled: boolean) =>
     queryKey: EVENT_KEYS.ADMIN_HISTORY(id),
     queryFn: () => adminEventHistory(id),
     enabled,
+    meta: { silent: true },
+  });
+
+export const useEventPages = (params: EventListParams = {}) =>
+  useInfiniteQuery({
+    queryKey: [...EVENT_KEYS.LIST(params), 'pages'],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      getEvents({ ...params, limit: 24, offset: pageParam }),
+    getNextPageParam: (last) =>
+      last.offset + last.items.length < last.total
+        ? last.offset + last.items.length
+        : undefined,
     meta: { silent: true },
   });

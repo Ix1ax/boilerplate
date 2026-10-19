@@ -203,6 +203,14 @@ const hasSport = (v: { sport_id?: string; sport_name?: string }) =>
 
 // Поля события без значений по умолчанию: их же использует правка, где непереданное поле не трогаем.
 const eventFields = {
+  zone: chars(0, 100, 'Зона — не длиннее 100 символов').optional(),
+  meeting_host: chars(
+    0,
+    200,
+    'Кто встретит — не длиннее 200 символов',
+  ).optional(),
+  step_free: z.boolean().optional(),
+  companion_allowed: z.boolean().optional(),
   title: chars(3, 120, 'Название — от 3 до 120 символов'),
   description: chars(0, 5000, 'Описание — не длиннее 5000 символов'),
   starts_at: isoDate,
@@ -228,6 +236,10 @@ const eventFields = {
 export const eventInputSchema = z
   .object({
     ...eventFields,
+    zone: eventFields.zone.default(''),
+    meeting_host: eventFields.meeting_host.default(''),
+    step_free: eventFields.step_free.default(false),
+    companion_allowed: eventFields.companion_allowed.default(false),
     description: eventFields.description.default(''),
     level: level.default('any'),
     requirements: eventFields.requirements.default(''),
@@ -278,7 +290,23 @@ export const eventInputSchema = z
   .refine((v) => v.quorum_deadline == null || v.min_participants != null, {
     path: ['min_participants'],
     message: 'Срок сбора состава задаётся вместе с минимумом участников',
-  });
+  })
+  .refine(
+    (v) => !v.quorum_deadline || new Date(v.quorum_deadline) > new Date(),
+    {
+      path: ['quorum_deadline'],
+      message: 'Срок сбора состава должен быть в будущем',
+    },
+  )
+  .refine(
+    (v) =>
+      !v.quorum_deadline ||
+      new Date(v.quorum_deadline) <= new Date(v.starts_at),
+    {
+      path: ['quorum_deadline'],
+      message: 'Состав нужно собрать до начала мероприятия',
+    },
+  );
 export type EventFormInput = z.input<typeof eventInputSchema>;
 export type EventFormValues = z.output<typeof eventInputSchema>;
 
@@ -294,6 +322,20 @@ export const eventPatchSchema = z
     path: ['location'],
     message: 'Отметьте точку на карте целиком',
   });
+/** Форма правки всегда содержит текущее начало; очистка не должна молча исчезать из PATCH. */
+export const eventEditSchema = eventPatchSchema
+  .refine((v) => !!v.starts_at, {
+    path: ['starts_at'],
+    message: 'Укажите дату и время начала',
+  })
+  .refine(
+    (v) =>
+      !v.starts_at || !v.ends_at || new Date(v.ends_at) > new Date(v.starts_at),
+    {
+      path: ['ends_at'],
+      message: 'Окончание должно быть позже начала',
+    },
+  );
 export type EventPatchValues = z.output<typeof eventPatchSchema>;
 
 /** Запись или заявка (POST /events/{id}/join). */

@@ -4,7 +4,7 @@ import { STATIC_ROUTES } from '@/shared/constants';
 import { Button, Eyebrow, RadarRings } from '@/shared/ui';
 
 const STEPS = [
-  ['01', 'Найдите встречу', 'Списком: спорт, дата, режим записи.'],
+  ['01', 'Найдите встречу', 'Списком или на карте: спорт, дата, режим записи.'],
   [
     '02',
     'Спросите до записи',
@@ -118,7 +118,8 @@ export const AboutPage = () => (
           <h2 className="title-display text-2xl">Для клубов</h2>
           <span>
             Заявка → проверка администратором → публикация встреч без проверки
-            каждой. При отказе причина видна, заявку можно исправить.
+            каждой. При отказе причина видна, заявку можно исправить. Клуб видит
+            только обезличенный спрос — без имён и контактов.
           </span>
         </div>
         <div className="flex flex-col gap-2.5 rounded-[28px] bg-card p-7">
@@ -130,6 +131,26 @@ export const AboutPage = () => (
             <li>гарантий безопасности — встречи проводят люди и клубы.</li>
           </ul>
         </div>
+      </section>
+
+      <section className="grid gap-3 rounded-3xl bg-card p-7">
+        <h2 className="title-display text-2xl">Карта и данные</h2>
+        <p>
+          Карта — OpenStreetMap, © участники OpenStreetMap. Метки показывают
+          места встреч, а не людей.
+        </p>
+        <p>
+          Геолокацию используем только с вашего разрешения. Координаты вашего
+          устройства не сохраняются в профиле.
+        </p>
+        <a
+          className="underline"
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Лицензия и участники OpenStreetMap
+        </a>
       </section>
 
       <section className="relative flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-[32px] bg-gold p-9 text-ink">

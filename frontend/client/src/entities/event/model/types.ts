@@ -31,6 +31,11 @@ export type ParticipationStatus = MyParticipation['status'];
 export type EventListParams = {
   limit?: number;
   offset?: number;
+  bbox?: string;
+  near?: string;
+  radius_km?: number;
+  zone?: string;
+  step_free?: boolean;
   q?: string;
   /** UUID направлений через запятую. */
   sport?: string;

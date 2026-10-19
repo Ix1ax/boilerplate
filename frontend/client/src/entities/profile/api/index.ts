@@ -1,1 +1,1 @@
-export { getProfile } from './profileApi';
+export { getProfile, getMyProfile, updateMyProfile } from './profileApi';

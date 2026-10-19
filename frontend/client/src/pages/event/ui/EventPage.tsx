@@ -4,6 +4,7 @@ import { ArrowLeftIcon } from 'lucide-react';
 
 import { Discussion, DISCUSSION_INPUT_ID } from '@/features/event-discussion';
 import { JoinPanel } from '@/features/event-join';
+import { ReportButton } from '@/features/report';
 
 import {
   type Event,
@@ -14,6 +15,7 @@ import {
   useEvent,
 } from '@/entities/event';
 import { getSportVisual, SportGlyph } from '@/entities/sport';
+import { useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { Badge, Button, Notice } from '@/shared/ui';
@@ -116,6 +118,7 @@ const EventDetails = ({
   onRefresh: () => void;
 }) => {
   const [draft, setDraft] = useState('');
+  const {data:user} = useCurrentUser();
   const closed = event.status !== 'published' || isPast(event);
 
   const ask = (topic: string) => {
@@ -147,12 +150,35 @@ const EventDetails = ({
                 {event.moderationReason
                   ? `Причина: ${event.moderationReason}.`
                   : 'Причина не указана.'}{' '}
-                Новые записи закрыты.
+                Ваша запись сохранена. Новые записи закрыты.
               </span>
             </Notice>
           )}
 
+          {event.status !== 'published' && (
+            <div className="flex flex-wrap gap-3">
+              <Button render={<Link to={STATIC_ROUTES.EVENTS} />}>
+                Найти другую встречу
+              </Button>
+              <Button variant="outline" render={<Link to={STATIC_ROUTES.MY} />}>
+                Мой спорт
+              </Button>
+            </div>
+          )}
           <EventFacts event={event} />
+          <div className="flex flex-wrap gap-2">
+            {event.zone && <Badge>{event.zone}</Badge>}
+            {event.stepFree && <Badge>Без ступеней / есть пандус</Badge>}
+            {event.companionAllowed && <Badge>Можно с сопровождающим</Badge>}
+          </div>
+          {event.meetingHost && (
+            <p>
+              <b>Кто встретит:</b> {event.meetingHost}
+            </p>
+          )}
+          {!!user && !event.isOrganizer && event.status === 'published' && (
+            <ReportButton eventId={event.id} />
+          )}
 
           {event.outdoor && !closed && <EventWeatherNote eventId={event.id} />}
 
@@ -167,7 +193,7 @@ const EventDetails = ({
 
           <FirstMeeting
             event={event}
-            canAsk={!event.isOrganizer && !closed}
+            canAsk={!!user && !event.isOrganizer && !closed}
             onAsk={ask}
           />
 

@@ -4,6 +4,8 @@ import { motion } from 'motion/react';
 import { Footer } from '@/widgets/footer';
 import { Header } from '@/widgets/header';
 
+import { ProfilePreferencesSync } from '@/features/profile-preferences';
+
 import { STATIC_ROUTES } from '@/shared/constants';
 import { DURATION, EASING } from '@/shared/motion';
 
@@ -18,6 +20,7 @@ export const RootLayout = () => {
 
   return (
     <div className="flex min-h-screen flex-col">
+      <ProfilePreferencesSync />
       <a
         href="#main-content"
         className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:rounded-full focus-visible:bg-primary focus-visible:px-5 focus-visible:py-3 focus-visible:font-bold focus-visible:text-primary-foreground"

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { reasonSchema } from '@starter/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -11,6 +13,8 @@ import {
   remindParticipants,
   useEvent,
 } from '@/entities/event';
+
+import { request } from '@/shared/api';
 
 export const useEventManage = (
   eventId: string,
@@ -25,14 +29,28 @@ export const useEventManage = (
     meta: { silent: true },
   });
   const [feedback, setFeedback] = useState('');
-  const [reason, setReason] = useState('');
+  const cancelForm = useForm<{ reason: string }>({
+    resolver: zodResolver(reasonSchema),
+    defaultValues: { reason: '' },
+  });
+  const reason = useWatch({ control: cancelForm.control, name: 'reason' });
+  const setReason = (value: string) =>
+    cancelForm.setValue('reason', value, { shouldDirty: true });
   const [reasonError, setReasonError] = useState('');
   const action = useMutation({
     mutationFn: async (task: {
-      kind: 'approve' | 'reject' | 'remind' | 'cancel';
+      kind: 'approve' | 'reject' | 'remind' | 'cancel' | 'remove';
       participantId?: string;
       reason?: string;
     }) => {
+      if (task.kind === 'remove') {
+        await request({
+          url: `/events/${eventId}/participants/${task.participantId}/remove`,
+          method: 'POST',
+          data: { reason: task.reason },
+        });
+        return 'Участник исключён.';
+      }
       if (task.kind === 'approve') {
         await approveParticipant(eventId, task.participantId!);
         return 'Заявка принята.';
@@ -59,9 +77,10 @@ export const useEventManage = (
     onError: () => setFeedback(''),
   });
   const cancel = async () => {
-    const parsed = reasonSchema.safeParse({ reason });
-    if (!parsed.success) {
-      setReasonError(parsed.error.issues[0].message);
+    if (!(await cancelForm.trigger())) {
+      setReasonError(
+        cancelForm.formState.errors.reason?.message ?? 'Укажите причину отмены',
+      );
       return;
     }
     setReasonError('');
@@ -69,7 +88,7 @@ export const useEventManage = (
     if (accepted)
       action.mutate({
         kind: 'cancel',
-        reason: parsed.data.reason,
+        reason: cancelForm.getValues('reason'),
       });
   };
   return {

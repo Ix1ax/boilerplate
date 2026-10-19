@@ -9,6 +9,7 @@ import {
 import { usePersonProfile } from '@/entities/profile';
 
 import { ApiError } from '@/shared/api';
+import { Badge } from '@/shared/ui';
 
 const LEVELS: Record<string, string> = {
   any: 'Любой уровень',
@@ -45,6 +46,13 @@ export const PersonPage = () => {
       stats={profile.stats}
       events={profile.events}
     >
+      <div className="flex flex-wrap gap-2">
+        {profile.interests?.map((interest) => (
+          <Badge key={interest} variant="soft">
+            {interest}
+          </Badge>
+        ))}
+      </div>
       {(profile.city || profile.level) && (
         <p>
           {[profile.city, LEVELS[profile.level]].filter(Boolean).join(' · ')}

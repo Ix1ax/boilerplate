@@ -15,6 +15,12 @@ export const ClubStatus = ({ organization }: ClubStatusProps) => (
     <Badge variant={organization.status === 'approved' ? 'success' : 'warning'}>
       {organizationStatusLabels[organization.status]}
     </Badge>
+    <p className="text-sm text-muted-foreground">
+      Заявка отправлена{' '}
+      {new Date(organization.createdAt).toLocaleDateString('ru-RU')}
+      {organization.reviewedAt &&
+        ` · решение от ${new Date(organization.reviewedAt).toLocaleDateString('ru-RU')}`}
+    </p>
     {organization.status === 'pending' && (
       <p>
         Заявка у модератора. После одобрения вы сможете публиковать встречи от

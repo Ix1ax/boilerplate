@@ -9,9 +9,13 @@ import type { Profile } from '@/entities/profile';
 
 import type { Camelize } from '@/shared/api';
 
-export type { OrganizationValues } from '@starter/contracts';
+export type { OrganizationProfileValues as OrganizationValues } from '@starter/contracts';
 
-export type Organization = Camelize<OrganizationDto>;
+export type Organization = Camelize<OrganizationDto> & {
+  site: string;
+  zones: string[];
+  venues: string[];
+};
 export type OrganizationDetail = Camelize<OrganizationDetailDto>;
 export type OrganizationPage = Camelize<OrganizationPageDto>;
 

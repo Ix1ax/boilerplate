@@ -1,6 +1,9 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { changePasswordSchema, type ChangePasswordValues } from '@starter/contracts';
+import {
+  changePasswordSchema,
+  type ChangePasswordValues,
+} from '@starter/contracts';
 import { useMutation } from '@tanstack/react-query';
 
 import { toApiError } from '@/shared/api';

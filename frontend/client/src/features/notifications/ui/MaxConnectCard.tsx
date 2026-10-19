@@ -29,6 +29,11 @@ export const MaxConnectCard = () => {
           Подключить MAX
         </Button>
       )}
+      {max.link.isError && (
+        <Notice role="alert" tone="danger" className="w-full">
+          Не удалось создать ссылку для MAX. Попробуйте ещё раз.
+        </Notice>
+      )}
       {max.unlink.isError && (
         <Notice role="alert" tone="danger" className="w-full">
           Не удалось отключить MAX. Попробуйте ещё раз.

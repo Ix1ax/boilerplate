@@ -133,3 +133,9 @@ export const dayRangeParams = (
       return {};
   }
 };
+
+/** Значение datetime-local в часовом поясе города, независимо от ISO-смещения API. */
+export const toCityInput = (value: string) => {
+  if (!Number.isFinite(new Date(value).getTime())) return '';
+  return `${toCityDate(value)}T${formatTime(value)}`;
+};

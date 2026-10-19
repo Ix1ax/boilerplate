@@ -1,5 +1,12 @@
 import { useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { EVENT_KEYS } from '@/entities/event';
+import { ORGANIZATION_KEYS } from '@/entities/organization';
 
 import { env } from '@/shared/config';
 
@@ -20,11 +27,23 @@ export const useNotifications = () => {
     });
     return () => source.close();
   }, [client]);
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: KEY,
-    queryFn: getNotifications,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => getNotifications(pageParam),
+    getNextPageParam: (last) =>
+      last.offset + last.items.length < last.total
+        ? last.offset + last.limit
+        : undefined,
     refetchInterval: 60_000,
+    meta: { silent: true },
   });
+  useEffect(() => {
+    if (!query.dataUpdatedAt) return;
+    void client.invalidateQueries({ queryKey: EVENT_KEYS.ALL });
+    void client.invalidateQueries({ queryKey: ORGANIZATION_KEYS.ALL });
+  }, [client, query.dataUpdatedAt]);
+  return query;
 };
 
 export const useMarkRead = () => {

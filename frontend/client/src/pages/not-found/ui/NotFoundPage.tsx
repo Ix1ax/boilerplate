@@ -1,21 +1,6 @@
 import { Link } from 'react-router';
 
 import { STATIC_ROUTES } from '@/shared/constants';
-import { buttonVariants } from '@/shared/ui';
+import { Button, RadarRings } from '@/shared/ui';
 
-export const NotFoundPage = () => {
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-semibold">404</h1>
-        <p className="text-sm text-muted-foreground">Страница не найдена</p>
-      </div>
-      <Link
-        to={STATIC_ROUTES.HOME}
-        className={buttonVariants({ variant: 'outline' })}
-      >
-        На главную
-      </Link>
-    </div>
-  );
-};
+export const NotFoundPage = () => <section className="relative mx-auto grid min-h-[65vh] w-full max-w-5xl content-center justify-items-start gap-5 overflow-hidden px-5 py-16 sm:px-8"><RadarRings tone="blue" sizes={[160,300,440]} strength={0.2} className="top-1/2 right-10"/><span className="relative text-7xl font-extrabold text-blue">404</span><h1 className="title-display relative text-4xl">Здесь пока никого нет</h1><p className="relative max-w-xl text-lg">Ссылка могла устареть, а страница — переехать. Найдём другую встречу рядом?</p><div className="relative flex flex-wrap gap-3"><Button render={<Link to={STATIC_ROUTES.EVENTS}/>}>Найти встречу</Button><Button variant="outline" render={<Link to={STATIC_ROUTES.HOME}/>}>На главную</Button></div></section>;

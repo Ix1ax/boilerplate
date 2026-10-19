@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { CalendarXIcon } from 'lucide-react';
 
 import {
@@ -11,10 +11,8 @@ import {
 
 import { useAdminEvents } from '@/entities/event';
 
-import { DYNAMIC_ROUTES } from '@/shared/constants';
 import { useOffsetPagination } from '@/shared/hooks';
 import {
-  Badge,
   Button,
   EmptyState,
   Input,
@@ -25,14 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
 } from '@/shared/ui';
 
+import { AdminEventDetail } from './AdminEventDetail';
 import { AdminEventHistoryDialog } from './AdminEventHistoryDialog';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -42,15 +35,11 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Отменено',
 };
 
-const STATUS_BADGE: Record<string, 'success' | 'warning' | 'destructive' | 'neutral'> = {
-  published: 'success',
-  unpublished: 'warning',
-  deleted: 'destructive',
-  cancelled: 'neutral',
-};
-
 const formatDate = (iso: string) =>
-  new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+  new Date(iso).toLocaleString('ru-RU', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
 
 export const AdminEventsPanel = () => {
   const pagination = useOffsetPagination(20, 'ev_offset');
@@ -59,9 +48,11 @@ export const AdminEventsPanel = () => {
   const status = searchParams.get('ev_status') ?? 'all';
   const [unpublishId, setUnpublishId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
 
   const update = (key: string, value: string) => {
+    setSelectedId(null);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (value) next.set(key, value);
@@ -96,7 +87,9 @@ export const AdminEventsPanel = () => {
         />
         <Select
           value={status}
-          onValueChange={(value) => update('ev_status', value === 'all' ? '' : (value ?? ''))}
+          onValueChange={(value) =>
+            update('ev_status', value === 'all' ? '' : (value ?? ''))
+          }
         >
           <SelectTrigger aria-label="Фильтр по статусу">
             <SelectValue />
@@ -129,78 +122,35 @@ export const AdminEventsPanel = () => {
       )}
 
       {!isPending && !isError && data.items.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Мероприятие</TableHead>
-              <TableHead>Организатор</TableHead>
-              <TableHead>Когда</TableHead>
-              <TableHead>Статус</TableHead>
-              <TableHead>Действия</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(240px,1fr)_2fr]">
+          <div className="space-y-3">
             {data.items.map((event) => (
-              <TableRow key={event.id}>
-                <TableCell>
-                  <Link
-                    to={DYNAMIC_ROUTES.EVENT(event.id)}
-                    className="font-bold underline-offset-3 hover:underline"
-                  >
-                    {event.title}
-                  </Link>
-                </TableCell>
-                <TableCell className="max-w-48 truncate" title={event.organizer.name}>
-                  {event.organizer.name}
-                </TableCell>
-                <TableCell>{formatDate(event.startsAt)}</TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_BADGE[event.status]}>
-                    {STATUS_LABEL[event.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-2">
-                    {event.status === 'published' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setUnpublishId(event.id)}
-                      >
-                        Снять
-                      </Button>
-                    )}
-                    {event.status !== 'deleted' && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setDeleteId(event.id)}
-                      >
-                        Удалить
-                      </Button>
-                    )}
-                    {event.status === 'unpublished' && (
-                      <Button
-                        size="sm"
-                        disabled={restore.isPending}
-                        onClick={() => restore.mutate(event.id)}
-                      >
-                        Вернуть
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setHistoryId(event.id)}
-                    >
-                      История
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
+              <button
+                key={event.id}
+                aria-pressed={(selectedId ?? data.items[0]?.id) === event.id}
+                onClick={() => setSelectedId(event.id)}
+                className={`w-full rounded-2xl border-2 bg-card p-5 text-left ${(selectedId ?? data.items[0]?.id) === event.id ? 'border-blue' : 'border-transparent'}`}
+              >
+                <b className="block text-xl">{event.title}</b>
+                <span className="mt-2 block">
+                  {STATUS_LABEL[event.status]} · {event.sport.name}
+                </span>
+                <span className="block text-sm">
+                  {event.organizer.name} · {formatDate(event.startsAt)}
+                </span>
+              </button>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+          <AdminEventDetail
+            key={selectedId ?? data.items[0].id}
+            id={selectedId ?? data.items[0].id}
+            onUnpublish={setUnpublishId}
+            onDelete={setDeleteId}
+            onRestore={(id) => restore.mutate(id)}
+            onHistory={setHistoryId}
+            pending={restore.isPending}
+          />
+        </div>
       )}
 
       {!isPending && !isError && data && (

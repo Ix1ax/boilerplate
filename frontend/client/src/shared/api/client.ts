@@ -30,7 +30,10 @@ API.interceptors.response.use(
     const apiError = toApiError(error);
     if (
       apiError.isUnauthorized &&
-      error.config?.url !== SILENT_UNAUTHORIZED_URL
+      error.config?.url !== SILENT_UNAUTHORIZED_URL &&
+      !['/auth/local/login', '/auth/local/register'].includes(
+        error.config?.url ?? '',
+      )
     )
       getApiConfig().onUnauthorized();
     return Promise.reject(apiError);

@@ -1,9 +1,12 @@
 import type { MaxStatus, NotificationPage } from '@starter/contracts';
 
-import { request } from '@/shared/api';
+import { type Camelize, request } from '@/shared/api';
 
-export const getNotifications = () =>
-  request<NotificationPage>({ url: '/notifications', params: { limit: 20 } });
+export const getNotifications = (offset = 0) =>
+  request<Camelize<NotificationPage>>({
+    url: '/notifications',
+    params: { limit: 20, offset },
+  });
 
 export const markRead = (id: string) =>
   request<void>({ url: `/notifications/${id}/read`, method: 'POST' });

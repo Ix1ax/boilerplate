@@ -46,7 +46,7 @@ export const EventFiltersPanel = ({
   onChange,
 }: EventFiltersPanelProps) => {
   const { data: sports = [] } = useSports();
-  const base = sports.filter((sport) => !sport.isCustom);
+  const base = sports;
   const chips = [
     ...base.slice(0, MAX_CHIPS),
     // Выбранное по ссылке направление показываем, даже если оно не попало в чипы.
@@ -132,6 +132,42 @@ export const EventFiltersPanel = ({
             </SelectContent>
           </Select>
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="grid gap-1.5">
+          <label htmlFor="catalog-zone">Зона / район</label>
+          <Input
+            id="catalog-zone"
+            maxLength={100}
+            value={filters.zone}
+            onChange={(e) => onChange('zone', e.target.value)}
+          />
+        </div>
+        <label className="flex min-h-12 items-center gap-2">
+          <Checkbox
+            checked={filters.stepFree}
+            onCheckedChange={(checked) => onChange('stepFree', checked)}
+          />
+          Доступная площадка: без ступеней / есть пандус
+        </label>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="catalog-sport" className="text-sm font-semibold">
+          Все направления, включая новые
+        </label>
+        <select
+          id="catalog-sport"
+          className="min-h-12 rounded-lg border border-input bg-card px-3"
+          value={filters.sport}
+          onChange={(e) => onChange('sport', e.target.value)}
+        >
+          <option value="">Все направления</option>
+          {sports.map((sport) => (
+            <option key={sport.id} value={sport.id}>
+              {sport.name}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div

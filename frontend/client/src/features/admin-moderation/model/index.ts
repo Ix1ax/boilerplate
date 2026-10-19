@@ -1,4 +1,8 @@
-export { useUnpublishEvent, useDeleteEvent, useRestoreEvent } from './useEventModeration';
+export {
+  useUnpublishEvent,
+  useDeleteEvent,
+  useRestoreEvent,
+} from './useEventModeration';
 export {
   useApproveOrganization,
   useRejectOrganization,

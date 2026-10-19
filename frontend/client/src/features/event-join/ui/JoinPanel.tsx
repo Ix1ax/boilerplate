@@ -10,6 +10,7 @@ import {
   formatTime,
   isPast,
 } from '@/entities/event';
+import { useCurrentUser } from '@/entities/user';
 
 import { ApiError } from '@/shared/api';
 import { DYNAMIC_ROUTES, STATIC_ROUTES } from '@/shared/constants';
@@ -25,6 +26,7 @@ import {
 } from '@/shared/ui';
 
 import { useJoinEvent, useLeaveEvent } from '../model';
+import { useBuddy } from '../model/useJoin';
 
 interface JoinPanelProps {
   event: Event;
@@ -36,7 +38,9 @@ interface JoinPanelProps {
  * вы в составе, решение организатора, снято или прошло, вы организатор.
  */
 export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
+  const {data:user,isPending:checkingUser} = useCurrentUser();
   const join = useJoinEvent();
+  const buddy = useBuddy();
   const leave = useLeaveEvent();
   const confirm = useConfirm();
   const [firstTime, setFirstTime] = useState(false);
@@ -90,6 +94,9 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
   else if (status) stateKey = status;
 
   const renderState = () => {
+    if(checkingUser) return <p role="status">Проверяем сессию…</p>;
+    if(!user) return <div className="grid gap-3"><h2 className="title-display text-2xl">Присоединяйтесь к встрече</h2><p>Войдите, чтобы записаться, отправить заявку или задать вопрос.</p><Button render={<Link to={`${STATIC_ROUTES.LOGIN}?next=${encodeURIComponent(DYNAMIC_ROUTES.EVENT(event.id))}`} />}>Войти и записаться</Button></div>;
+
     if (event.status !== 'published') {
       return (
         <Notice
@@ -178,6 +185,25 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
               Вас встретит <b>{me.buddy.name}</b> — подойдите к нему на месте.
             </span>
           )}
+          {!me?.firstTime && (
+            <Button
+              variant="outline"
+              disabled={buddy.isPending}
+              onClick={() =>
+                buddy.mutate({ id: event.id, enabled: !me?.isBuddy })
+              }
+            >
+              {me?.isBuddy
+                ? 'Больше не встречаю новичков'
+                : 'Готов встретить новичка'}
+            </Button>
+          )}
+          {me?.newcomers?.length ? (
+            <p>
+              Вы встречаете:{' '}
+              {me.newcomers.map((person) => person.name).join(', ')}.
+            </p>
+          ) : null}
           <span className="text-[15px]">
             Напомним за сутки и за 2 часа до начала.
           </span>

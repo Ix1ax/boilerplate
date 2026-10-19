@@ -2,7 +2,7 @@ import { levelLabels } from '@starter/contracts';
 
 import { LocationField } from '@/features/location-picker';
 
-import type { Event } from '@/entities/event';
+import { type Event, toCityInput } from '@/entities/event';
 
 import {
   Button,
@@ -69,10 +69,12 @@ export const EventEditForm = ({ event }: EventEditFormProps) => {
                 <FormControl>
                   <Input
                     type="datetime-local"
-                    value={String(field.value ?? '').slice(0, 16)}
+                    value={field.value ? toCityInput(String(field.value)) : ''}
                     onChange={(e) =>
                       field.onChange(
-                        e.target.value ? `${e.target.value}:00+07:00` : undefined,
+                        e.target.value
+                          ? `${e.target.value}:00+07:00`
+                          : undefined,
                       )
                     }
                   />
@@ -90,7 +92,7 @@ export const EventEditForm = ({ event }: EventEditFormProps) => {
                 <FormControl>
                   <Input
                     type="datetime-local"
-                    value={String(field.value ?? '').slice(0, 16)}
+                    value={field.value ? toCityInput(String(field.value)) : ''}
                     onChange={(e) =>
                       field.onChange(
                         e.target.value ? `${e.target.value}:00+07:00` : null,
@@ -120,9 +122,10 @@ export const EventEditForm = ({ event }: EventEditFormProps) => {
           lat={form.watch('lat')}
           lng={form.watch('lng')}
           onChange={({ lat, lng, address }) => {
-            form.setValue('lat', lat);
-            form.setValue('lng', lng);
-            if (address) form.setValue('location', address);
+            form.setValue('lat', lat, { shouldDirty: true });
+            form.setValue('lng', lng, { shouldDirty: true });
+            if (address)
+              form.setValue('location', address, { shouldDirty: true });
           }}
         />
         <FormField
@@ -144,7 +147,11 @@ export const EventEditForm = ({ event }: EventEditFormProps) => {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Уровень участников</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange} items={LEVEL_ITEMS}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={LEVEL_ITEMS}
+              >
                 <FormControl>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -240,6 +247,46 @@ export const EventEditForm = ({ event }: EventEditFormProps) => {
             </FormItem>
           )}
         />
+        {(['zone', 'meeting_host'] as const).map((name) => (
+          <FormField
+            key={name}
+            control={form.control}
+            name={name}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {name === 'zone' ? 'Зона / район' : 'Кто встретит участников'}
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage role="alert" />
+              </FormItem>
+            )}
+          />
+        ))}
+        {(['step_free', 'companion_allowed'] as const).map((name) => (
+          <FormField
+            key={name}
+            control={form.control}
+            name={name}
+            render={({ field }) => (
+              <FormItem className="flex min-h-12 items-center gap-3">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel>
+                  {name === 'step_free'
+                    ? 'Без ступеней / есть пандус'
+                    : 'Можно с сопровождающим'}
+                </FormLabel>
+              </FormItem>
+            )}
+          />
+        ))}
         {errors.root && (
           <Notice role="alert" tone="danger">
             {errors.root.message}

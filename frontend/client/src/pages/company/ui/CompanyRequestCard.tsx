@@ -4,6 +4,7 @@ import type { CompanyRequest } from '@/entities/company';
 
 import { Badge, Button } from '@/shared/ui';
 
+import { CommonProposal } from './CommonProposal';
 import { Matches } from './Matches';
 
 interface CompanyRequestCardProps {
@@ -12,6 +13,7 @@ interface CompanyRequestCardProps {
   closing: boolean;
   onToggle: () => void;
   onClose: () => void;
+  onEdit: () => void;
 }
 
 export const CompanyRequestCard = ({
@@ -20,6 +22,7 @@ export const CompanyRequestCard = ({
   closing,
   onToggle,
   onClose,
+  onEdit,
 }: CompanyRequestCardProps) => {
   return (
     <article className="flex flex-col gap-4 rounded-3xl bg-card p-6">
@@ -37,17 +40,38 @@ export const CompanyRequestCard = ({
       </div>
       <p>
         {levelLabels[item.level]}
-        {item.area && ` · ${item.area}`}
+        {item.zones?.length
+          ? ` · ${item.zones.join(', ')}`
+          : item.area && ` · ${item.area}`}
       </p>
-      <p>
-        {item.weekdays.length
-          ? item.weekdays.map((day) => weekdayLabels[day - 1]).join(', ')
-          : 'Любой день'}{' '}
-        ·{' '}
-        {item.dayParts.length
-          ? item.dayParts.map((part) => dayPartLabels[part]).join(', ')
-          : 'Любое время'}
-      </p>
+      {item.windows?.length > 0 && (
+        <ul>
+          {item.windows.map((w, i) => (
+            <li key={i}>
+              {new Date(w.startsAt).toLocaleString('ru-RU', {
+                timeZone: 'Asia/Krasnoyarsk',
+              })}{' '}
+              —{' '}
+              {new Date(w.endsAt).toLocaleTimeString('ru-RU', {
+                timeZone: 'Asia/Krasnoyarsk',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!item.windows?.length && (
+        <p>
+          {item.weekdays.length
+            ? item.weekdays.map((day) => weekdayLabels[day - 1]).join(', ')
+            : 'Любой день'}{' '}
+          ·{' '}
+          {item.dayParts.length
+            ? item.dayParts.map((part) => dayPartLabels[part]).join(', ')
+            : 'Любое время'}
+        </p>
+      )}
       {item.note && <p>{item.note}</p>}
       <p>
         Подходящих встреч: {item.matchesCount} · Ещё ищут компанию:{' '}
@@ -60,6 +84,11 @@ export const CompanyRequestCard = ({
         </p>
       )}
       <div className="flex flex-wrap gap-3">
+        {item.status === 'active' && (
+          <Button variant="outline" onClick={onEdit}>
+            Изменить
+          </Button>
+        )}
         <Button onClick={() => onToggle()}>
           {selected ? 'Скрыть встречи' : 'Посмотреть встречи'}
         </Button>
@@ -73,7 +102,12 @@ export const CompanyRequestCard = ({
           </Button>
         )}
       </div>
-      {selected && <Matches id={item.id} />}
+      {selected && (
+        <>
+          <CommonProposal id={item.id} onEdit={onEdit} />
+          <Matches id={item.id} />
+        </>
+      )}
     </article>
   );
 };

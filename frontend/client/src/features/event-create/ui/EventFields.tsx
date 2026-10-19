@@ -1,6 +1,8 @@
 import type { UseFormReturn } from 'react-hook-form';
 import type { EventFormInput, EventFormValues } from '@starter/contracts';
 
+import { toCityInput } from '@/entities/event';
+
 import {
   Checkbox,
   FormControl,
@@ -24,6 +26,8 @@ interface FormProps {
 
 interface EventInputFieldProps extends FormProps {
   name:
+    | 'zone'
+    | 'meeting_host'
     | 'title'
     | 'location'
     | 'starts_at'
@@ -46,7 +50,7 @@ interface EventTextFieldProps extends FormProps {
 }
 
 interface EventCheckboxFieldProps extends FormProps {
-  name: 'outdoor' | 'as_organization';
+  name: 'outdoor' | 'as_organization' | 'step_free' | 'companion_allowed';
 }
 
 export const EventInputField = ({
@@ -66,7 +70,7 @@ export const EventInputField = ({
             {...field}
             value={
               type === 'datetime-local'
-                ? String(field.value ?? '').slice(0, 16)
+                ? (field.value && toCityInput(String(field.value))) || ''
                 : (field.value ?? '')
             }
             type={type}

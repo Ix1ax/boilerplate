@@ -4,6 +4,7 @@ import { FlagIcon } from 'lucide-react';
 
 import { ReasonDialog, useDismissReport } from '@/features/admin-moderation';
 
+import { useAdminAction } from '@/entities/admin';
 import { useAdminReports } from '@/entities/report';
 
 import { DYNAMIC_ROUTES } from '@/shared/constants';
@@ -43,7 +44,10 @@ const STATUS_BADGE: Record<string, 'warning' | 'success' | 'neutral'> = {
 };
 
 const formatDate = (iso: string) =>
-  new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+  new Date(iso).toLocaleString('ru-RU', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
 
 export const AdminReportsPanel = () => {
   const pagination = useOffsetPagination(20, 'rep_offset');
@@ -64,10 +68,17 @@ export const AdminReportsPanel = () => {
   const { data, isPending, isError, refetch } = useAdminReports({
     offset: pagination.offset,
     limit: pagination.pageSize,
-    status: status === 'all' ? undefined : (status as 'open' | 'resolved' | 'dismissed'),
+    status:
+      status === 'all'
+        ? undefined
+        : (status as 'open' | 'resolved' | 'dismissed'),
   });
 
   const dismiss = useDismissReport();
+  const action = useAdminAction();
+  const [accept, setAccept] = useState<{ id: string; type: string } | null>(
+    null,
+  );
 
   return (
     <div className="space-y-4">
@@ -145,6 +156,21 @@ export const AdminReportsPanel = () => {
                 {report.status === 'open' && (
                   <Button
                     size="sm"
+                    onClick={() =>
+                      setAccept({
+                        id: report.targetId,
+                        type: report.targetType,
+                      })
+                    }
+                  >
+                    {report.targetType === 'comment'
+                      ? 'Скрыть сообщение'
+                      : 'Снять мероприятие'}
+                  </Button>
+                )}
+                {report.status === 'open' && (
+                  <Button
+                    size="sm"
                     variant="ghost"
                     onClick={() => setDismissId(report.id)}
                   >
@@ -168,6 +194,31 @@ export const AdminReportsPanel = () => {
         />
       )}
 
+      <ReasonDialog
+        key={accept?.id ?? 'accept'}
+        open={!!accept}
+        onOpenChange={(open) => !open && setAccept(null)}
+        title={
+          accept?.type === 'comment' ? 'Скрыть сообщение' : 'Снять мероприятие'
+        }
+        description="Открытые жалобы на эту цель закроются как решённые."
+        submitLabel="Принять меры"
+        pending={action.isPending}
+        error={action.error}
+        onSubmit={(reason) => {
+          if (accept)
+            action.mutate(
+              {
+                url:
+                  accept.type === 'comment'
+                    ? `/admin/comments/${accept.id}/hide`
+                    : `/admin/events/${accept.id}/unpublish`,
+                reason,
+              },
+              { onSuccess: () => setAccept(null) },
+            );
+        }}
+      />
       <ReasonDialog
         open={dismissId !== null}
         onOpenChange={(open) => !open && setDismissId(null)}

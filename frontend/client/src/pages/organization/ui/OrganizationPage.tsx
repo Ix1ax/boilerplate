@@ -1,4 +1,5 @@
 import { useParams } from 'react-router';
+import { organizationStatusLabels } from '@starter/contracts';
 
 import {
   OrganizerProfile,
@@ -36,13 +37,37 @@ export const OrganizationPage = () => {
     >
       <div className="flex flex-col gap-3">
         <div>
-          <Badge variant="success">Проверенная организация</Badge>
+          <Badge
+            variant={organization.status === 'approved' ? 'success' : 'warning'}
+          >
+            {organizationStatusLabels[organization.status]}
+          </Badge>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Допуск даёт право публиковать встречи на платформе и не является
+            оценкой качества занятий. Контакты не публикуются — задайте вопрос в
+            обсуждении встречи.
+          </p>
         </div>
         {organization.city && <p>{organization.city}</p>}
-        {organization.contacts && (
-          <p className="whitespace-pre-wrap break-words">
-            Контакты: {organization.contacts}
-          </p>
+        {organization.site && /^https?:\/\//.test(organization.site) && (
+          <a
+            className="underline"
+            href={organization.site}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Сайт клуба
+          </a>
+        )}
+        {!!organization.zones?.length && (
+          <p>Районы: {organization.zones.join(', ')}</p>
+        )}
+        {!!organization.venues?.length && (
+          <ul className="list-disc pl-5">
+            {organization.venues.map((venue) => (
+              <li key={venue}>{venue}</li>
+            ))}
+          </ul>
         )}
         <div className="flex flex-wrap gap-2">
           {organization.sports.map((sport) => (

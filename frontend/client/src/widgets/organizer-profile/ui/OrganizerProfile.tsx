@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 
-import { type Event,EventCard } from '@/entities/event';
+import { type Event, EventCard } from '@/entities/event';
 import type { Profile } from '@/entities/profile';
 
 import { STATIC_ROUTES } from '@/shared/constants';
@@ -40,6 +40,10 @@ export const OrganizerProfile = ({
           </div>
         ))}
       </dl>
+      <p className="rounded-3xl bg-card p-6 text-muted-foreground">
+        Рейтингов и отзывов о людях в сервисе нет. Вопросы организатору можно
+        задать в обсуждении встречи.
+      </p>
       <section aria-labelledby="organizer-events">
         <h2 id="organizer-events" className="title-display mb-5 text-[26px]">
           Ближайшие встречи

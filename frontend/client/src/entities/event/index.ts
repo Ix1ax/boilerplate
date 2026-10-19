@@ -35,6 +35,7 @@ export {
   levelShort,
   organizerKind,
   toCityDate,
+  toCityInput,
 } from './lib';
 export {
   type AdminEventsParams,
@@ -58,6 +59,7 @@ export {
   useEvent,
   useEventWeather,
   useEvents,
+  useEventPages,
   useMyEvents,
   useMyParticipations,
 } from './model';

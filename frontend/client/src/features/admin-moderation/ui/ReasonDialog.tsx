@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useId } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { reasonSchema } from '@starter/contracts';
+import type { z } from 'zod';
 
 import { toApiError } from '@/shared/api';
 import {
@@ -15,6 +19,7 @@ import {
 } from '@/shared/ui';
 
 interface ReasonDialogProps {
+  schema?: typeof reasonSchema;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -26,8 +31,9 @@ interface ReasonDialogProps {
   onSubmit: (reason: string) => void;
 }
 
-/** Диалог с обязательной причиной: отказ заявке, снятие события, отклонение жалобы. */
+/** Единая схема ограничивает причину так же, как доменные решения сервера. */
 export const ReasonDialog = ({
+  schema = reasonSchema,
   open,
   onOpenChange,
   title,
@@ -38,65 +44,64 @@ export const ReasonDialog = ({
   error,
   onSubmit,
 }: ReasonDialogProps) => {
-  const [reason, setReason] = useState('');
-  const [touched, setTouched] = useState(false);
-  const trimmed = reason.trim();
-  const invalid = touched && trimmed.length === 0;
-
+  const id = useId();
+  const form = useForm<
+    z.input<typeof reasonSchema>,
+    unknown,
+    z.output<typeof reasonSchema>
+  >({ resolver: zodResolver(schema), defaultValues: { reason: '' } });
+  const close = (next: boolean) => {
+    if (!next) form.reset();
+    onOpenChange(next);
+  };
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          setReason('');
-          setTouched(false);
-        }
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {description && (
-            <DialogDescription>{description}</DialogDescription>
-          )}
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <Label htmlFor="reason-dialog-text">Причина</Label>
-        <Textarea
-          id="reason-dialog-text"
-          value={reason}
-          maxLength={1000}
-          aria-invalid={invalid}
-          onChange={(event) => setReason(event.target.value)}
-        />
-        {invalid && (
-          <p role="alert" className="text-danger">
-            Укажите причину: её увидит другая сторона
-          </p>
-        )}
-        {error != null && (
-          <Notice role="alert" tone="danger">
-            {toApiError(error).message}
-          </Notice>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button
-            variant={destructive ? 'destructive' : 'default'}
-            disabled={pending}
-            onClick={() => {
-              if (!trimmed) {
-                setTouched(true);
-                return;
-              }
-              onSubmit(trimmed);
-            }}
-          >
-            {submitLabel}
-          </Button>
-        </DialogFooter>
+        <form
+          className="space-y-4"
+          onSubmit={form.handleSubmit((values) => onSubmit(values.reason))}
+          noValidate
+        >
+          <Label htmlFor={id}>Причина</Label>
+          <Textarea
+            id={id}
+            {...form.register('reason')}
+            aria-invalid={!!form.formState.errors.reason}
+            aria-describedby={
+              form.formState.errors.reason ? `${id}-error` : undefined
+            }
+          />
+          {form.formState.errors.reason && (
+            <p id={`${id}-error`} role="alert" className="text-danger">
+              {form.formState.errors.reason.message}
+            </p>
+          )}
+          {error != null && (
+            <Notice role="alert" tone="danger">
+              {toApiError(error).message}
+            </Notice>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => close(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="submit"
+              variant={destructive ? 'destructive' : 'default'}
+              disabled={pending}
+            >
+              {pending ? 'Сохраняем…' : submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

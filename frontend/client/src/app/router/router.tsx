@@ -24,23 +24,6 @@ export const router = createBrowserRouter([
           { path: STATIC_ROUTES.LOGIN, lazy: () => import('@/pages/login') },
           { path: STATIC_ROUTES.ABOUT, lazy: () => import('@/pages/about') },
           { path: STATIC_ROUTES.FORBIDDEN, element: <ForbiddenPage /> },
-          {
-            // Весь API требует сессию: гостя отправляем на вход и возвращаем обратно.
-            element: <ProtectedRoute />,
-            children: [
-              {
-                path: STATIC_ROUTES.COMPANY,
-                lazy: () => import('@/pages/company'),
-              },
-              { path: STATIC_ROUTES.CLUB, lazy: () => import('@/pages/club') },
-              {
-                path: STATIC_ROUTES.EVENT_NEW,
-                lazy: () => import('@/pages/event-new'),
-              },
-              {
-                path: DYNAMIC_ROUTES.EVENT_MANAGE(':eventId'),
-                lazy: () => import('@/pages/event-manage'),
-              },
               {
                 path: DYNAMIC_ROUTES.ORGANIZATION(':orgId'),
                 lazy: () => import('@/pages/organization'),
@@ -61,6 +44,29 @@ export const router = createBrowserRouter([
                 path: DYNAMIC_ROUTES.EVENT(':eventId'),
                 lazy: () => import('@/pages/event'),
               },
+          {
+            // Изменения и личные кабинеты доступны только после входа.
+            element: <ProtectedRoute />,
+            children: [
+              {
+                path: STATIC_ROUTES.COMPANY,
+                lazy: () => import('@/pages/company'),
+              },
+              { path: '/my/organization', element: <Navigate to={STATIC_ROUTES.CLUB} replace /> },
+              { path: STATIC_ROUTES.CLUB, lazy: () => import('@/pages/club') },
+              {
+                path: STATIC_ROUTES.EVENT_NEW,
+                lazy: () => import('@/pages/event-new'),
+              },
+              {
+                path: DYNAMIC_ROUTES.EVENT_MANAGE(':eventId'),
+                lazy: () => import('@/pages/event-manage'),
+              },
+
+
+
+
+
               {
                 path: STATIC_ROUTES.MY,
                 lazy: () => import('@/pages/my-sport'),

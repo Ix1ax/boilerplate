@@ -1,13 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { deleteEvent, EVENT_KEYS, restoreEvent, unpublishEvent } from '@/entities/event';
+import {
+  deleteEvent,
+  EVENT_KEYS,
+  restoreEvent,
+  unpublishEvent,
+} from '@/entities/event';
 
 export const useUnpublishEvent = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       unpublishEvent(id, reason),
-    onSuccess: () => {
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: EVENT_KEYS.ALL });
     },
   });
@@ -18,7 +25,9 @@ export const useDeleteEvent = () => {
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       deleteEvent(id, reason),
-    onSuccess: () => {
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: EVENT_KEYS.ALL });
     },
   });
@@ -28,7 +37,9 @@ export const useRestoreEvent = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreEvent(id),
-    onSuccess: () => {
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: EVENT_KEYS.ALL });
     },
   });

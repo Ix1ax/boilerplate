@@ -1,132 +1,161 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 
-import { useEvents } from '@/entities/event';
-import { formatWhen, JOIN_MODE_LABELS } from '@/entities/event';
-import { getSportVisual } from '@/entities/sport';
+import { formatWhen, useEventPages } from '@/entities/event';
+import { useSports } from '@/entities/sport';
 
 import { DYNAMIC_ROUTES } from '@/shared/constants';
-import { Badge, Eyebrow, HeroBand, Skeleton } from '@/shared/ui';
+import { useDebounce } from '@/shared/hooks';
+import { Badge, Button, HeroBand, Notice, Skeleton } from '@/shared/ui';
 
-// Демо-город: приблизительная рамка Красноярска по координатам фикстур.
-const BOUNDS = { minLat: 55.95, maxLat: 56.08, minLng: 92.68, maxLng: 93.02 };
-
-const clamp = (value: number) => Math.min(100, Math.max(0, value));
-
-const project = (lat: number, lng: number) => ({
-  left: clamp(
-    ((lng - BOUNDS.minLng) / (BOUNDS.maxLng - BOUNDS.minLng)) * 100,
-  ),
-  top: clamp(
-    ((BOUNDS.maxLat - lat) / (BOUNDS.maxLat - BOUNDS.minLat)) * 100,
-  ),
-});
+import { EventMap } from './EventMap';
 
 export const MapPage = () => {
-  const { data, isPending } = useEvents({ limit: 100 });
+  const [bounds, setBounds] = useState('92.68,55.95,93.02,56.08');
+  const [sport, setSport] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const located = (data?.items ?? []).filter(
-    (event): event is typeof event & { lat: number; lng: number } =>
-      event.lat != null && event.lng != null,
-  );
+  const [center, setCenter] = useState<[number, number] | null>(null);
+  const [geoError, setGeoError] = useState('');
+  const [locating, setLocating] = useState(false);
+  const bbox = useDebounce(bounds, 300);
+  const query = useEventPages({ bbox, sport: sport || undefined });
+  const { data: sports = [] } = useSports();
+  const located =
+    query.data?.pages
+      .flatMap((page) => page.items)
+      .filter((event) => event.lat != null && event.lng != null) ?? [];
   const selected = located.find((event) => event.id === selectedId);
-
+  const atPlace = selected
+    ? located.filter(
+        (event) =>
+          event.location === selected.location &&
+          event.lat?.toFixed(4) === selected.lat?.toFixed(4) &&
+          event.lng?.toFixed(4) === selected.lng?.toFixed(4),
+      )
+    : located;
+  const locate = () => {
+    if (!navigator.geolocation) {
+      setGeoError(
+        'Браузер не поддерживает определение местоположения. Выберите область на карте.',
+      );
+      return;
+    }
+    setLocating(true);
+    setGeoError('');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setCenter([coords.latitude, coords.longitude]);
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        setGeoError(
+          'Не удалось определить местоположение. Разрешите доступ в браузере или выберите область вручную.',
+        );
+      },
+      { timeout: 10000, maximumAge: 60000 },
+    );
+  };
   return (
     <>
       <HeroBand
-        eyebrow="Красноярск · демо-город"
+        eyebrow="Красноярск · встречи рядом"
         title="Встречи на карте"
-        description="Схема без реальных тайлов: точки расставлены по координатам встреч внутри города."
+        description="Выберите площадку, чтобы увидеть встречи. Число на метке — количество загруженных встреч в этом месте."
       />
-      <div className="mx-auto w-full max-w-[1280px] px-4 pt-7 pb-18 sm:px-8">
-        {isPending && <Skeleton className="h-[560px] w-full rounded-3xl" />}
-
-        {!isPending && (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-            <div
-              className="relative aspect-square overflow-hidden rounded-3xl border border-border bg-[linear-gradient(rgb(18_18_18/6%)_1px,transparent_1px),linear-gradient(90deg,rgb(18_18_18/6%)_1px,transparent_1px)] bg-card bg-[size:48px_48px] dark:bg-[linear-gradient(rgb(238_240_234/8%)_1px,transparent_1px),linear-gradient(90deg,rgb(238_240_234/8%)_1px,transparent_1px)]"
-              role="img"
-              aria-label="Схема расположения встреч в городе"
+      <div className="mx-auto grid w-full max-w-[1280px] gap-5 px-4 pt-7 pb-18 sm:px-8">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-1.5">
+            <label htmlFor="map-sport">Направление</label>
+            <select
+              id="map-sport"
+              className="min-h-12 rounded-lg border border-input bg-card px-3"
+              value={sport}
+              onChange={(e) => {
+                setSport(e.target.value);
+                setSelectedId(null);
+              }}
             >
-              {located.map((event) => {
-                const { left, top } = project(event.lat, event.lng);
-                const visual = getSportVisual(event.sport.name);
-                const isSelected = event.id === selectedId;
-                return (
-                  <button
-                    key={event.id}
-                    type="button"
-                    aria-label={event.title}
-                    aria-pressed={isSelected}
-                    onClick={() => setSelectedId(event.id)}
-                    className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow-md transition-transform"
-                    style={{
-                      left: `${left}%`,
-                      top: `${top}%`,
-                      width: isSelected ? 22 : 14,
-                      height: isSelected ? 22 : 14,
-                      background: visual.cover.ink,
-                      zIndex: isSelected ? 2 : 1,
-                    }}
-                  />
-                );
-              })}
-              {located.length === 0 && (
-                <p className="absolute inset-0 grid place-items-center px-6 text-center text-muted-foreground">
-                  У ближайших встреч пока не указаны координаты.
-                </p>
-              )}
-            </div>
-
-            <div className="flex max-h-[560px] flex-col gap-3 overflow-y-auto">
-              {located.length === 0 && !isPending && (
-                <p className="text-muted-foreground">Список пуст.</p>
-              )}
-              {located.map((event) => (
-                <button
-                  key={event.id}
-                  type="button"
-                  onClick={() => setSelectedId(event.id)}
-                  className={`flex flex-col gap-1.5 rounded-2xl p-4 text-left transition-colors ${
-                    event.id === selectedId
-                      ? 'bg-ink text-paper'
-                      : 'bg-card hover:bg-muted'
-                  }`}
-                >
-                  <Eyebrow
-                    className={
-                      event.id === selectedId
-                        ? 'text-gold'
-                        : 'text-muted-foreground'
-                    }
-                  >
-                    {formatWhen(event.startsAt)}
-                  </Eyebrow>
-                  <b>{event.title}</b>
-                  <span className="text-sm opacity-80">{event.location}</span>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    <Badge variant={event.id === selectedId ? 'gold' : 'soft'}>
-                      {event.sport.name}
-                    </Badge>
-                    <Badge variant="outline">
-                      {JOIN_MODE_LABELS[event.joinMode]}
-                    </Badge>
-                  </div>
-                </button>
+              <option value="">Все направления</option>
+              {sports.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
+          <Button variant="outline" disabled={locating} onClick={locate}>
+            {locating ? 'Определяем…' : 'Показать рядом со мной'}
+          </Button>
+          <Button variant="outline" onClick={() => setSelectedId(null)}>
+            Все площадки
+          </Button>
+        </div>
+        {geoError && <Notice role="alert">{geoError}</Notice>}
+        {query.isError && (
+          <Notice tone="danger" role="alert">
+            Не удалось загрузить встречи.{' '}
+            <Button variant="link" onClick={() => void query.refetch()}>
+              Повторить
+            </Button>
+          </Notice>
         )}
-
-        {selected && (
-          <Link
-            to={DYNAMIC_ROUTES.EVENT(selected.id)}
-            className="mt-6 inline-flex min-h-12 items-center rounded-full bg-primary px-6 font-bold text-primary-foreground"
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <EventMap
+            events={located}
+            selected={selectedId}
+            onSelect={setSelectedId}
+            onBounds={setBounds}
+            center={center}
+          />
+          <section
+            className="flex max-h-[520px] flex-col gap-3 overflow-y-auto"
+            aria-label="Встречи на выбранных площадках"
           >
-            Открыть «{selected.title}»
-          </Link>
-        )}
+            <h2 className="title-display text-2xl">
+              {selected ? selected.location : 'В видимой области'}
+            </h2>
+            {query.isPending && <Skeleton className="h-40 rounded-3xl" />}
+            {!query.isPending && !query.isError && !atPlace.length && (
+              <p>
+                В этой области встреч пока нет. Измените масштаб или
+                направление.
+              </p>
+            )}
+            {atPlace.map((event) => (
+              <article
+                key={event.id}
+                className="grid gap-2 rounded-3xl bg-card p-5"
+              >
+                <span>{formatWhen(event.startsAt)}</span>
+                <h3 className="font-bold">{event.title}</h3>
+                <p>{event.location}</p>
+                <Badge>{event.sport.name}</Badge>
+                <Button
+                  variant="outline"
+                  render={<Link to={DYNAMIC_ROUTES.EVENT(event.id)} />}
+                >
+                  Открыть встречу
+                </Button>
+              </article>
+            ))}
+            {query.hasNextPage && (
+              <Button
+                disabled={query.isFetchingNextPage}
+                onClick={() => void query.fetchNextPage()}
+              >
+                {query.isFetchingNextPage
+                  ? 'Загружаем…'
+                  : 'Загрузить ещё встречи в области'}
+              </Button>
+            )}
+          </section>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Картографические данные © OpenStreetMap. Встречи без координат
+          доступны в каталоге. Ваше местоположение используется только после
+          нажатия кнопки.
+        </p>
       </div>
     </>
   );

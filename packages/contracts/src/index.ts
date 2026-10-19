@@ -92,3 +92,9 @@ export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;
 
 // Кейс «Платформа совместных спортивных активностей»: типы, схемы форм и подписи статусов.
 export * from './sport';
+
+export * from './admin';
+
+export * from "./company";
+
+export * from './profile';

@@ -10,7 +10,9 @@ export const useApproveOrganization = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => approveOrganization(id),
-    onSuccess: () => {
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: ORGANIZATION_KEYS.ALL });
     },
   });
@@ -21,7 +23,9 @@ export const useRejectOrganization = () => {
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       rejectOrganization(id, reason),
-    onSuccess: () => {
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: ORGANIZATION_KEYS.ALL });
     },
   });
