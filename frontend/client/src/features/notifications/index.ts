@@ -1,1 +1,1 @@
-export { NotificationsBell } from './ui';
+export { MaxConnectCard, NotificationsBell } from './ui';

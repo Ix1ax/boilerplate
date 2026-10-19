@@ -1,6 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import {
+  adminEventHistory,
+  adminListEvents,
   getEvent,
   getEvents,
   getEventWeather,
@@ -8,7 +10,7 @@ import {
   getMyParticipations,
 } from '../api';
 import { EVENT_KEYS } from './constants';
-import { type EventListParams } from './types';
+import { type AdminEventsParams, type EventListParams } from './types';
 
 export const useEvent = (id: string) =>
   useQuery({
@@ -50,5 +52,21 @@ export const useMyEvents = () =>
   useQuery({
     queryKey: EVENT_KEYS.MY_EVENTS,
     queryFn: getMyEvents,
+    meta: { silent: true },
+  });
+
+export const useAdminEvents = (params: AdminEventsParams = {}) =>
+  useQuery({
+    queryKey: EVENT_KEYS.ADMIN_LIST(params),
+    queryFn: () => adminListEvents(params),
+    placeholderData: keepPreviousData,
+    meta: { silent: true },
+  });
+
+export const useAdminEventHistory = (id: string, enabled: boolean) =>
+  useQuery({
+    queryKey: EVENT_KEYS.ADMIN_HISTORY(id),
+    queryFn: () => adminEventHistory(id),
+    enabled,
     meta: { silent: true },
   });

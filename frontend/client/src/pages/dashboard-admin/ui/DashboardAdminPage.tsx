@@ -2,6 +2,9 @@ import { DownloadIcon } from 'lucide-react';
 
 import { AuditLogTable } from '@/widgets/admin-audit';
 import { AdminStats } from '@/widgets/admin-dashboard';
+import { AdminEventsPanel } from '@/widgets/admin-events';
+import { AdminOrganizationsPanel } from '@/widgets/admin-organizations';
+import { AdminReportsPanel } from '@/widgets/admin-reports';
 
 import { env } from '@/shared/config';
 import {
@@ -18,12 +21,24 @@ import {
 
 export const DashboardAdminPage = () => {
   return (
-    <Tabs defaultValue="overview">
+    <Tabs defaultValue="organizations">
       <TabsList>
+        <TabsTrigger value="organizations">Организации</TabsTrigger>
+        <TabsTrigger value="events">Мероприятия</TabsTrigger>
+        <TabsTrigger value="moderation-reports">Жалобы</TabsTrigger>
         <TabsTrigger value="overview">Обзор</TabsTrigger>
         <TabsTrigger value="audit">Журнал</TabsTrigger>
-        <TabsTrigger value="reports">Отчёты</TabsTrigger>
+        <TabsTrigger value="export">Отчёты</TabsTrigger>
       </TabsList>
+      <TabsContent value="organizations" className="mt-4">
+        <AdminOrganizationsPanel />
+      </TabsContent>
+      <TabsContent value="events" className="mt-4">
+        <AdminEventsPanel />
+      </TabsContent>
+      <TabsContent value="moderation-reports" className="mt-4">
+        <AdminReportsPanel />
+      </TabsContent>
       <TabsContent value="overview" className="mt-4">
         <AdminStats />
       </TabsContent>
@@ -37,7 +52,7 @@ export const DashboardAdminPage = () => {
           </CardContent>
         </Card>
       </TabsContent>
-      <TabsContent value="reports" className="mt-4">
+      <TabsContent value="export" className="mt-4">
         <Card>
           <CardHeader>
             <CardTitle>Отчёты</CardTitle>

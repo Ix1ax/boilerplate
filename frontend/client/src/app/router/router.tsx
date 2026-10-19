@@ -54,12 +54,20 @@ export const router = createBrowserRouter([
                 lazy: () => import('@/pages/events'),
               },
               {
+                path: STATIC_ROUTES.MAP,
+                lazy: () => import('@/pages/map'),
+              },
+              {
                 path: DYNAMIC_ROUTES.EVENT(':eventId'),
                 lazy: () => import('@/pages/event'),
               },
               {
                 path: STATIC_ROUTES.MY,
                 lazy: () => import('@/pages/my-sport'),
+              },
+              {
+                path: STATIC_ROUTES.SETTINGS,
+                lazy: () => import('@/pages/settings'),
               },
               {
                 path: STATIC_ROUTES.DASHBOARD,

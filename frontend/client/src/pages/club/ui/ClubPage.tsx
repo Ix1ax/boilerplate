@@ -1,3 +1,5 @@
+import { ClubDemandPanel } from '@/widgets/club-demand';
+
 import { ClubForm } from '@/features/organization-profile';
 
 import { useMyOrganization } from '@/entities/organization';
@@ -32,6 +34,9 @@ export const ClubPage = () => {
           <>
             {organization.data && (
               <ClubStatus organization={organization.data} />
+            )}
+            {organization.data?.status === 'approved' && (
+              <ClubDemandPanel sports={organization.data.sports} />
             )}
             <ClubForm organization={organization.data ?? null} />
           </>

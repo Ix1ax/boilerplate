@@ -1,0 +1,1 @@
+export { AdminOrganizationsPanel } from './AdminOrganizationsPanel';

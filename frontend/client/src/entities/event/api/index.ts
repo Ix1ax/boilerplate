@@ -6,10 +6,16 @@ export {
   getMyParticipations,
 } from './eventApi';
 export {
-  createEvent,
-  listParticipants,
+  adminEventHistory,
+  adminListEvents,
   approveParticipant,
+  cancelEvent,
+  createEvent,
+  deleteEvent,
+  listParticipants,
   rejectParticipant,
   remindParticipants,
-  cancelEvent,
+  restoreEvent,
+  unpublishEvent,
+  updateEvent,
 } from './managementApi';

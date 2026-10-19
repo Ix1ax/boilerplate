@@ -3,6 +3,7 @@ import { levelLabels } from '@starter/contracts';
 import { Button, Form, Notice } from '@/shared/ui';
 
 import { useEventCreate } from '../model';
+import { DemandHint } from './DemandHint';
 import {
   EventCheckboxField,
   EventChoiceField,
@@ -20,6 +21,8 @@ export const EventCreateForm = () => {
     sportsQuery,
     organization,
   } = useEventCreate();
+  const sportId = form.watch('sport_id');
+  const sportName = form.watch('sport_name');
   return (
     <Form {...form}>
       <form
@@ -67,6 +70,7 @@ export const EventCreateForm = () => {
             Выберите направление или впишите своё (от 2 до 60 символов).
           </Notice>
         )}
+        <DemandHint sportId={sportId} sportName={sportName} />
         <div className="grid gap-6 sm:grid-cols-2">
           <EventInputField
             form={form}

@@ -1,0 +1,1 @@
+export { AdminEventsPanel } from './ui';

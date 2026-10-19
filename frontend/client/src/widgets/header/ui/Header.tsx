@@ -6,6 +6,7 @@ import {
   LogOutIcon,
   MoonIcon,
   PlusIcon,
+  SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
   TrophyIcon,
@@ -35,6 +36,7 @@ import {
 
 const NAV = [
   { to: STATIC_ROUTES.EVENTS, label: 'Найти встречу' },
+  { to: STATIC_ROUTES.MAP, label: 'Карта' },
   { to: STATIC_ROUTES.MY, label: 'Мой спорт' },
   { to: STATIC_ROUTES.COMPANY, label: 'Собрать компанию' },
 ];
@@ -82,6 +84,10 @@ const UserMenu = ({ name, isAdmin }: { name: string; isAdmin: boolean }) => {
               Администрирование
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem render={<Link to={STATIC_ROUTES.SETTINGS} />}>
+            <SettingsIcon aria-hidden />
+            Профиль и настройки
+          </DropdownMenuItem>
           <DropdownMenuItem
             closeOnClick={false}
             onClick={() => setTheme(isDark ? 'light' : 'dark')}

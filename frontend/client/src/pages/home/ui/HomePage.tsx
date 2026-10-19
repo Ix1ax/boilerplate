@@ -215,7 +215,10 @@ export const HomePage = () => {
                   >
                     Вид спорта
                   </label>
-                  <Select value={heroSport} onValueChange={setHeroSport}>
+                  <Select
+                    value={heroSport}
+                    onValueChange={(value) => setHeroSport(value ?? 'all')}
+                  >
                     <SelectTrigger
                       id="home-sport"
                       size="sm"

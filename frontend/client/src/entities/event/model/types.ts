@@ -3,7 +3,9 @@ export type {
   EventInput,
   EventLevel,
   EventPage,
+  EventPatch,
   EventWeather,
+  HistoryEntry,
   JoinMode,
   MyEntry,
   MyParticipation,
@@ -24,4 +26,12 @@ export type EventListParams = {
   from?: string;
   to?: string;
   organization?: string;
+};
+
+export type AdminEventsParams = {
+  limit?: number;
+  offset?: number;
+  /** published, unpublished, deleted, cancelled — через запятую. */
+  status?: string;
+  q?: string;
 };

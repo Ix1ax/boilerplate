@@ -1,3 +1,7 @@
+import { useState } from 'react';
+
+import { EventEditForm } from '@/features/event-edit';
+
 import { toApiError } from '@/shared/api';
 import { Badge, Button, Label, Notice, Textarea } from '@/shared/ui';
 
@@ -13,6 +17,7 @@ export const EventManagement = ({
   eventId: routeEventId,
   onConfirmCancel,
 }: EventManagementProps) => {
+  const [editing, setEditing] = useState(false);
   const {
     event,
     participants,
@@ -65,10 +70,31 @@ export const EventManagement = ({
                 Напомнить участникам
               </Button>
             )}
+            {!closed && (
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setEditing((value) => !value)}
+              >
+                {editing ? 'Скрыть редактор' : 'Изменить встречу'}
+              </Button>
+            )}
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
             Напоминание можно отправить до начала встречи, не чаще раза в час.
           </p>
+          {!closed && editing && (
+            <section className="mt-8">
+              <h2 className="title-display text-[26px]">Редактор встречи</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Направление, режим записи и «от чьего имени» не меняются.
+                Перенос времени или места — участники получат уведомление.
+              </p>
+              <div className="mt-5">
+                <EventEditForm event={event.data} />
+              </div>
+            </section>
+          )}
           {feedback && (
             <Notice role="status" tone="success" className="mt-5">
               {feedback}

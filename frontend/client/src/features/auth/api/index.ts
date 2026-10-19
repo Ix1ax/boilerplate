@@ -1,1 +1,1 @@
-export { login, logout } from './authApi';
+export { changeLocalPassword, login, logout } from './authApi';

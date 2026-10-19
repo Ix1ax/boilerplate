@@ -10,3 +10,14 @@ export const logout = () =>
     baseURL: '/',
     method: 'POST',
   });
+
+export const changeLocalPassword = (data: {
+  current_password: string;
+  new_password: string;
+}) =>
+  request<void>({
+    url: '/auth/local/password',
+    baseURL: '/',
+    method: 'POST',
+    data,
+  });
