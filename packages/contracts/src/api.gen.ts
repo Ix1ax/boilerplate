@@ -778,6 +778,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/organizations/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Карточка организации для админа
+     * @description Организация в любом статусе, её представитель, история допуска с причинами и все события (во всех статусах).
+     */
+    get: operations['adminGetOrganization'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/admin/organizations/{id}/approve': {
     parameters: {
       query?: never;
@@ -925,6 +951,121 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/events/{id}/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * История события
+     * @description Публикация, снятие, удаление, отмена и сбор состава — кто, когда и с какой причиной. `kind` — event или event_quorum.
+     */
+    get: operations['adminEventHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/sports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Справочник направлений для модерации
+     * @description Все направления, пользовательские и скрытые первыми; кто добавил, сколько событий и активных запросов «Ищу компанию».
+     */
+    get: operations['adminListSports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/sports/{id}/hide': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Скрыть пользовательское направление
+     * @description Спам, оскорбление или дубль. Направление пропадает из справочника, новые события и запросы с ним создать нельзя; уже созданные события остаются (их снимают отдельно). Базовые направления не скрываются — 409. Причина обязательна.
+     */
+    post: operations['adminHideSport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/sports/{id}/show': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Вернуть направление в справочник */
+    post: operations['adminShowSport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/domain/republish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Переотправить снимки в moderation
+     * @description Ставит в outbox снимки всех организаций, событий, записей, сообщений и запросов «Ищу компанию» (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор безопасен.
+     */
+    post: operations['adminRepublishDomain'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/admin/comments/{id}/hide': {
     parameters: {
       query?: never;
@@ -1058,6 +1199,126 @@ export interface paths {
      *     (400, 429, 503) приходят обычным JSON, как у /llm/generate.
      */
     post: operations['generateStream'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/moderation/dashboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Дашборд администратора
+     * @description Что требует решения (заявки организаций, самые давние — первыми) и как живёт платформа — события, записи, новички, сообщения, «Ищу компанию», сбор состава, ряд за 14 дней по Красноярску и популярные направления.
+     */
+    get: operations['moderationDashboard'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/moderation/log': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Журнал модерации
+     * @description Решения по организациям, смена статуса мероприятий (снятие, удаление, возврат, отмена — в том числе автоматическая, когда не собран состав) и скрытие сообщений. Кто, когда и с какой причиной.
+     */
+    get: operations['moderationLog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/moderation/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Лента сообщений
+     * @description Последние сообщения всех обсуждений в одном месте. Скрыть сообщение — `POST /api/v1/admin/comments/{id}/hide` сервиса events.
+     */
+    get: operations['moderationComments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/moderation/reports/events.csv': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Выгрузка мероприятий
+     * @description Все мероприятия во всех статусах: организатор, время по Красноярску, режим, статус и причина, участники, заявки, новички, состав. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.
+     */
+    get: operations['moderationReportEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/moderation/reports/organizations.csv': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Выгрузка организаций
+     * @description Организации, представители, статус допуска и причина отказа, число событий. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.
+     */
+    get: operations['moderationReportOrganizations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/moderation/reports/log.csv': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Выгрузка журнала модерации
+     * @description До 10 000 последних решений. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.
+     */
+    get: operations['moderationReportLog'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1752,6 +2013,34 @@ export interface components {
         advice: string;
       } | null;
     };
+    Transition: {
+      from: string;
+      to: string;
+      /** @description Кто принял решение (имя или «Платформа») */
+      actor: string;
+      /** @description Причина или комментарий */
+      comment: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    HistoryEntry: components['schemas']['Transition'] & {
+      /** @enum {string} */
+      kind: 'event' | 'event_quorum';
+    };
+    OrganizationDetail: components['schemas']['Organization'] & {
+      history: components['schemas']['Transition'][];
+      events: components['schemas']['Event'][];
+    };
+    AdminSport: components['schemas']['Sport'] & {
+      hidden: boolean;
+      /** @description Кто добавил (пусто — базовое направление) */
+      created_by: string;
+      events_count: number;
+      /** @description Активные запросы «Ищу компанию» */
+      requests_count: number;
+      /** Format: date-time */
+      created_at: string;
+    };
     Reason: {
       /** @description Причина решения — её увидит другая сторона */
       reason?: string;
@@ -1793,6 +2082,104 @@ export interface components {
       json?: boolean;
       /** @description Творчество: 0 — предсказуемо, 1+ — разнообразнее */
       temperature?: number;
+    };
+    Counter: number;
+    Dashboard: {
+      organizations: {
+        pending: components['schemas']['Counter'];
+        approved: components['schemas']['Counter'];
+        rejected: components['schemas']['Counter'];
+      };
+      events: {
+        upcoming: components['schemas']['Counter'];
+        unpublished: components['schemas']['Counter'];
+        deleted: components['schemas']['Counter'];
+        cancelled: components['schemas']['Counter'];
+        created_week: components['schemas']['Counter'];
+      };
+      participations: {
+        confirmed: components['schemas']['Counter'];
+        pending: components['schemas']['Counter'];
+        first_time: components['schemas']['Counter'];
+      };
+      comments: {
+        total: components['schemas']['Counter'];
+        hidden: components['schemas']['Counter'];
+      };
+      company_requests: {
+        active: components['schemas']['Counter'];
+      };
+      quorum: {
+        gathering: components['schemas']['Counter'];
+        reached: components['schemas']['Counter'];
+        failed: components['schemas']['Counter'];
+      };
+      /** @description 14 последних дней по Красноярску */
+      series: {
+        /** Format: date */
+        date: string;
+        events: components['schemas']['Counter'];
+        participations: components['schemas']['Counter'];
+      }[];
+      top_sports: {
+        sport: string;
+        events: components['schemas']['Counter'];
+      }[];
+      /** @description Самые давние заявки на допуск */
+      pending_organizations: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        owner_name: string;
+        /** Format: date-time */
+        created_at: string;
+      }[];
+      /**
+       * Format: date-time
+       * @description Время последнего полученного изменения
+       */
+      updated_at: string | null;
+    };
+    LogEntry: {
+      /** @enum {string} */
+      entity: 'organization' | 'event' | 'comment';
+      /** Format: uuid */
+      entity_id: string;
+      title: string;
+      from: string;
+      to: string;
+      /** @description Кто решил: имя администратора, организатор или «Платформа» */
+      actor: string;
+      /** @description Причина */
+      comment: string;
+      /** Format: date-time */
+      at: string;
+    };
+    LogPage: {
+      items: components['schemas']['LogEntry'][];
+      total: number;
+      limit: number;
+      offset: number;
+    };
+    ModerationComment: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      event_id: string;
+      event_title: string;
+      author_name: string;
+      body: string;
+      /** @enum {string} */
+      status: 'visible' | 'hidden';
+      hidden_reason: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    CommentPage: {
+      items: components['schemas']['ModerationComment'][];
+      total: number;
+      limit: number;
+      offset: number;
     };
     Notification: {
       /** Format: uuid */
@@ -3678,6 +4065,36 @@ export interface operations {
       500: components['responses']['InternalError'];
     };
   };
+  adminGetOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Карточка */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrganizationDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
   approveOrganization: {
     parameters: {
       query?: never;
@@ -3893,6 +4310,161 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminEventHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Переходы от старых к новым */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['HistoryEntry'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminListSports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Направления */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AdminSport'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminHideSport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Дубль направления «Футбол»"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Направление скрыто */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminSport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminShowSport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Направление снова доступно */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminSport'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminRepublishDomain: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сколько снимков поставлено в очередь */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            queued: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       500: components['responses']['InternalError'];
     };
   };
@@ -4307,6 +4879,169 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       429: components['responses']['TooManyRequests'];
       503: components['responses']['Unavailable'];
+    };
+  };
+  moderationDashboard: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Дашборд */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Dashboard'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  moderationLog: {
+    parameters: {
+      query?: {
+        /** @description organization, event или comment; несколько — через запятую */
+        entity?: string;
+        /** @description Новый статус, например rejected или unpublished */
+        to?: string;
+        entity_id?: string;
+        /** @description Поиск по названию, автору решения и причине */
+        q?: string;
+        sort?: 'at' | '-at';
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница журнала */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LogPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  moderationComments: {
+    parameters: {
+      query?: {
+        status?: 'visible' | 'hidden';
+        event_id?: string;
+        /** @description Поиск по тексту, автору и названию мероприятия */
+        q?: string;
+        sort?: 'created' | '-created';
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница сообщений */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommentPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  moderationReportEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Файл CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  moderationReportOrganizations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Файл CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  moderationReportLog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Файл CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
     };
   };
   listNotifications: {

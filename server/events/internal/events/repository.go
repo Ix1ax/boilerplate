@@ -260,7 +260,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$2
 		if err != nil {
 			return err
 		}
-		if err = platform.RecordTransition(ctx, tx, "event", id, platform.Transition{From: "none", To: "published", Actor: actorLabel(a)}); err != nil {
+		if err = record(ctx, tx, "event", id, platform.Transition{From: "none", To: "published", Actor: actorLabel(a)}); err != nil {
 			return err
 		}
 		return matchNewEvent(ctx, tx, id)
@@ -366,7 +366,7 @@ RETURNING id`, uuid.NewString(), eventID, a.ID, to, message, firstTime).Scan(&ou
 			return err
 		}
 		out.Status, out.FirstTime = to, firstTime
-		if err = platform.RecordTransition(ctx, tx, "participation", out.ID, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: message}); err != nil {
+		if err = record(ctx, tx, "participation", out.ID, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: message}); err != nil {
 			return err
 		}
 		title := map[string]string{"confirmed": "Новый участник", "pending": "Новая заявка на участие", "waitlist": "Новый участник в листе ожидания"}[to]
@@ -415,7 +415,7 @@ func (r *Repository) Leave(ctx context.Context, a Actor, eventID string) error {
 		if err = releaseNewcomers(ctx, tx, eventID, pid, e); err != nil {
 			return err
 		}
-		if err = platform.RecordTransition(ctx, tx, "participation", pid, platform.Transition{From: from, To: "cancelled", Actor: actorLabel(a)}); err != nil {
+		if err = record(ctx, tx, "participation", pid, platform.Transition{From: from, To: "cancelled", Actor: actorLabel(a)}); err != nil {
 			return err
 		}
 		if err = notify(ctx, tx, e.OrganizerID, "Участник отменил запись", displayName(a)+" — «"+e.Title+"»", "/events/"+eventID); err != nil {
@@ -435,7 +435,7 @@ func (r *Repository) Leave(ctx context.Context, a Actor, eventID string) error {
 		if _, err = tx.Exec(ctx, "UPDATE participations SET status='confirmed', updated_at=now() WHERE id=$1", nextID); err != nil {
 			return err
 		}
-		if err = platform.RecordTransition(ctx, tx, "participation", nextID, platform.Transition{From: "waitlist", To: "confirmed", Actor: "system", Comment: "Освободилось место"}); err != nil {
+		if err = record(ctx, tx, "participation", nextID, platform.Transition{From: "waitlist", To: "confirmed", Actor: "system", Comment: "Освободилось место"}); err != nil {
 			return err
 		}
 		if err = notify(ctx, tx, nextUser, "Освободилось место — вы участвуете", "«"+e.Title+"»: запись подтверждена из листа ожидания", "/events/"+eventID); err != nil {
@@ -534,7 +534,7 @@ func (r *Repository) Decide(ctx context.Context, a Actor, eventID, pid string, a
 		if _, err = tx.Exec(ctx, "UPDATE participations SET status=$2, decision_reason=$3, decided_by=$4, decided_at=now(), updated_at=now() WHERE id=$1", pid, to, reason, a.ID); err != nil {
 			return err
 		}
-		if err = platform.RecordTransition(ctx, tx, "participation", pid, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
+		if err = record(ctx, tx, "participation", pid, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
 			return err
 		}
 		title, body := "Заявка принята", "«"+e.Title+"»: вы в составе участников. Подробности — на странице мероприятия."
@@ -610,7 +610,7 @@ func changeEventStatus(ctx context.Context, tx pgx.Tx, a Actor, id string, e loc
 	if _, err := tx.Exec(ctx, "UPDATE events SET status=$2, moderation_reason=$3, moderated_by=$4, moderated_at=now(), updated_at=now() WHERE id=$1", id, to, reason, actorLabel(a)); err != nil {
 		return err
 	}
-	if err := platform.RecordTransition(ctx, tx, "event", id, platform.Transition{From: e.Status, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
+	if err := record(ctx, tx, "event", id, platform.Transition{From: e.Status, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
 		return err
 	}
 	body := "«" + e.Title + "»"
@@ -720,6 +720,9 @@ func (r *Repository) AddComment(ctx context.Context, a Actor, eventID string, pa
 		if _, err = tx.Exec(ctx, "INSERT INTO comments(id,event_id,author_id,parent_id,body) VALUES($1,$2,$3,$4,$5)", id, eventID, a.ID, parentID, body); err != nil {
 			return err
 		}
+		if err = record(ctx, tx, "comment", id, platform.Transition{From: "none", To: "visible", Actor: actorLabel(a)}); err != nil {
+			return err
+		}
 		link := "/events/" + eventID + "#discussion"
 		if a.ID != organizerID {
 			if err = notify(ctx, tx, organizerID, "Новый вопрос по мероприятию", displayName(a)+" — «"+title+"»", link); err != nil {
@@ -756,7 +759,7 @@ func (r *Repository) HideComment(ctx context.Context, a Actor, id, reason string
 		if _, err = tx.Exec(ctx, "UPDATE comments SET status='hidden', hidden_reason=$2, hidden_by=$3 WHERE id=$1", id, reason, actorLabel(a)); err != nil {
 			return err
 		}
-		if err = platform.RecordTransition(ctx, tx, "comment", id, platform.Transition{From: "visible", To: "hidden", Actor: actorLabel(a), Comment: reason}); err != nil {
+		if err = record(ctx, tx, "comment", id, platform.Transition{From: "visible", To: "hidden", Actor: actorLabel(a), Comment: reason}); err != nil {
 			return err
 		}
 		if err = notify(ctx, tx, author, "Ваше сообщение скрыто модератором", "«"+title+"»: "+reason, "/events/"+eventID+"#discussion"); err != nil {
@@ -829,7 +832,7 @@ ON CONFLICT (owner_id) DO NOTHING`, id, a.ID, in.Name, in.Description, in.City, 
 		if err = setOrgSports(ctx, tx, id, in.SportIDs); err != nil {
 			return err
 		}
-		return platform.RecordTransition(ctx, tx, "organization", id, platform.Transition{From: "none", To: "pending", Actor: actorLabel(a)})
+		return record(ctx, tx, "organization", id, platform.Transition{From: "none", To: "pending", Actor: actorLabel(a)})
 	})
 	if err != nil {
 		return Organization{}, err
@@ -855,7 +858,7 @@ func (r *Repository) UpdateOrganization(ctx context.Context, a Actor, in Organiz
 			if err = orgWorkflow.Check(status, next, ""); err != nil {
 				return err
 			}
-			if err = platform.RecordTransition(ctx, tx, "organization", id, platform.Transition{From: status, To: next, Actor: actorLabel(a), Comment: "Профиль исправлен и подан повторно"}); err != nil {
+			if err = record(ctx, tx, "organization", id, platform.Transition{From: status, To: next, Actor: actorLabel(a), Comment: "Профиль исправлен и подан повторно"}); err != nil {
 				return err
 			}
 		}
@@ -938,7 +941,7 @@ func (r *Repository) ReviewOrganization(ctx context.Context, a Actor, id, to, re
 		if _, err = tx.Exec(ctx, "UPDATE organizations SET status=$2, review_reason=$3, reviewed_by=$4, reviewed_at=now(), updated_at=now() WHERE id=$1", id, to, reason, actorLabel(a)); err != nil {
 			return err
 		}
-		if err = platform.RecordTransition(ctx, tx, "organization", id, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
+		if err = record(ctx, tx, "organization", id, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
 			return err
 		}
 		if to == "approved" {

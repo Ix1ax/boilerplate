@@ -60,6 +60,18 @@ services:
     healthcheck:
       <<: *pg-health
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  moderation-postgres:
+    container_name: moderation-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${MODERATION_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${MODERATION_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${MODERATION_DB_NAME:?required}
+    ports: ['127.0.0.1:${MODERATION_DB_PORT:-5438}:5432']
+    volumes: [moderation-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
   audit-postgres:
     container_name: audit-postgres
     image: postgres:17-alpine
@@ -239,6 +251,28 @@ services:
       DATABASE_URL: postgres://${EVENTS_DB_USER}:${EVENTS_DB_PASSWORD}@events-postgres:5432/${EVENTS_DB_NAME}?sslmode=disable
     depends_on:
       events-postgres: { condition: service_healthy }
+  moderation-migrate:
+    container_name: moderation-migrate
+    profiles: [app]
+    build: ./server/moderation
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${MODERATION_DB_USER}:${MODERATION_DB_PASSWORD}@moderation-postgres:5432/${MODERATION_DB_NAME}?sslmode=disable
+    depends_on:
+      moderation-postgres: { condition: service_healthy }
+  moderation-service:
+    container_name: moderation-service
+    profiles: [app]
+    build: ./server/moderation
+    environment:
+      DATABASE_URL: postgres://${MODERATION_DB_USER}:${MODERATION_DB_PASSWORD}@moderation-postgres:5432/${MODERATION_DB_NAME}?sslmode=disable
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      moderation-migrate: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
   events-service:
     container_name: events-service
     profiles: [app]
@@ -364,6 +398,7 @@ services:
       AUDIT_URL: http://audit-service:8080
       REALTIME_URL: http://realtime-service:8080
       EVENTS_URL: http://events-service:8080
+      MODERATION_URL: http://moderation-service:8080
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
@@ -393,6 +428,7 @@ services:
       audit-service: { condition: service_healthy }
       realtime-service: { condition: service_healthy }
       events-service: { condition: service_healthy }
+      moderation-service: { condition: service_healthy }
     healthcheck: *svc-health
   web-service:
     container_name: web-service
@@ -414,6 +450,7 @@ volumes:
   files-postgres-data:
   notifications-postgres-data:
   events-postgres-data:
+  moderation-postgres-data:
   audit-postgres-data:
   keycloak-postgres-data:
   files-s3-data:

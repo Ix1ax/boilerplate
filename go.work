@@ -6,6 +6,7 @@ use (
 	./server/files
 	./server/gateway
 	./server/llm
+	./server/moderation
 	./server/notifications
 	./server/realtime
 	./server/tasks

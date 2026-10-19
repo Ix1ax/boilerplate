@@ -28,6 +28,7 @@ info:
     - `events` — server/events/api/openapi.yaml
     - `files` — server/files/api/openapi.yaml
     - `llm` — server/llm/api/openapi.yaml
+    - `moderation` — server/moderation/api/openapi.yaml
     - `notifications` — server/notifications/api/openapi.yaml
     - `realtime` — server/realtime/api/openapi.yaml
     - `tasks` — server/tasks/api/openapi.yaml
@@ -70,6 +71,8 @@ tags:
     description: Загрузка, список, скачивание и удаление своих файлов. (сервис files)
   - name: Модель
     description: Состояние модели и генерация ответов. (сервис llm)
+  - name: Админка
+    description: Аналитика, журнал и отчёты. Только роль `admin`. (сервис moderation)
   - name: Уведомления
     description: Список, живой поток и отметки прочтения. (сервис notifications)
   - name: Мессенджер MAX
@@ -1526,6 +1529,32 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/admin/organizations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminGetOrganization
+      summary: Карточка организации для админа
+      description:
+        Организация в любом статусе, её представитель, история допуска с причинами и все события (во всех
+        статусах).
+      responses:
+        '200':
+          description: Карточка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/admin/organizations/{id}/approve:
     parameters:
       - $ref: '#/components/parameters/ID'
@@ -1729,6 +1758,162 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminEventHistory
+      summary: История события
+      description:
+        Публикация, снятие, удаление, отмена и сбор состава — кто, когда и с какой причиной. `kind` —
+        event или event_quorum.
+      responses:
+        '200':
+          description: Переходы от старых к новым
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HistoryEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/sports:
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminListSports
+      summary: Справочник направлений для модерации
+      description:
+        Все направления, пользовательские и скрытые первыми; кто добавил, сколько событий и активных
+        запросов «Ищу компанию».
+      responses:
+        '200':
+          description: Направления
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminSport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/sports/{id}/hide:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: adminHideSport
+      summary: Скрыть пользовательское направление
+      description:
+        Спам, оскорбление или дубль. Направление пропадает из справочника, новые события и запросы с ним
+        создать нельзя; уже созданные события остаются (их снимают отдельно). Базовые направления не
+        скрываются — 409. Причина обязательна.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Дубль направления «Футбол»
+      responses:
+        '200':
+          description: Направление скрыто
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/sports/{id}/show:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: adminShowSport
+      summary: Вернуть направление в справочник
+      responses:
+        '200':
+          description: Направление снова доступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/domain/republish:
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: adminRepublishDomain
+      summary: Переотправить снимки в moderation
+      description:
+        Ставит в outbox снимки всех организаций, событий, записей, сообщений и запросов «Ищу компанию»
+        (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор
+        безопасен.
+      responses:
+        '202':
+          description: Сколько снимков поставлено в очередь
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - queued
+                properties:
+                  queued:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/admin/comments/{id}/hide:
@@ -2089,6 +2274,202 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/admin/moderation/dashboard:
+    get:
+      tags:
+        - Админка
+      operationId: moderationDashboard
+      summary: Дашборд администратора
+      description:
+        Что требует решения (заявки организаций, самые давние — первыми) и как живёт платформа — события,
+        записи, новички, сообщения, «Ищу компанию», сбор состава, ряд за 14 дней по Красноярску и популярные
+        направления.
+      responses:
+        '200':
+          description: Дашборд
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/log:
+    get:
+      tags:
+        - Админка
+      operationId: moderationLog
+      summary: Журнал модерации
+      description:
+        Решения по организациям, смена статуса мероприятий (снятие, удаление, возврат, отмена — в том
+        числе автоматическая, когда не собран состав) и скрытие сообщений. Кто, когда и с какой причиной.
+      parameters:
+        - name: entity
+          in: query
+          description: organization, event или comment; несколько — через запятую
+          schema:
+            type: string
+        - name: to
+          in: query
+          description: Новый статус, например rejected или unpublished
+          schema:
+            type: string
+        - name: entity_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          description: Поиск по названию, автору решения и причине
+          schema:
+            type: string
+            maxLength: 100
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - at
+              - -at
+            default: -at
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/comments:
+    get:
+      tags:
+        - Админка
+      operationId: moderationComments
+      summary: Лента сообщений
+      description:
+        Последние сообщения всех обсуждений в одном месте. Скрыть сообщение — `POST
+        /api/v1/admin/comments/{id}/hide` сервиса events.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - visible
+              - hidden
+        - name: event_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          description: Поиск по тексту, автору и названию мероприятия
+          schema:
+            type: string
+            maxLength: 100
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - created
+              - -created
+            default: -created
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Страница сообщений
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/events.csv:
+    get:
+      tags:
+        - Админка
+      operationId: moderationReportEvents
+      summary: Выгрузка мероприятий
+      description:
+        'Все мероприятия во всех статусах: организатор, время по Красноярску, режим, статус и причина,
+        участники, заявки, новички, состав. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/organizations.csv:
+    get:
+      tags:
+        - Админка
+      operationId: moderationReportOrganizations
+      summary: Выгрузка организаций
+      description:
+        Организации, представители, статус допуска и причина отказа, число событий. CSV для Excel — UTF-8
+        с BOM, разделитель «;», статусы по-русски.
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/log.csv:
+    get:
+      tags:
+        - Админка
+      operationId: moderationReportLog
+      summary: Выгрузка журнала модерации
+      description: До 10 000 последних решений. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/notifications:
     get:
       tags:
@@ -3586,6 +3967,80 @@ components:
               type: string
               description: Главный совет; пусто — особых советов нет
               example: возьмите дождевик и сменную обувь
+    Transition:
+      type: object
+      required:
+        - from
+        - to
+        - actor
+        - comment
+        - created_at
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        actor:
+          type: string
+          description: Кто принял решение (имя или «Платформа»)
+        comment:
+          type: string
+          description: Причина или комментарий
+        created_at:
+          type: string
+          format: date-time
+    HistoryEntry:
+      allOf:
+        - $ref: '#/components/schemas/Transition'
+        - type: object
+          required:
+            - kind
+          properties:
+            kind:
+              type: string
+              enum:
+                - event
+                - event_quorum
+    OrganizationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Organization'
+        - type: object
+          required:
+            - history
+            - events
+          properties:
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/Transition'
+            events:
+              type: array
+              items:
+                $ref: '#/components/schemas/Event'
+    AdminSport:
+      allOf:
+        - $ref: '#/components/schemas/Sport'
+        - type: object
+          required:
+            - hidden
+            - created_by
+            - events_count
+            - requests_count
+            - created_at
+          properties:
+            hidden:
+              type: boolean
+            created_by:
+              type: string
+              description: Кто добавил (пусто — базовое направление)
+            events_count:
+              type: integer
+            requests_count:
+              type: integer
+              description: Активные запросы «Ищу компанию»
+            created_at:
+              type: string
+              format: date-time
     Reason:
       type: object
       properties:
@@ -3677,6 +4132,259 @@ components:
           minimum: 0
           maximum: 2
           description: 'Творчество: 0 — предсказуемо, 1+ — разнообразнее'
+    Counter:
+      type: integer
+      minimum: 0
+    Dashboard:
+      type: object
+      required:
+        - organizations
+        - events
+        - participations
+        - comments
+        - company_requests
+        - quorum
+        - series
+        - top_sports
+        - pending_organizations
+        - updated_at
+      properties:
+        organizations:
+          type: object
+          required:
+            - pending
+            - approved
+            - rejected
+          properties:
+            pending:
+              $ref: '#/components/schemas/Counter'
+            approved:
+              $ref: '#/components/schemas/Counter'
+            rejected:
+              $ref: '#/components/schemas/Counter'
+        events:
+          type: object
+          required:
+            - upcoming
+            - unpublished
+            - deleted
+            - cancelled
+            - created_week
+          properties:
+            upcoming:
+              $ref: '#/components/schemas/Counter'
+            unpublished:
+              $ref: '#/components/schemas/Counter'
+            deleted:
+              $ref: '#/components/schemas/Counter'
+            cancelled:
+              $ref: '#/components/schemas/Counter'
+            created_week:
+              $ref: '#/components/schemas/Counter'
+        participations:
+          type: object
+          required:
+            - confirmed
+            - pending
+            - first_time
+          properties:
+            confirmed:
+              $ref: '#/components/schemas/Counter'
+            pending:
+              $ref: '#/components/schemas/Counter'
+            first_time:
+              $ref: '#/components/schemas/Counter'
+        comments:
+          type: object
+          required:
+            - total
+            - hidden
+          properties:
+            total:
+              $ref: '#/components/schemas/Counter'
+            hidden:
+              $ref: '#/components/schemas/Counter'
+        company_requests:
+          type: object
+          required:
+            - active
+          properties:
+            active:
+              $ref: '#/components/schemas/Counter'
+        quorum:
+          type: object
+          required:
+            - gathering
+            - reached
+            - failed
+          properties:
+            gathering:
+              $ref: '#/components/schemas/Counter'
+            reached:
+              $ref: '#/components/schemas/Counter'
+            failed:
+              $ref: '#/components/schemas/Counter'
+        series:
+          type: array
+          description: 14 последних дней по Красноярску
+          items:
+            type: object
+            required:
+              - date
+              - events
+              - participations
+            properties:
+              date:
+                type: string
+                format: date
+              events:
+                $ref: '#/components/schemas/Counter'
+              participations:
+                $ref: '#/components/schemas/Counter'
+        top_sports:
+          type: array
+          items:
+            type: object
+            required:
+              - sport
+              - events
+            properties:
+              sport:
+                type: string
+              events:
+                $ref: '#/components/schemas/Counter'
+        pending_organizations:
+          type: array
+          description: Самые давние заявки на допуск
+          items:
+            type: object
+            required:
+              - id
+              - name
+              - owner_name
+              - created_at
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              owner_name:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время последнего полученного изменения
+    LogEntry:
+      type: object
+      required:
+        - entity
+        - entity_id
+        - title
+        - from
+        - to
+        - actor
+        - comment
+        - at
+      properties:
+        entity:
+          type: string
+          enum:
+            - organization
+            - event
+            - comment
+        entity_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        actor:
+          type: string
+          description: 'Кто решил: имя администратора, организатор или «Платформа»'
+        comment:
+          type: string
+          description: Причина
+        at:
+          type: string
+          format: date-time
+    LogPage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEntry'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    ModerationComment:
+      type: object
+      required:
+        - id
+        - event_id
+        - event_title
+        - author_name
+        - body
+        - status
+        - hidden_reason
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        event_title:
+          type: string
+        author_name:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+          enum:
+            - visible
+            - hidden
+        hidden_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CommentPage:
+      type: object
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerationComment'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
     Notification:
       type: object
       required:

@@ -6,6 +6,7 @@ services:
   notifications-postgres: { ports: !reset [], restart: unless-stopped }
   audit-postgres: { ports: !reset [], restart: unless-stopped }
   events-postgres: { ports: !reset [], restart: unless-stopped }
+  moderation-postgres: { ports: !reset [], restart: unless-stopped }
   keycloak-postgres: { restart: unless-stopped }
   gateway-redis: { ports: !reset [], restart: unless-stopped }
   files-s3: { ports: !reset [], restart: unless-stopped }
@@ -38,6 +39,8 @@ services:
     image: ${COMPOSE_PROJECT_NAME:?required}/audit:${DEPLOY_REVISION:?required}
   events-migrate:
     image: ${COMPOSE_PROJECT_NAME:?required}/events:${DEPLOY_REVISION:?required}
+  moderation-migrate:
+    image: ${COMPOSE_PROJECT_NAME:?required}/moderation:${DEPLOY_REVISION:?required}
   tasks-service:
     image: ${COMPOSE_PROJECT_NAME:?required}/tasks:${DEPLOY_REVISION:?required}
     restart: unless-stopped
@@ -52,6 +55,9 @@ services:
     restart: unless-stopped
   events-service:
     image: ${COMPOSE_PROJECT_NAME:?required}/events:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+  moderation-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/moderation:${DEPLOY_REVISION:?required}
     restart: unless-stopped
   realtime-service:
     image: ${COMPOSE_PROJECT_NAME:?required}/realtime:${DEPLOY_REVISION:?required}

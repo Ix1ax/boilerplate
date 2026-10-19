@@ -57,17 +57,17 @@ trap diagnose ERR
 "${compose[@]}" config -q
 "${compose[@]}" pull --ignore-buildable
 # На небольшом VPS параллельные Go-сборки могут исчерпать память.
-for service in tasks-service files-service notifications-service audit-service events-service realtime-service llm-service gateway-service web-service; do
+for service in tasks-service files-service notifications-service audit-service events-service moderation-service realtime-service llm-service gateway-service web-service; do
   "${compose[@]}" build "$service"
 done
 
 "${compose[@]}" up -d --wait --wait-timeout 600 \
-  tasks-postgres files-postgres notifications-postgres audit-postgres events-postgres keycloak-postgres \
+  tasks-postgres files-postgres notifications-postgres audit-postgres events-postgres moderation-postgres keycloak-postgres \
   gateway-redis files-s3 rabbitmq mailpit llm-ollama
 
 backup="$deploy_root/backups/$(date -u +%Y%m%dT%H%M%SZ)-$revision"
 mkdir -p "$backup"
-for service in tasks files notifications audit events keycloak; do
+for service in tasks files notifications audit events moderation keycloak; do
   "${compose[@]}" exec -T "$service-postgres" sh -c \
     'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup/$service.dump"
 done
@@ -81,7 +81,7 @@ run_once() {
   exit_code=$(docker wait "$container")
   [[ "$exit_code" == 0 ]] || fail "$service завершился с кодом $exit_code"
 }
-for service in tasks files notifications audit events; do
+for service in tasks files notifications audit events moderation; do
   run_once "$service-migrate"
 done
 run_once llm-ollama-pull

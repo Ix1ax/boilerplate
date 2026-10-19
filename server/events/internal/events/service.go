@@ -24,6 +24,11 @@ type Store interface {
 	DueReminders(ctx context.Context) ([]ReminderTarget, error)
 	ReminderTargetFor(ctx context.Context, a Actor, eventID string) (ReminderTarget, error)
 	SendReminder(ctx context.Context, t ReminderTarget, kind, weatherLine string) (int, error)
+	AdminOrganization(ctx context.Context, a Actor, id string) (OrganizationDetail, error)
+	EventHistory(ctx context.Context, a Actor, id string) ([]HistoryEntry, error)
+	AdminSports(ctx context.Context) ([]AdminSport, error)
+	SetSportHidden(ctx context.Context, a Actor, id string, hidden bool, reason string) (AdminSport, error)
+	RepublishDomain(ctx context.Context) (int, error)
 	Leave(ctx context.Context, a Actor, eventID string) error
 	Participants(ctx context.Context, a Actor, eventID string) ([]Participant, error)
 	Decide(ctx context.Context, a Actor, eventID, participationID string, approve bool, reason string) (Participant, error)

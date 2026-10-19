@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"example.com/hackathon/server/events/internal/platform"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -90,6 +91,9 @@ ON CONFLICT (user_id, sport_id) WHERE status='active' DO NOTHING`,
 		if tag.RowsAffected() == 0 {
 			return ErrRequestExists
 		}
+		if err = record(ctx, tx, "company_request", id, platform.Transition{From: "none", To: "active", Actor: actorLabel(a)}); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `INSERT INTO company_matches(request_id,event_id)
 SELECT r.id, e.id FROM company_requests r JOIN events e ON `+companyMatch+` WHERE r.id=$1
 ON CONFLICT DO NOTHING`, id)
@@ -103,14 +107,16 @@ ON CONFLICT DO NOTHING`, id)
 
 // CloseCompanyRequest — «компания нашлась» или «больше не ищу»: уведомления прекращаются.
 func (r *Repository) CloseCompanyRequest(ctx context.Context, a Actor, id string) error {
-	tag, err := r.db.Exec(ctx, "UPDATE company_requests SET status='closed', updated_at=now() WHERE id=$1 AND user_id=$2 AND status='active'", id, a.ID)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return r.inTx(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, "UPDATE company_requests SET status='closed', updated_at=now() WHERE id=$1 AND user_id=$2 AND status='active'", id, a.ID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return record(ctx, tx, "company_request", id, platform.Transition{From: "active", To: "closed", Actor: actorLabel(a)})
+	})
 }
 
 // matchNewEvent вызывается в транзакции публикации: находит подходящие запросы, записывает совпадения
