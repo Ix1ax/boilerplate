@@ -1,12 +1,15 @@
-import { Outlet, useMatch, useNavigation } from 'react-router';
+import { Outlet, useLocation, useMatch, useNavigation } from 'react-router';
+import { motion } from 'motion/react';
 
 import { Footer } from '@/widgets/footer';
 import { Header } from '@/widgets/header';
 
 import { STATIC_ROUTES } from '@/shared/constants';
+import { DURATION, EASING } from '@/shared/motion';
 
 export const RootLayout = () => {
   const navigation = useNavigation();
+  const { pathname } = useLocation();
   const isNavigating = navigation.state === 'loading';
   // Лендинг открывается тёмной секцией: шапка и подвал — в его цветах.
   const isLanding = useMatch(STATIC_ROUTES.HOME) !== null;
@@ -33,7 +36,16 @@ export const RootLayout = () => {
       {!isAuth && <Header tone={isLanding ? 'dark' : 'light'} />}
 
       <main id="main-content" className="flex flex-1 flex-col">
-        <Outlet />
+        {/* Смена экрана — быстрое появление; transform не используем, чтобы не ломать sticky. */}
+        <motion.div
+          key={pathname}
+          className="flex flex-1 flex-col"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DURATION.quick, ease: EASING.out }}
+        >
+          <Outlet />
+        </motion.div>
       </main>
 
       {!isAuth && <Footer tone={isLanding ? 'dark' : 'light'} />}

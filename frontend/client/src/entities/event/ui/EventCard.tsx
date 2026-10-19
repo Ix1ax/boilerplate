@@ -4,6 +4,7 @@ import { cn } from 'cn';
 import { SportCoverArt } from '@/entities/sport';
 
 import { DYNAMIC_ROUTES } from '@/shared/constants';
+import { Lift } from '@/shared/motion';
 import { Badge } from '@/shared/ui';
 
 import {
@@ -30,69 +31,71 @@ interface EventCardProps {
 export const EventCard = ({ event, className }: EventCardProps) => {
   const status = event.my_participation?.status;
   return (
-    <Link
-      to={DYNAMIC_ROUTES.EVENT(event.id)}
-      className={cn(
-        'lift flex flex-col overflow-hidden rounded-3xl bg-card text-card-foreground no-underline shadow-[0_1px_2px_rgb(18_18_18/6%),0_8px_24px_-14px_rgb(18_18_18/20%)]',
-        className,
-      )}
-    >
-      <SportCoverArt sport={event.sport.name} className="h-[170px] shrink-0">
-        <span className="absolute top-3.5 left-3.5 rounded-full bg-ink px-3 py-1.5 text-sm font-semibold text-paper">
-          {formatWhen(event.starts_at)}
-        </span>
-        <span
-          className={cn(
-            'absolute right-3.5 bottom-3.5 rounded-full border-[1.5px] border-ink bg-white px-3 py-1.5 text-sm font-semibold text-ink',
-            event.join_mode === 'request' && 'border-dashed',
-          )}
-        >
-          {JOIN_MODE_LABELS[event.join_mode]}
-        </span>
-      </SportCoverArt>
-      <div className="flex flex-1 flex-col gap-2.5 px-[22px] pt-5 pb-[22px]">
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="soft">{event.sport.name}</Badge>
-          {event.sport.is_custom && (
-            <Badge variant="gold">Новое направление</Badge>
-          )}
-          {event.is_organizer && (
-            <Badge variant="outline">Вы организатор</Badge>
-          )}
-          {status === 'confirmed' && (
-            <Badge variant="success">✓ Вы записаны</Badge>
-          )}
-          {status === 'pending' && (
-            <Badge variant="warning">◷ Ожидает решения</Badge>
-          )}
-          {status === 'waitlist' && (
-            <Badge variant="warning">◷ Лист ожидания</Badge>
-          )}
-        </div>
-        <b className="text-[22px] leading-tight">{event.title}</b>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[15px] leading-snug">
-          <div className="min-w-0">
-            <MetaLabel>Где</MetaLabel>
-            <span className="line-clamp-2">{event.location}</span>
+    <Lift className="flex h-full w-full rounded-3xl">
+      <Link
+        to={DYNAMIC_ROUTES.EVENT(event.id)}
+        className={cn(
+          'flex w-full flex-col overflow-hidden rounded-3xl bg-card text-card-foreground no-underline shadow-[0_1px_2px_rgb(18_18_18/6%),0_8px_24px_-14px_rgb(18_18_18/20%)]',
+          className,
+        )}
+      >
+        <SportCoverArt sport={event.sport.name} className="h-[170px] shrink-0">
+          <span className="absolute top-3.5 left-3.5 rounded-full bg-ink px-3 py-1.5 text-sm font-semibold text-paper">
+            {formatWhen(event.starts_at)}
+          </span>
+          <span
+            className={cn(
+              'absolute right-3.5 bottom-3.5 rounded-full border-[1.5px] border-ink bg-white px-3 py-1.5 text-sm font-semibold text-ink',
+              event.join_mode === 'request' && 'border-dashed',
+            )}
+          >
+            {JOIN_MODE_LABELS[event.join_mode]}
+          </span>
+        </SportCoverArt>
+        <div className="flex flex-1 flex-col gap-2.5 px-[22px] pt-5 pb-[22px]">
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="soft">{event.sport.name}</Badge>
+            {event.sport.is_custom && (
+              <Badge variant="gold">Новое направление</Badge>
+            )}
+            {event.is_organizer && (
+              <Badge variant="outline">Вы организатор</Badge>
+            )}
+            {status === 'confirmed' && (
+              <Badge variant="success">✓ Вы записаны</Badge>
+            )}
+            {status === 'pending' && (
+              <Badge variant="warning">◷ Ожидает решения</Badge>
+            )}
+            {status === 'waitlist' && (
+              <Badge variant="warning">◷ Лист ожидания</Badge>
+            )}
           </div>
-          <div>
-            <MetaLabel>Для кого</MetaLabel>
-            {levelShort(event.level)}
+          <b className="text-[22px] leading-tight">{event.title}</b>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[15px] leading-snug">
+            <div className="min-w-0">
+              <MetaLabel>Где</MetaLabel>
+              <span className="line-clamp-2">{event.location}</span>
+            </div>
+            <div>
+              <MetaLabel>Для кого</MetaLabel>
+              {levelShort(event.level)}
+            </div>
           </div>
-        </div>
-        <div className="mt-auto flex flex-wrap justify-between gap-1.5 border-t border-stone pt-3 text-[15px] dark:border-border">
-          <span>
-            <b>{event.organizer.name}</b>{' '}
-            <span className="text-muted-foreground">
-              · {organizerKind(event.organizer)}
+          <div className="mt-auto flex flex-wrap justify-between gap-1.5 border-t border-stone pt-3 text-[15px] dark:border-border">
+            <span>
+              <b>{event.organizer.name}</b>{' '}
+              <span className="text-muted-foreground">
+                · {organizerKind(event.organizer)}
+              </span>
             </span>
-          </span>
-          <span className="text-muted-foreground">
-            {formatTeamCount(event)}
-          </span>
+            <span className="text-muted-foreground">
+              {formatTeamCount(event)}
+            </span>
+          </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </Lift>
   );
 };
 

@@ -18,6 +18,7 @@ import { hasRole, useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { initialOf } from '@/shared/lib';
+import { Lift } from '@/shared/motion';
 import {
   BrandMark,
   Button,
@@ -194,21 +195,23 @@ export const Header = ({ tone = 'light' }: HeaderProps) => {
           ) : (
             !isLoading && (
               <>
-                <Button
-                  variant={dark ? 'outline-light' : 'outline'}
-                  className="lift"
-                  render={<Link to={STATIC_ROUTES.LOGIN} />}
-                >
-                  Войти
-                </Button>
-                {dark && (
+                <Lift>
                   <Button
-                    variant="gold"
-                    className="lift max-sm:hidden"
-                    render={<Link to={STATIC_ROUTES.EVENTS} />}
+                    variant={dark ? 'outline-light' : 'outline'}
+                    render={<Link to={STATIC_ROUTES.LOGIN} />}
                   >
-                    Найти встречу
+                    Войти
                   </Button>
+                </Lift>
+                {dark && (
+                  <Lift className="inline-flex max-sm:hidden">
+                    <Button
+                      variant="gold"
+                      render={<Link to={STATIC_ROUTES.EVENTS} />}
+                    >
+                      Найти встречу
+                    </Button>
+                  </Lift>
                 )}
               </>
             )

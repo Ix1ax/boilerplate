@@ -11,6 +11,7 @@ import { EventCard, EventCardSkeleton, useEvents } from '@/entities/event';
 import { useSports } from '@/entities/sport';
 
 import { STATIC_ROUTES } from '@/shared/constants';
+import { Lift, Reveal, staggerDelay } from '@/shared/motion';
 import { Button, HeroBand, RadarRings } from '@/shared/ui';
 
 const PAGE = 24;
@@ -20,27 +21,29 @@ const GRID =
 
 /** Синяя карточка в конце выдачи: если подходящего нет — собрать компанию. */
 const CompanyTeaser = () => (
-  <Link
-    to={STATIC_ROUTES.COMPANY}
-    className="lift relative flex min-h-[300px] flex-col justify-between gap-4 overflow-hidden rounded-3xl bg-blue p-7 text-white"
-  >
-    <RadarRings
-      tone="white"
-      sizes={[140, 240]}
-      strength={0.3}
-      className="right-[50px] bottom-[50px]"
-    />
-    <b className="display-caps relative text-[26px] leading-[1.05]">
-      Не нашли своё?
-    </b>
-    <span className="relative">
-      Оставьте запрос: спорт, район и удобное время. Когда найдётся подходящая
-      встреча, мы сообщим.
-    </span>
-    <span className="relative inline-flex min-h-12 items-center self-start rounded-full bg-gold px-5 font-bold text-ink">
-      Собрать компанию
-    </span>
-  </Link>
+  <Lift className="flex h-full w-full rounded-3xl">
+    <Link
+      to={STATIC_ROUTES.COMPANY}
+      className="relative flex min-h-[300px] w-full flex-col justify-between gap-4 overflow-hidden rounded-3xl bg-blue p-7 text-white"
+    >
+      <RadarRings
+        tone="white"
+        sizes={[140, 240]}
+        strength={0.3}
+        className="right-[50px] bottom-[50px]"
+      />
+      <b className="display-caps relative text-[26px] leading-[1.05]">
+        Не нашли своё?
+      </b>
+      <span className="relative">
+        Оставьте запрос: спорт, район и удобное время. Когда найдётся подходящая
+        встреча, мы сообщим.
+      </span>
+      <span className="relative inline-flex min-h-12 items-center self-start rounded-full bg-gold px-5 font-bold text-ink">
+        Собрать компанию
+      </span>
+    </Link>
+  </Lift>
 );
 
 export const EventsPage = () => {
@@ -165,10 +168,23 @@ export const EventsPage = () => {
               </div>
             ) : (
               <div className={GRID} aria-busy={isFetching}>
-                {items.map((event) => (
-                  <EventCard key={event.id} event={event} />
+                {items.map((event, index) => (
+                  <Reveal
+                    key={event.id}
+                    className="h-full"
+                    delay={staggerDelay(index)}
+                    y={20}
+                  >
+                    <EventCard event={event} className="h-full" />
+                  </Reveal>
                 ))}
-                <CompanyTeaser />
+                <Reveal
+                  className="h-full"
+                  delay={staggerDelay(items.length)}
+                  y={20}
+                >
+                  <CompanyTeaser />
+                </Reveal>
               </div>
             )}
 

@@ -13,6 +13,7 @@ import {
 
 import { ApiError } from '@/shared/api';
 import { DYNAMIC_ROUTES, STATIC_ROUTES } from '@/shared/constants';
+import { PopIn, Spin, StateSwap } from '@/shared/motion';
 import {
   Badge,
   Button,
@@ -79,6 +80,14 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
       : 'Свободная запись: после нажатия вы сразу в составе.';
     submitLabel = full ? 'Встать в лист ожидания' : 'Записаться';
   }
+
+  let stateKey = 'idle';
+  if (event.status !== 'published') stateKey = 'closed';
+  else if (isPast(event)) stateKey = 'past';
+  else if (event.is_organizer) stateKey = 'organizer';
+  else if (conflict) stateKey = 'conflict';
+  else if (join.isPending) stateKey = 'sending';
+  else if (status) stateKey = status;
 
   const renderState = () => {
     if (event.status !== 'published') {
@@ -147,13 +156,22 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
     if (join.isPending) {
       return (
         <Button size="lg" disabled>
+          <Spin />
           {isFree ? 'Записываем…' : 'Отправляем…'}
         </Button>
       );
     }
     if (status === 'confirmed') {
       return (
-        <Notice tone="success" title="✓ Вы записаны" className="gap-2.5">
+        <Notice
+          tone="success"
+          title={
+            <>
+              <PopIn>✓</PopIn> Вы записаны
+            </>
+          }
+          className="gap-2.5"
+        >
           <span>Организатор видит вас в составе. Встреча — в «Мой спорт».</span>
           {me?.buddy && (
             <span>
@@ -292,8 +310,10 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
         </span>
         <b className="text-[22px] leading-snug">{event.location}</b>
       </div>
-      <div aria-live="polite" className="relative flex flex-col gap-3">
-        {renderState()}
+      <div aria-live="polite" className="relative">
+        <StateSwap stateKey={stateKey} className="flex flex-col gap-3">
+          {renderState()}
+        </StateSwap>
       </div>
     </div>
   );

@@ -52,6 +52,8 @@ const Button = ({
   return (
     <ButtonPrimitive
       data-slot="button"
+      // Ссылка или другой элемент через render — не нативная кнопка.
+      nativeButton={props.render ? false : undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

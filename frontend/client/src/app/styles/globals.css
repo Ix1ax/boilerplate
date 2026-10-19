@@ -197,34 +197,6 @@
   }
 }
 
-@layer components {
-  /* Отклик на наведение: карточка приподнимается, ≤ 280 мс. */
-  .lift {
-    transition:
-      transform 280ms var(--ease-spring),
-      box-shadow 280ms var(--ease-out-expo);
-  }
-  .lift:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 24px 44px -24px rgb(18 18 18 / 45%);
-  }
-  /* Одно появление при загрузке; задержка — через --d. */
-  .rise {
-    animation: rise 720ms var(--ease-out-expo) both;
-    animation-delay: var(--d, 0ms);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .lift,
-    .rise {
-      transition: none;
-      animation: none;
-    }
-    .lift:hover {
-      transform: none;
-    }
-  }
-}
-
 /* Заголовки разделов: Unbounded 900, капс, плотная разрядка. */
 @utility display-caps {
   font-family: var(--font-display);
@@ -240,17 +212,6 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.15;
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(28px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @theme {

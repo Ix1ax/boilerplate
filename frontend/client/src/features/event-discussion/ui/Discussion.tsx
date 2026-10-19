@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { EventComment } from '@starter/contracts';
 import { cn } from 'cn';
+import { motion } from 'motion/react';
 
 import { CITY_TIME_ZONE, toCityDate } from '@/entities/event';
 
 import { initialOf } from '@/shared/lib';
+import { TRANSITION } from '@/shared/motion';
 import { Badge, Button, Label, Skeleton, Textarea } from '@/shared/ui';
 
 import { useAddComment, useComments } from '../model';
@@ -47,7 +49,10 @@ const CommentItem = ({
     .join(' · ');
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={TRANSITION.base}
       className={cn(
         'flex gap-3 rounded-[18px] px-4 py-3.5',
         comment.is_organizer
@@ -93,7 +98,7 @@ const CommentItem = ({
           </Button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 
