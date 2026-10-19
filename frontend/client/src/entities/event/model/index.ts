@@ -1,17 +1,28 @@
 export { EVENT_KEYS } from './constants';
 export type {
+  AdminEventsParams,
   Event,
   EventInput,
   EventLevel,
   EventListParams,
   EventPage,
+  EventPatch,
   EventWeather,
+  HistoryEntry,
   JoinMode,
   MyEntry,
   MyParticipation,
   Organizer,
+  Participant,
   ParticipationStatus,
 } from './types';
-export { useEvent, useEventWeather } from './useEvent';
-export { useEvents } from './useEvents';
-export { useMyEvents, useMyParticipations } from './useMyParticipations';
+export {
+  useAdminEventHistory,
+  useAdminEvents,
+  useEvent,
+  useEventWeather,
+  useEvents,
+  useEventPages,
+  useMyEvents,
+  useMyParticipations,
+} from './hooks';

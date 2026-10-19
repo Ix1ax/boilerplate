@@ -12,6 +12,8 @@ import type { Sport } from '@/entities/sport';
 import { useDebounce } from '@/shared/hooks';
 
 export type EventFilters = {
+  zone: string;
+  stepFree: boolean;
   q: string;
   sport: string;
   day: DayRange;
@@ -20,6 +22,8 @@ export type EventFilters = {
 };
 
 const DEFAULTS: EventFilters = {
+  zone: '',
+  stepFree: false,
   q: '',
   sport: '',
   day: 'week',
@@ -35,6 +39,8 @@ export const useEventFilters = () => {
   const [search, setSearch] = useSearchParams();
 
   const filters: EventFilters = {
+    zone: search.get('zone') ?? '',
+    stepFree: search.get('stepFree') === '1',
     q: search.get('q') ?? DEFAULTS.q,
     sport: search.get('sport') ?? DEFAULTS.sport,
     day: isDayRange(search.get('day'))
@@ -68,16 +74,28 @@ export const useEventFilters = () => {
   const q = useDebounce(filters.q.trim(), 300);
   const params = useMemo<EventListParams>(
     () => ({
+      zone: filters.zone || undefined,
+      step_free: filters.stepFree || undefined,
       q: q || undefined,
       sport: filters.sport || undefined,
       mode: filters.mode || undefined,
       level: filters.novice ? 'beginner' : undefined,
       ...dayRangeParams(filters.day),
     }),
-    [q, filters.sport, filters.mode, filters.novice, filters.day],
+    [
+      q,
+      filters.zone,
+      filters.stepFree,
+      filters.sport,
+      filters.mode,
+      filters.novice,
+      filters.day,
+    ],
   );
 
   const isDefault =
+    !filters.zone &&
+    !filters.stepFree &&
     !filters.q &&
     !filters.sport &&
     filters.day === DEFAULTS.day &&
@@ -93,6 +111,8 @@ export const describeFilters = (
   sports: Sport[] = [],
 ) => {
   const parts: string[] = [];
+  if (filters.zone) parts.push(filters.zone);
+  if (filters.stepFree) parts.push('доступная площадка');
   const sport = sports.find((item) => item.id === filters.sport);
   if (sport) parts.push(sport.name);
   if (filters.day !== 'all')

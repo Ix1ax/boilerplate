@@ -1,1 +1,1 @@
-export { useCurrentUser } from './model/useCurrentUser';
+export { useCurrentUser } from './model/hooks';

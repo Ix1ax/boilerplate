@@ -765,7 +765,11 @@ export interface paths {
     delete: operations['closeCompanyRequest'];
     options?: never;
     head?: never;
-    patch?: never;
+    /**
+     * Изменить собственный активный запрос
+     * @description Полная замена условий; новая редакция отменяет ответы на прежний общий вариант. Чужой или истёкший запрос — 404.
+     */
+    patch: operations['updateCompanyRequest'];
     trace?: never;
   };
   '/api/v1/my/company-requests/{id}/matches': {
@@ -1432,7 +1436,63 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+<<<<<<< HEAD
+  '/api/v1/my/company-requests/{id}/proposal': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Общий час по реальным запросам
+     * @description Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+     */
+    get: operations['getCompanyProposal'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/company-requests/{id}/proposal/response': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ответить на актуальную версию общего варианта
+     * @description Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+     */
+    post: operations['respondCompanyProposal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/sports/company-demand': {
+=======
   '/api/v1/my/company-proposals': {
+>>>>>>> main
     parameters: {
       query?: never;
       header?: never;
@@ -1440,6 +1500,12 @@ export interface paths {
       cookie?: never;
     };
     /**
+<<<<<<< HEAD
+     * Обезличенные группы спроса для допущенного клуба
+     * @description Общий час целиком покрыт окнами всех запросов; учитываются зоны, спорт, уровень и срок. Для клуба только группы от 3 человек. Интерес не создаёт запись; изменение состава или условий меняет версию.
+     */
+    get: operations['companyDemand'];
+=======
      * Мои предложения встреч из общего спроса
      * @description При чтении запускается детерминированный подбор из первых 1000 активных запросов.
      *     Минимум 3 человека, совместимый уровень, общий день и время, совпадающий район
@@ -2193,6 +2259,7 @@ export interface paths {
     };
     /** Личный прогресс и достижения */
     get: operations['personalProgress'];
+>>>>>>> main
     put?: never;
     post?: never;
     delete?: never;
@@ -2885,6 +2952,46 @@ export interface components {
       limit: number;
       offset: number;
     };
+    /** @description Конкретное будущее окно от часа до суток; не повторяется еженедельно. */
+    CompanyWindow: {
+      /**
+       * Format: date-time
+       * @example 2026-10-24T12:00:00+07:00
+       */
+      starts_at: string;
+      /**
+       * Format: date-time
+       * @example 2026-10-24T14:00:00+07:00
+       */
+      ends_at: string;
+    };
+    CompanyProposal: {
+      version: string;
+      /** Format: uuid */
+      sport_id: string;
+      sport_name: string;
+      zone: string;
+      /** @enum {string} */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      /** Format: date-time */
+      starts_at: string;
+      /** Format: date-time */
+      ends_at: string;
+      /** @description Число реальных активных запросов */
+      count: number;
+      interested: number;
+      response: boolean | null;
+      /** Format: uuid */
+      event_id: string | null;
+      /** @description Число подтверждённых записей опубликованной встречи */
+      enrolled: number;
+    };
+    CompanyProposalEnvelope: {
+      proposal: components['schemas']['CompanyProposal'] | null;
+    };
+    CompanyDemandPage: {
+      items: components['schemas']['CompanyProposal'][];
+    };
     Sport: {
       /** Format: uuid */
       id: string;
@@ -2922,6 +3029,14 @@ export interface components {
       newcomers?: components['schemas']['Person'][];
     };
     Event: {
+      /** @default  */
+      zone: string;
+      /** @default  */
+      meeting_host: string;
+      /** @default false */
+      step_free: boolean;
+      /** @default false */
+      companion_allowed: boolean;
       /** Format: uuid */
       id: string;
       /** @example Шахматный турнир выходного дня */
@@ -2998,6 +3113,10 @@ export interface components {
       offset: number;
     };
     EventInput: {
+      zone?: string;
+      meeting_host?: string;
+      step_free?: boolean;
+      companion_allowed?: boolean;
       title: string;
       description?: string;
       /**
@@ -3151,6 +3270,18 @@ export interface components {
       sport_ids?: string[];
     };
     Profile: {
+      interests?: string[];
+      /** @description Личные настройки возвращаются только владельцу */
+      preferences?: {
+        /** @default true */
+        notify_reminders: boolean;
+        /** @default true */
+        notify_decisions: boolean;
+        /** @default true */
+        notify_replies: boolean;
+        large_text?: boolean;
+        reduced_motion?: boolean;
+      };
       id: string;
       name: string;
       about: string;
@@ -3161,6 +3292,13 @@ export interface components {
     };
     /** @description Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней — «когда угодно». */
     CompanyRequestInput: {
+      zones?: string[];
+      windows?: components['schemas']['CompanyWindow'][];
+      /**
+       * Format: date-time
+       * @description Срок в пределах 30 дней; окна заканчиваются до него
+       */
+      expires_at?: string;
       /** Format: uuid */
       sport_id?: string;
       sport_name?: string;
@@ -3183,6 +3321,9 @@ export interface components {
       note?: string;
     };
     CompanyRequest: {
+      zones?: string[];
+      windows?: components['schemas']['CompanyWindow'][];
+      revision?: number;
       /** Format: uuid */
       id: string;
       sport: components['schemas']['Sport'];
@@ -3281,13 +3422,29 @@ export interface components {
       since: string;
     };
     ProfilePatch: {
+      interests?: string[];
+      /** @description Личные настройки возвращаются только владельцу */
+      preferences?: {
+        /** @default true */
+        notify_reminders: boolean;
+        /** @default true */
+        notify_decisions: boolean;
+        /** @default true */
+        notify_replies: boolean;
+        large_text?: boolean;
+        reduced_motion?: boolean;
+      };
       about?: string;
       city?: string;
       /** @enum {string} */
       level?: '' | 'beginner' | 'amateur' | 'pro';
     };
-    /** @description Только меняемые поля. Режим записи, направление и организатор не меняются. */
+    /** @description Только меняемые поля. Режим записи, направление и организатор не меняются. Отсутствующее поле сохраняет значение; null для ends_at, capacity очищает его. Координаты lat/lng очищаются только парой null. */
     EventPatch: {
+      zone?: string;
+      meeting_host?: string;
+      step_free?: boolean;
+      companion_allowed?: boolean;
       title?: string;
       description?: string;
       /** Format: date-time */
@@ -4813,6 +4970,10 @@ export interface operations {
   listEvents: {
     parameters: {
       query?: {
+        /** @description Точное название зоны */
+        zone?: string;
+        /** @description Только площадки без ступеней или с пандусом */
+        step_free?: boolean;
         /** @description Сколько записей вернуть (страница) */
         limit?: components['parameters']['Limit'];
         /** @description Сколько записей пропустить от начала */
@@ -5799,6 +5960,43 @@ export interface operations {
       500: components['responses']['InternalError'];
     };
   };
+  updateCompanyRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CompanyRequestInput'];
+      };
+    };
+    responses: {
+      /** @description Актуальный запрос */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+      503: components['responses']['Unavailable'];
+    };
+  };
   listCompanyMatches: {
     parameters: {
       query?: {
@@ -6759,7 +6957,90 @@ export interface operations {
       500: components['responses']['InternalError'];
     };
   };
+<<<<<<< HEAD
+  getCompanyProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Результат подбора */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyProposalEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  respondCompanyProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "version": "abc123",
+         *       "interested": true
+         *     }
+         */
+        'application/json': {
+          version: string;
+          interested: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Результат подбора */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyProposalEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  companyDemand: {
+=======
   demandProposals: {
+>>>>>>> main
     parameters: {
       query?: never;
       header?: never;
@@ -6768,12 +7049,19 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+<<<<<<< HEAD
+      /** @description Результат подбора */
+=======
       /** @description Предложения, включая истёкшие и принятые */
+>>>>>>> main
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
+<<<<<<< HEAD
+          'application/json': components['schemas']['CompanyDemandPage'];
+=======
           'application/json': {
             items: components['schemas']['DemandProposal'][];
           };
@@ -6810,10 +7098,18 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Event'];
+>>>>>>> main
         };
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+<<<<<<< HEAD
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+      503: components['responses']['Unavailable'];
+=======
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
       500: components['responses']['InternalError'];
@@ -8993,6 +9289,7 @@ export interface operations {
       404: components['responses']['NotFound'];
       422: components['responses']['ValidationError'];
       500: components['responses']['InternalError'];
+>>>>>>> main
     };
   };
   listFiles: {

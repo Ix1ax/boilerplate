@@ -9,15 +9,22 @@ type LocationState = {
 } | null;
 
 /** Куда вернуть после входа: из state защищённого маршрута или из ?next=. */
-export const useLoginTarget = () => {
+export const useLoginTarget = (fallback: string = STATIC_ROUTES.EVENTS) => {
   const location = useLocation();
   const [search] = useSearchParams();
   const from = (location.state as LocationState)?.from;
   if (from) return `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`;
   const next = search.get('next');
   // Только свои пути: чужой адрес в ?next= не должен уводить с сайта.
-  if (next && next.startsWith('/') && !next.startsWith('//')) return next;
-  return STATIC_ROUTES.EVENTS;
+  if (
+    next &&
+    next.startsWith('/') &&
+    !next.startsWith('//') &&
+    !next.includes('\\') &&
+    !/[\u0000-\u001f]/.test(next)
+  )
+    return next;
+  return fallback;
 };
 
 export const useLogin = () => {

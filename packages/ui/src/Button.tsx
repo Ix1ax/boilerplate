@@ -1,43 +1,39 @@
-import type { ComponentProps } from 'react';
+import { Button as ButtonPrimitive } from '@base-ui/react/button';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
+import { cn } from 'cn';
 
-import { cn } from './utils';
-
+// Кнопки-«пилюли» системы «Вместе»: высота не меньше 44 px, жёлтый — только с чёрным текстом.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:bg-border disabled:text-muted-foreground aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent bg-clip-padding font-bold whitespace-nowrap transition-[background-color,color,border-color,transform] duration-200 outline-none select-none active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none aria-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
         default:
-          'bg-primary font-semibold text-primary-foreground hover:bg-primary/90',
-        dashed:
-          'border-dashed border-ring bg-transparent text-brand-text hover:bg-accent',
+          'bg-primary text-primary-foreground hover:bg-blue-hover disabled:bg-blue-pale disabled:text-ink',
+        gold: 'bg-gold text-ink hover:bg-[#f2c832] disabled:opacity-60',
+        ink: 'bg-ink text-paper hover:bg-[#2b2f37] disabled:opacity-60 dark:bg-paper dark:text-ink dark:hover:bg-white',
         outline:
-          'border-input bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+          'border-[1.5px] border-foreground bg-card text-foreground hover:bg-muted aria-expanded:bg-muted disabled:opacity-50',
+        'outline-light':
+          'border-[1.5px] border-paper/50 bg-transparent text-paper hover:border-paper hover:bg-paper/10 disabled:opacity-50',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+          'bg-secondary text-secondary-foreground hover:bg-line-strong aria-expanded:bg-line-strong disabled:opacity-50 dark:hover:bg-ink-soft',
         ghost:
-          'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
+          'font-semibold text-foreground hover:bg-muted aria-expanded:bg-muted disabled:opacity-50',
         destructive:
-          'bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40',
-        link: 'text-primary underline-offset-4 hover:underline',
+          'bg-danger text-white hover:bg-[#6f1808] disabled:opacity-50 dark:bg-[#8a1f0b] dark:hover:bg-[#a52a12]',
+        link: 'h-auto! min-h-11 rounded-none px-0! text-primary underline-offset-4 hover:underline dark:text-interest',
       },
       size: {
-        // Две высоты: 40px — формы и страницы, 32px — списки и тулбары.
-        default:
-          'h-10 gap-2 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
-        sm: "h-8 gap-1.5 px-3 text-[0.8125rem] has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
-        /** @deprecated используйте size="sm" (32px) */
-        xs: "h-8 gap-1.5 px-3 text-[0.8125rem] [&_svg:not([class*='size-'])]:size-3.5",
-        /** @deprecated используйте size="default" (40px) */
-        lg: 'h-10 gap-2 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
-        icon: 'size-10',
-        'icon-sm': 'size-8',
-        /** @deprecated используйте size="icon-sm" (32px) */
-        'icon-xs': "size-8 [&_svg:not([class*='size-'])]:size-3.5",
-        /** @deprecated используйте size="icon" (40px) */
-        'icon-lg': 'size-10',
+        default: 'min-h-12 px-5 text-base',
+        xs: "min-h-9 gap-1 px-3 text-sm [&_svg:not([class*='size-'])]:size-4",
+        sm: "min-h-11 gap-1.5 px-4 text-[15px] [&_svg:not([class*='size-'])]:size-4",
+        lg: 'min-h-14 px-7 text-[17px]',
+        xl: 'min-h-16 px-8 text-[19px]',
+        icon: 'size-12',
+        'icon-xs': "size-9 [&_svg:not([class*='size-'])]:size-4",
+        'icon-sm': "size-11 [&_svg:not([class*='size-'])]:size-4",
+        'icon-lg': 'size-14',
       },
     },
     defaultVariants: {
@@ -47,25 +43,17 @@ const buttonVariants = cva(
   },
 );
 
-interface ButtonProps
-  extends ComponentProps<'button'>, VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
-}
-
 const Button = ({
   className,
   variant = 'default',
   size = 'default',
-  asChild = false,
   ...props
-}: ButtonProps) => {
-  const Comp = asChild ? Slot.Root : 'button';
-
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) => {
   return (
-    <Comp
+    <ButtonPrimitive
       data-slot="button"
-      data-variant={variant}
-      data-size={size}
+      // Ссылка или другой элемент через render — не нативная кнопка.
+      nativeButton={props.render ? false : undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

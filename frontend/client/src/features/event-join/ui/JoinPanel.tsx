@@ -10,6 +10,7 @@ import {
   formatTime,
   isPast,
 } from '@/entities/event';
+import { useCurrentUser } from '@/entities/user';
 
 import { ApiError } from '@/shared/api';
 import { DYNAMIC_ROUTES, STATIC_ROUTES } from '@/shared/constants';
@@ -25,6 +26,7 @@ import {
 } from '@/shared/ui';
 
 import { useJoinEvent, useLeaveEvent } from '../model';
+import { useBuddy } from '../model/useJoin';
 
 interface JoinPanelProps {
   event: Event;
@@ -36,16 +38,18 @@ interface JoinPanelProps {
  * вы в составе, решение организатора, снято или прошло, вы организатор.
  */
 export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
+  const {data:user,isPending:checkingUser} = useCurrentUser();
   const join = useJoinEvent();
+  const buddy = useBuddy();
   const leave = useLeaveEvent();
   const confirm = useConfirm();
   const [firstTime, setFirstTime] = useState(false);
   const [message, setMessage] = useState('');
 
-  const me = event.my_participation;
+  const me = event.myParticipation;
   const status = me?.status;
-  const isFree = event.join_mode === 'open';
-  const full = event.spots_left === 0;
+  const isFree = event.joinMode === 'open';
+  const full = event.spotsLeft === 0;
   const conflict = join.error instanceof ApiError && join.error.status === 409;
 
   const submit = () =>
@@ -84,12 +88,15 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
   let stateKey = 'idle';
   if (event.status !== 'published') stateKey = 'closed';
   else if (isPast(event)) stateKey = 'past';
-  else if (event.is_organizer) stateKey = 'organizer';
+  else if (event.isOrganizer) stateKey = 'organizer';
   else if (conflict) stateKey = 'conflict';
   else if (join.isPending) stateKey = 'sending';
   else if (status) stateKey = status;
 
   const renderState = () => {
+    if(checkingUser) return <p role="status">Проверяем сессию…</p>;
+    if(!user) return <div className="grid gap-3"><h2 className="title-display text-2xl">Присоединяйтесь к встрече</h2><p>Войдите, чтобы записаться, отправить заявку или задать вопрос.</p><Button render={<Link to={`${STATIC_ROUTES.LOGIN}?next=${encodeURIComponent(DYNAMIC_ROUTES.EVENT(event.id))}`} />}>Войти и записаться</Button></div>;
+
     if (event.status !== 'published') {
       return (
         <Notice
@@ -116,7 +123,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
         </Notice>
       );
     }
-    if (event.is_organizer) {
+    if (event.isOrganizer) {
       return (
         <div className="flex flex-col gap-2.5">
           <Badge variant="gold" className="text-[15px]">
@@ -124,7 +131,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
           </Badge>
           <span>
             {formatTeamCount(event)}
-            {event.pending_count > 0 && ` · заявок: ${event.pending_count}`}.
+            {event.pendingCount > 0 && ` · заявок: ${event.pendingCount}`}.
             Заявки, состав и ответы — в управлении встречей.
           </span>
           <Button
@@ -178,6 +185,25 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
               Вас встретит <b>{me.buddy.name}</b> — подойдите к нему на месте.
             </span>
           )}
+          {!me?.firstTime && (
+            <Button
+              variant="outline"
+              disabled={buddy.isPending}
+              onClick={() =>
+                buddy.mutate({ id: event.id, enabled: !me?.isBuddy })
+              }
+            >
+              {me?.isBuddy
+                ? 'Больше не встречаю новичков'
+                : 'Готов встретить новичка'}
+            </Button>
+          )}
+          {me?.newcomers?.length ? (
+            <p>
+              Вы встречаете:{' '}
+              {me.newcomers.map((person) => person.name).join(', ')}.
+            </p>
+          ) : null}
           <span className="text-[15px]">
             Напомним за сутки и за 2 часа до начала.
           </span>
@@ -248,7 +274,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
         >
           <span>
             Вы не в составе.
-            {me?.decision_reason && <> Причина: «{me.decision_reason}».</>}
+            {me?.decisionReason && <> Причина: «{me.decisionReason}».</>}
           </span>
           <Link
             to={STATIC_ROUTES.EVENTS}
@@ -306,7 +332,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
       />
       <div className="relative flex flex-col gap-0.5 pr-16">
         <span className="font-mono text-[13px] text-muted-foreground uppercase">
-          {formatDayShort(event.starts_at)} · {formatTime(event.starts_at)}
+          {formatDayShort(event.startsAt)} · {formatTime(event.startsAt)}
         </span>
         <b className="text-[22px] leading-snug">{event.location}</b>
       </div>

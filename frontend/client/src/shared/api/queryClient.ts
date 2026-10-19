@@ -18,12 +18,14 @@ export const queryClient = new QueryClient({
       onGlobalError(error);
     },
   }),
+
   mutationCache: new MutationCache({
     onError: (error, _vars, _ctx, mutation) => {
       if (mutation.meta?.silent) return;
       onGlobalError(error);
     },
   }),
+
   defaultOptions: {
     queries: {
       staleTime: STALE_TIME,

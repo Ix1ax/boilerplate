@@ -1,6 +1,7 @@
-import type { EventComment } from '@starter/contracts';
+import type { EventComment as CommentDto } from '@starter/contracts';
 
-import { request } from '@/shared/api';
+import { type Camelize, request } from '@/shared/api';
+export type EventComment = Camelize<CommentDto>;
 
 export const getComments = (eventId: string) =>
   request<{ items: EventComment[] }>({
@@ -18,4 +19,10 @@ export const addComment = ({ eventId, body, parentId }: AddCommentPayload) =>
     url: `/events/${eventId}/comments`,
     method: 'POST',
     data: { body, parent_id: parentId ?? null },
+  });
+
+export const deleteComment = (eventId: string, id: string) =>
+  request<EventComment>({
+    url: `/events/${eventId}/comments/${id}`,
+    method: 'DELETE',
   });

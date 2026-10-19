@@ -1,15 +1,26 @@
-import { useState } from 'react';
-import type { EventComment } from '@starter/contracts';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link } from 'react-router';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { commentSchema, type CommentValues } from '@starter/contracts';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from 'cn';
 import { motion } from 'motion/react';
 
-import { CITY_TIME_ZONE, toCityDate } from '@/entities/event';
+import { useConfirm } from '@/features/confirm';
+import { ReportButton } from '@/features/report';
 
+import { CITY_TIME_ZONE, toCityDate } from '@/entities/event';
+import { useCurrentUser } from '@/entities/user';
+
+import { DYNAMIC_ROUTES, STATIC_ROUTES } from '@/shared/constants';
 import { initialOf } from '@/shared/lib';
 import { TRANSITION } from '@/shared/motion';
 import { Badge, Button, Label, Skeleton, Textarea } from '@/shared/ui';
 
+import { deleteComment, type EventComment } from '../api/commentApi';
 import { useAddComment, useComments } from '../model';
+import { COMMENT_KEYS } from '../model/useComments';
 
 export const DISCUSSION_INPUT_ID = 'discussion-input';
 
@@ -38,13 +49,21 @@ const CommentItem = ({
   comment,
   canReply,
   onReply,
+  eventId,
+  isMine,
+  authenticated,
+  onDelete,
 }: {
   comment: EventComment;
+  eventId: string;
+  isMine: boolean;
+  authenticated: boolean;
+  onDelete: () => void;
   canReply: boolean;
   onReply: () => void;
 }) => {
-  const hidden = comment.status === 'hidden';
-  const meta = [comment.organization_name, formatMeta(comment.created_at)]
+  const hidden = comment.status === 'hidden' || comment.status === 'deleted';
+  const meta = [comment.organizationName, formatMeta(comment.createdAt)]
     .filter(Boolean)
     .join(' · ');
 
@@ -55,17 +74,17 @@ const CommentItem = ({
       transition={TRANSITION.base}
       className={cn(
         'flex gap-3 rounded-[18px] px-4 py-3.5',
-        comment.is_organizer
+        comment.isOrganizer
           ? 'border-[1.5px] border-blue bg-blue-soft text-ink'
           : 'bg-background',
-        comment.parent_id && 'ml-6 sm:ml-10',
+        comment.parentId && 'ml-6 sm:ml-10',
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
           'grid size-10 shrink-0 place-items-center rounded-full font-extrabold',
-          comment.is_organizer ? 'bg-blue text-white' : 'bg-gold text-ink',
+          comment.isOrganizer ? 'bg-blue text-white' : 'bg-gold text-ink',
         )}
       >
         {initialOf(comment.author.name)}
@@ -73,7 +92,7 @@ const CommentItem = ({
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2 text-[15px]">
           <b>{comment.author.name}</b>
-          {comment.is_organizer && (
+          {comment.isOrganizer && (
             <Badge className="px-2.5 py-0.5 text-[13px] font-bold">
               Организатор
             </Badge>
@@ -81,7 +100,11 @@ const CommentItem = ({
           <span className="text-muted-foreground">{meta}</span>
         </div>
         {hidden ? (
-          <i className="text-muted-foreground">Сообщение скрыто модератором</i>
+          <i className="text-muted-foreground">
+            {comment.status === 'deleted'
+              ? 'Сообщение удалено автором'
+              : 'Сообщение скрыто модератором'}
+          </i>
         ) : (
           <span className="break-words whitespace-pre-line">
             {comment.body}
@@ -96,6 +119,17 @@ const CommentItem = ({
           >
             Ответить
           </Button>
+        )}
+        {authenticated && comment.status === 'visible' && (
+          <div className="flex flex-wrap gap-2">
+            {isMine ? (
+              <Button variant="link" size="sm" onClick={onDelete}>
+                Удалить своё сообщение
+              </Button>
+            ) : (
+              <ReportButton eventId={eventId} commentId={comment.id} />
+            )}
+          </div>
         )}
       </div>
     </motion.div>
@@ -121,22 +155,32 @@ export const Discussion = ({
 }: DiscussionProps) => {
   const { data: comments, isPending, isError, refetch } = useComments(eventId);
   const add = useAddComment();
+  const { data: user } = useCurrentUser();
+  const cache = useQueryClient();
+  const confirm = useConfirm();
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteComment(eventId, id),
+    onSuccess: () =>
+      cache.invalidateQueries({ queryKey: COMMENT_KEYS.LIST(eventId) }),
+  });
   const [replyTo, setReplyTo] = useState<EventComment | null>(null);
-  const [emptyError, setEmptyError] = useState(false);
+  const commentForm = useForm<CommentValues>({
+    resolver: zodResolver(commentSchema),
+    defaultValues: { body: draft },
+  });
+  const { setValue } = commentForm;
+  useEffect(() => {
+    setValue('body', draft);
+  }, [draft, setValue]);
 
   // Ответы показываем сразу под вопросом.
-  const roots = (comments ?? []).filter((c) => !c.parent_id);
+  const roots = (comments ?? []).filter((c) => !c.parentId);
   const thread = roots.flatMap((root) => [
     root,
-    ...(comments ?? []).filter((c) => c.parent_id === root.id),
+    ...(comments ?? []).filter((c) => c.parentId === root.id),
   ]);
 
-  const send = () => {
-    const body = draft.trim();
-    if (!body) {
-      setEmptyError(true);
-      return;
-    }
+  const send = commentForm.handleSubmit(({ body }) => {
     add.mutate(
       { eventId, body, parentId: replyTo?.id },
       {
@@ -146,14 +190,12 @@ export const Discussion = ({
         },
       },
     );
-  };
+  });
 
   const isReply = isOrganizer || !!replyTo;
   let error = '';
-  if (emptyError)
-    error = isReply
-      ? 'Напишите ответ — поле пустое'
-      : 'Напишите вопрос — поле пустое';
+  if (commentForm.formState.errors.body)
+    error = commentForm.formState.errors.body.message ?? 'Проверьте сообщение';
   else if (add.isError)
     error = 'Не удалось отправить. Текст сохранён — попробуйте ещё раз.';
 
@@ -191,7 +233,20 @@ export const Discussion = ({
         <CommentItem
           key={comment.id}
           comment={comment}
-          canReply={!closed && !comment.parent_id}
+          eventId={eventId}
+          isMine={user?.id === comment.author.id}
+          authenticated={!!user}
+          onDelete={() => {
+            void confirm({
+              title: 'Удалить сообщение?',
+              description: 'Ответы останутся в обсуждении.',
+              confirmText: 'Удалить',
+              destructive: true,
+            }).then((ok) => {
+              if (ok && !remove.isPending) remove.mutate(comment.id);
+            });
+          }}
+          canReply={!!user && !closed && !comment.parentId}
           onReply={() => {
             setReplyTo(comment);
             document.getElementById(DISCUSSION_INPUT_ID)?.focus();
@@ -199,11 +254,24 @@ export const Discussion = ({
         />
       ))}
 
-      {closed ? (
+      {!user ? (
+        <Button
+          variant="outline"
+          render={
+            <Link
+              to={`${STATIC_ROUTES.LOGIN}?next=${encodeURIComponent(DYNAMIC_ROUTES.EVENT(eventId))}`}
+            />
+          }
+        >
+          Войти и спросить
+        </Button>
+      ) : null}
+      {!!user && closed && (
         <span className="text-muted-foreground">
           Обсуждение закрыто: встреча больше не принимает участников.
         </span>
-      ) : (
+      )}
+      {!!user && !closed && (
         <>
           <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
             <Label htmlFor={DISCUSSION_INPUT_ID}>{fieldLabel}</Label>
@@ -219,7 +287,10 @@ export const Discussion = ({
             maxLength={2000}
             value={draft}
             onChange={(e) => {
-              setEmptyError(false);
+              commentForm.clearErrors('body');
+              commentForm.setValue('body', e.target.value, {
+                shouldDirty: true,
+              });
               onDraftChange(e.target.value);
             }}
             aria-invalid={!!error}
@@ -236,7 +307,11 @@ export const Discussion = ({
             </span>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" disabled={add.isPending} onClick={send}>
+            <Button
+              variant="outline"
+              disabled={add.isPending}
+              onClick={() => void send()}
+            >
               {sendLabel}
             </Button>
             {!isOrganizer && (

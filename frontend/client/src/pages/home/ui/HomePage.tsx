@@ -1,9 +1,17 @@
-import { Link } from 'react-router';
-import { ArrowRightIcon } from 'lucide-react';
+import type { FormEvent } from 'react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { ArrowRightIcon, PlusIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 
-import { EventCard, useEvents } from '@/entities/event';
-import { useSports } from '@/entities/sport';
+import type { DayRange } from '@/entities/event';
+import { DAY_RANGE_LABELS, EventCard, useEvents } from '@/entities/event';
+import {
+  getSportVisual,
+  SportCoverArt,
+  SportGlyph,
+  useSports,
+} from '@/entities/sport';
 import { useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
@@ -12,13 +20,23 @@ import {
   DURATION,
   EASING,
   Lift,
-  Magnetic,
   MaskRise,
   Parallax,
   Reveal,
   staggerDelay,
 } from '@/shared/motion';
-import { Button, Eyebrow, RadarRings } from '@/shared/ui';
+import {
+  Button,
+  Eyebrow,
+  RadarRings,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui';
+
+const DAY_OPTIONS = Object.entries(DAY_RANGE_LABELS) as [DayRange, string][];
 
 const STEPS = [
   [
@@ -116,20 +134,45 @@ const FLOATERS = [
 
 export const HomePage = () => {
   useSmoothScroll();
-  // Лендинг открыт гостю: каталог и направления доступны только после входа, а любой 401
-  // уводит на страницу входа. Поэтому гостю показываем лендинг без живых данных.
+  const navigate = useNavigate();
+  const [heroSport, setHeroSport] = useState('all');
+  const [heroDay, setHeroDay] = useState<DayRange>('week');
+  // Лендинг открыт гостю: защищённые запросы ждут завершения проверки сессии.
   const { data: user, isPending: userPending } = useCurrentUser();
   const signedIn = !userPending && Boolean(user);
   const { data } = useEvents({ limit: 6 }, { enabled: signedIn });
   const { data: allSports } = useSports({ enabled: signedIn });
-  const sports = (allSports ?? []).filter((sport) => !sport.is_custom);
+  const sports = (allSports ?? []).filter((sport) => !sport.isCustom);
+  // Направления из макета остаются доступны для поиска при недоступном справочнике.
+  const sportOptions =
+    sports.length > 0
+      ? sports.map((sport) => ({ id: sport.id, name: sport.name }))
+      : ['Шахматы', 'Бег', 'Зарядка', 'Футбол', 'Йога', 'Баскетбол'].map(
+          (name) => ({ id: name, name }),
+        );
+  const sportLinks = sportOptions.map((sport) => ({
+    name: sport.name,
+    search: new URLSearchParams(
+      sports.length > 0 ? { sport: sport.id, day: 'all' } : { q: sport.id, day: 'all' },
+    ).toString(),
+  }));
   const events = data?.items ?? [];
+
+  const submitHeroSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const sportKey = sports.length > 0 ? 'sport' : 'q';
+    const params =
+      heroSport === 'all'
+        ? { day: heroDay }
+        : { [sportKey]: heroSport, day: heroDay };
+    navigate(`${STATIC_ROUTES.EVENTS}?${new URLSearchParams(params)}`);
+  };
 
   return (
     <>
       <section className="relative overflow-hidden bg-ink bg-[linear-gradient(rgb(238_240_234/5%)_1px,transparent_1px),linear-gradient(90deg,rgb(238_240_234/5%)_1px,transparent_1px)] bg-[size:80px_80px] text-paper">
         <div className="relative mx-auto flex max-w-[1360px] flex-wrap items-center gap-10 px-4 pt-16 pb-24 sm:px-8 sm:pt-20 sm:pb-32">
-          <div className="relative z-[2] min-w-0 flex-[1_1_620px]">
+          <div className="relative z-[2] min-w-0 flex-[1_1_580px]">
             <Reveal immediate delay={0.06} y={0} duration={0.48}>
               <Eyebrow className="flex flex-wrap gap-x-5 gap-y-2 text-paper/80">
                 <span className="inline-flex items-center gap-2">
@@ -141,7 +184,10 @@ export const HomePage = () => {
             </Reveal>
             <h1 className="display-caps mt-5 text-[clamp(64px,11vw,172px)] leading-[.86] tracking-[-0.045em]">
               <MaskRise delay={0.12}>Найди</MaskRise>
-              <MaskRise delay={0.2} className="text-gold">
+              <MaskRise
+                delay={0.2}
+                className="text-transparent [-webkit-text-stroke:2px_var(--color-paper)]"
+              >
                 своих
               </MaskRise>
             </h1>
@@ -152,43 +198,93 @@ export const HomePage = () => {
               y={16}
               className="mt-6 max-w-[640px] text-[clamp(20px,1.9vw,25px)] leading-snug"
             >
-              Компания для шахмат, бега, зарядки и вашего собственного вида
-              спорта. А если подходящей встречи ещё нет — её можно собрать.
+              Для пробежки, шахмат и зарядки
+              <br />
+              рядом с домом, сегодня
             </Reveal>
-            <Reveal
-              immediate
-              delay={0.5}
-              y={16}
-              className="mt-9 flex flex-wrap gap-3"
-            >
-              <Magnetic>
-                <Lift>
-                  <Button
-                    size="xl"
-
-                    render={<Link to={STATIC_ROUTES.EVENTS} />}
+            <Reveal immediate delay={0.45} className="mt-10 max-w-[740px]">
+              <form
+                role="search"
+                onSubmit={submitHeroSearch}
+                className="flex flex-wrap items-stretch gap-2 rounded-[28px] bg-white p-2.5 text-ink"
+              >
+                <div className="flex min-w-[150px] flex-1 flex-col justify-center gap-0.5 rounded-[20px] bg-paper px-4 py-2">
+                  <label
+                    htmlFor="home-sport"
+                    className="text-[13px] font-semibold text-[#4A505B]"
                   >
-                    Найти встречу
-                    <ArrowRightIcon aria-hidden />
-                  </Button>
-                </Lift>
-              </Magnetic>
-              <Magnetic>
-                <Lift>
-                  <Button
-                    size="xl"
-                    variant="gold"
-
-                    render={<Link to={STATIC_ROUTES.COMPANY} />}
+                    Вид спорта
+                  </label>
+                  <Select
+                    value={heroSport}
+                    onValueChange={(value) => setHeroSport(value ?? 'all')}
                   >
-                    Собрать компанию
-                  </Button>
-                </Lift>
-              </Magnetic>
+                    <SelectTrigger
+                      id="home-sport"
+                      size="sm"
+                      className="min-h-8 border-0 bg-transparent p-0 font-semibold text-ink"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Любой</SelectItem>
+                      {sportOptions.map((sport) => (
+                        <SelectItem key={sport.id} value={sport.id}>
+                          {sport.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex min-w-[150px] flex-1 flex-col justify-center gap-0.5 rounded-[20px] bg-paper px-4 py-2">
+                  <label
+                    htmlFor="home-day"
+                    className="text-[13px] font-semibold text-[#4A505B]"
+                  >
+                    Когда
+                  </label>
+                  <Select
+                    value={heroDay}
+                    onValueChange={(value) => setHeroDay(value as DayRange)}
+                  >
+                    <SelectTrigger
+                      id="home-day"
+                      size="sm"
+                      className="min-h-8 border-0 bg-transparent p-0 font-semibold text-ink"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAY_OPTIONS.map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="submit"
+                  className="min-h-[68px] flex-1 basis-[170px] rounded-[20px]"
+                >
+                  Найти встречу
+                  <ArrowRightIcon aria-hidden />
+                </Button>
+              </form>
+              <Link
+                to={STATIC_ROUTES.COMPANY}
+                className="mt-3.5 inline-flex min-h-11 items-center gap-2.5 font-semibold text-gold"
+              >
+                Не нашли подходящую? Соберите компанию с нуля
+                <ArrowRightIcon aria-hidden className="size-[18px]" />
+              </Link>
             </Reveal>
           </div>
 
-          <Parallax speed={-0.15} className="min-w-[300px] flex-[0_1_540px]">
+          <Parallax
+            speed={-0.15}
+            className="min-w-[300px] mx-auto w-full max-w-[540px] min-[1180px]:absolute min-[1180px]:top-16 min-[1180px]:right-8 min-[1180px]:w-[42%]"
+          >
             <Reveal
               immediate
               delay={0.31}
@@ -255,16 +351,16 @@ export const HomePage = () => {
           </Parallax>
         </div>
 
-        {sports.length > 0 && (
+        {sportLinks.length > 0 && (
           <div className="mt-2 border-t border-paper/15">
             <ul
               aria-label="Виды спорта на платформе"
               className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-7 gap-y-2.5 px-4 py-5 font-display text-[clamp(17px,1.8vw,24px)] font-extrabold tracking-[-0.01em] uppercase sm:px-8"
             >
-              {sports.map((sport, index) => (
+              {sportLinks.map((sport, index) => (
                 <Reveal
                   as="li"
-                  key={sport.id}
+                  key={sport.name}
                   immediate
                   delay={0.7 + staggerDelay(index) * 0.5}
                   y={12}
@@ -376,6 +472,65 @@ export const HomePage = () => {
       </section>
 
       <section
+        id="sports"
+        className="overflow-hidden bg-ink py-24 text-paper sm:py-32"
+      >
+        <div className="mx-auto max-w-[1360px] px-4 sm:px-8">
+          <Eyebrow className="text-gold">одна логика · любой спорт</Eyebrow>
+          <h2 className="display-caps mt-4 mb-16 max-w-[1000px] text-[clamp(2.25rem,1rem+4vw,4.5rem)] leading-[.94]">
+            <MaskRise inView>
+              Шахматы, бег и зарядка живут по одним правилам
+            </MaskRise>
+          </h2>
+        </div>
+        <ul className="border-t border-paper/20">
+          {sportLinks.map((sport) => (
+            <li key={sport.name} className="border-b border-paper/20">
+              <Link
+                to={`${STATIC_ROUTES.EVENTS}?${sport.search}`}
+                className="group mx-auto flex min-h-24 max-w-[1360px] items-center gap-4 px-4 py-6 transition-colors hover:bg-blue focus-visible:bg-blue sm:gap-8 sm:px-8"
+              >
+                <SportGlyph
+                  icon={getSportVisual(sport.name).icon}
+                  color="currentColor"
+                  size={56}
+                  className="size-8 shrink-0 sm:size-14"
+                />
+                <span className="display-caps min-w-0 flex-1 text-[clamp(1.5rem,.75rem+4vw,6rem)] leading-tight [overflow-wrap:anywhere]">
+                  {sport.name}
+                </span>
+                <ArrowRightIcon
+                  aria-hidden
+                  className="size-8 shrink-0 transition-transform group-hover:-rotate-45 sm:size-11"
+                />
+              </Link>
+            </li>
+          ))}
+          <li className="border-b border-paper/20">
+            <Link
+              to={STATIC_ROUTES.EVENT_NEW}
+              className="group mx-auto flex max-w-[1360px] items-center gap-4 px-4 py-6 hover:bg-blue sm:gap-8 sm:px-8"
+            >
+              <PlusIcon
+                aria-hidden
+                className="size-8 shrink-0 text-gold sm:size-14"
+              />
+              <span className="display-caps flex-1 text-[clamp(2.25rem,1rem+5vw,6rem)] text-transparent [-webkit-text-stroke:1px_var(--color-paper)]">
+                Свой вид
+              </span>
+              <span className="hidden max-w-52 text-right font-mono text-sm text-paper/80 sm:block">
+                Падел, фрисби — добавьте одной строкой
+              </span>
+              <ArrowRightIcon
+                aria-hidden
+                className="size-8 shrink-0 sm:size-11"
+              />
+            </Link>
+          </li>
+        </ul>
+      </section>
+
+      <section
         id="together"
         className="relative overflow-hidden bg-ink px-4 py-28 text-paper sm:px-8"
       >
@@ -435,26 +590,80 @@ export const HomePage = () => {
       </section>
 
       <section id="start" className="bg-paper px-4 py-28 text-ink sm:px-8">
-        <div className="mx-auto max-w-[1360px]">
-          <Eyebrow className="text-blue">новичкам и старшему поколению</Eyebrow>
-          <h2 className="display-caps mt-3.5 max-w-[900px] text-[clamp(40px,5.2vw,80px)] leading-[.92] tracking-[-0.035em]">
-            <MaskRise inView>Не страшно прийти впервые</MaskRise>
-          </h2>
-          <p className="mt-7 max-w-[600px] text-xl leading-relaxed text-ink-soft">
-            В каждой карточке есть блок «Первая встреча». Если организатор
-            чего-то не указал, мы так и пишем — и предлагаем спросить.
-          </p>
-          <div className="mt-7 flex max-w-[620px] flex-col gap-2.5 text-[19px] font-bold">
-            <div className="rounded-2xl bg-success-soft px-[18px] py-3.5 text-success">
-              ✓ Вы записаны
-            </div>
-            <div className="rounded-2xl bg-warning-soft px-[18px] py-3.5 text-warning">
-              ◷ Ожидает решения организатора
-            </div>
-            <div className="rounded-2xl bg-danger-soft px-[18px] py-3.5 text-danger">
-              ✕ Организатор отклонил заявку
+        <div className="mx-auto grid max-w-[1360px] items-center gap-16 lg:grid-cols-[1.3fr_1fr]">
+          <div>
+            <Eyebrow className="text-blue">
+              новичкам и старшему поколению
+            </Eyebrow>
+            <h2 className="display-caps mt-3.5 max-w-[900px] text-[clamp(40px,5.2vw,80px)] leading-[.92] tracking-[-0.035em]">
+              <MaskRise inView>Не страшно прийти впервые</MaskRise>
+            </h2>
+            <p className="mt-7 max-w-[600px] text-xl leading-relaxed text-ink-soft">
+              В каждой карточке есть блок «Первая встреча». Если организатор
+              чего-то не указал, мы так и пишем — и предлагаем спросить.
+            </p>
+            <div className="mt-7 flex max-w-[620px] flex-col gap-2.5 text-[19px] font-bold">
+              <div className="rounded-2xl bg-success-soft px-[18px] py-3.5 text-success">
+                ✓ Вы записаны
+              </div>
+              <div className="rounded-2xl bg-warning-soft px-[18px] py-3.5 text-warning">
+                ◷ Ожидает решения организатора
+              </div>
+              <div className="rounded-2xl bg-danger-soft px-[18px] py-3.5 text-danger">
+                ✕ Организатор отклонил заявку
+              </div>
             </div>
           </div>
+          <Reveal className="relative mx-auto w-full max-w-[380px]">
+            <div className="relative aspect-[9/16] overflow-hidden rounded-4xl bg-night text-paper shadow-2xl">
+              <SportCoverArt
+                sport="Шахматы"
+                className="absolute inset-0"
+                glyphSize={140}
+                rings={[220, 340, 480]}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/40" />
+              <div
+                className="absolute inset-x-4 top-4 flex gap-1.5"
+                aria-hidden
+              >
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className={`h-1 flex-1 rounded-full ${i === 0 ? 'bg-paper' : 'bg-paper/35'}`}
+                  />
+                ))}
+              </div>
+              <div className="absolute top-10 left-5 right-5 flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-full bg-paper text-ink">
+                  <SportGlyph icon="chess" color="currentColor" size={24} />
+                </span>
+                <b>Первая встреча</b>
+              </div>
+              <div className="absolute right-5 bottom-5 left-5">
+                <span className="font-mono text-xs text-gold">
+                  пример · шахматы без опыта
+                </span>
+                <p className="mt-3 mb-5 text-2xl leading-tight font-bold">
+                  Приходите, доски дадим. Правила объясним на месте.
+                </p>
+                <Button
+                  variant="gold"
+                  className="w-full"
+                  render={
+                    <Link to={`${STATIC_ROUTES.EVENTS}?novice=1&day=all`} />
+                  }
+                >
+                  Встречи для новичков
+                </Button>
+              </div>
+            </div>
+            <div className="absolute top-1/3 left-0 max-w-56 rounded-2xl bg-ink p-4 text-paper shadow-xl sm:-left-8">
+              <b className="text-gold">Организатор</b>
+              <br />
+              Можно прийти одному!
+            </div>
+          </Reveal>
         </div>
       </section>
 

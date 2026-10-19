@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Lenis from 'lenis';
 import { useAccessibility } from 'open-accessibility-widget/react';
 
@@ -10,7 +10,19 @@ import 'lenis/dist/lenis.css';
 export const useSmoothScroll = () => {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const { settings } = useAccessibility();
-  const disabled = reducedMotion || settings.stopAnimations;
+  const [profileReduced, setProfileReduced] = useState(
+    document.documentElement.dataset.reducedMotion === 'true',
+  );
+  useEffect(() => {
+    const sync = () =>
+      setProfileReduced(
+        document.documentElement.dataset.reducedMotion === 'true',
+      );
+    window.addEventListener('profile-preferences-changed', sync);
+    return () =>
+      window.removeEventListener('profile-preferences-changed', sync);
+  }, []);
+  const disabled = reducedMotion || settings.stopAnimations || profileReduced;
 
   useEffect(() => {
     if (disabled) return;

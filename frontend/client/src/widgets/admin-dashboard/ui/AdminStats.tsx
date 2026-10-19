@@ -1,16 +1,9 @@
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { Link } from 'react-router';
 
-import { useTaskStats } from '@/entities/task';
+import { useAdminDashboard } from '@/entities/admin';
 
 import {
+  Button,
   Card,
   CardContent,
   CardHeader,
@@ -18,124 +11,102 @@ import {
   Skeleton,
 } from '@/shared/ui';
 
-const formatDay = (iso: string) =>
-  new Date(iso).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-  });
-
-const StatCard = ({ label, value }: { label: string; value: number }) => (
-  <Card size="sm">
-    <CardHeader>
-      <CardTitle className="text-sm font-normal text-muted-foreground">
-        {label}
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="text-2xl font-semibold">{value}</CardContent>
-  </Card>
-);
-
 export const AdminStats = () => {
-  const { data, isPending, isError, refetch } = useTaskStats();
-
+  const { data, isPending, isError, refetch } = useAdminDashboard();
   if (isPending) return <Skeleton className="h-64 w-full" />;
-
-  if (isError) {
+  if (isError)
     return (
       <div role="alert">
         Не удалось загрузить статистику.{' '}
-        <button className="underline" onClick={() => void refetch()}>
-          Повторить
-        </button>
+        <Button onClick={() => void refetch()}>Повторить</Button>
       </div>
     );
-  }
-
-  const chartData = data.by_day.map((day) => ({
-    date: day.date,
-    label: formatDay(day.date),
-    count: day.count,
-  }));
-
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 @md:grid-cols-4">
-        <StatCard label="Всего задач" value={data.total} />
-        <StatCard label="Готово" value={data.completed} />
-        <StatCard label="Пользователей" value={data.owners} />
-        <StatCard
-          label="Нужна проверка ИИ"
-          value={data.moderation.needs_review}
-        />
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ['Ждут допуска', data.organizations.pending],
+          ['Предстоящие встречи', data.events.upcoming],
+          ['Подтверждённые участники', data.participations.confirmed],
+          ['Активные запросы компании', data.companyRequests.active],
+          ['Снятые встречи', data.events.unpublished],
+          ['Скрытые сообщения', data.comments.hidden],
+          ['Впервые на встрече', data.participations.firstTime],
+          ['Состав собран', data.quorum.reached],
+        ].map(([label, value]) => (
+          <Card key={label}>
+            <CardHeader>
+              <CardTitle className="text-sm">{label}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-3xl font-bold">{value}</CardContent>
+          </Card>
+        ))}
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Создано задач за 14 дней</CardTitle>
+          <CardTitle>Новые встречи и записи за 14 дней</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div
-            className="h-64 w-full"
-            role="img"
-            aria-label="Задачи, созданные за последние 14 дней"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tickLine={false}
-                  axisLine={false}
-                  width={28}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
-                />
-                <Tooltip
-                  cursor={{ fill: 'var(--muted)' }}
-                  contentStyle={{
-                    background: 'var(--popover)',
-                    color: 'var(--popover-foreground)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  labelFormatter={(label) => label}
-                  formatter={(value) => [value ?? 0, 'Задач']}
-                />
-                <Bar
-                  dataKey="count"
-                  fill="var(--primary)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <table className="sr-only">
-            <caption>Задачи, созданные за последние 14 дней</caption>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full text-left">
             <thead>
               <tr>
                 <th>Дата</th>
-                <th>Количество</th>
+                <th>Встречи</th>
+                <th>Записи</th>
               </tr>
             </thead>
             <tbody>
-              {chartData.map((day) => (
+              {data.series.map((day) => (
                 <tr key={day.date}>
                   <td>{day.date}</td>
-                  <td>{day.count}</td>
+                  <td>{day.events}</td>
+                  <td>{day.participations}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </CardContent>
       </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Популярные направления</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.topSports.map((sport) => (
+              <p key={sport.sport}>
+                {sport.sport}: {sport.events}
+              </p>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Давние заявки</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.pendingOrganizations.map((org) => (
+              <p key={org.id}>
+                <Link
+                  className="underline"
+                  to={`/dashboard/admin?tab=organizations&org_id=${org.id}`}
+                >
+                  {org.name}
+                </Link>{' '}
+                · {org.ownerName} ·{' '}
+                {new Date(org.createdAt).toLocaleDateString('ru-RU')}
+              </p>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Статистика обновляется из событий платформы. Последнее изменение:{' '}
+        {data.updatedAt
+          ? new Date(data.updatedAt).toLocaleString('ru-RU')
+          : 'ещё не получено'}
+        .
+      </p>
     </div>
   );
 };

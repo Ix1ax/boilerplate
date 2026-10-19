@@ -1,0 +1,1 @@
+export { AdminReportsPanel } from './ui';

@@ -14,6 +14,4 @@ export type {
   TaskStatus,
   TaskTransition,
 } from './types';
-export { useTaskHistory } from './useTaskHistory';
-export { useTaskStats } from './useTaskStats';
-export { useTasks } from './useTasks';
+export { useTaskHistory, useTaskStats, useTasks } from './hooks';

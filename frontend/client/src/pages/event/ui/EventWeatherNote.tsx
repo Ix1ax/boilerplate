@@ -13,7 +13,7 @@ export const EventWeatherNote = ({ eventId }: { eventId: string }) => {
     ) : null;
   }
 
-  const { temperature_c, description, precipitation_probability, advice } =
+  const { temperatureC, description, precipitationProbability, advice } =
     data.forecast;
   return (
     <div className="flex items-center gap-4 rounded-[22px] bg-card px-5 py-4">
@@ -23,9 +23,9 @@ export const EventWeatherNote = ({ eventId }: { eventId: string }) => {
       />
       <div className="flex flex-col">
         <b className="text-lg">
-          {Math.round(temperature_c)}°, {description}
-          {precipitation_probability > 0 &&
-            ` · осадки ${precipitation_probability}%`}
+          {Math.round(temperatureC)}°, {description}
+          {precipitationProbability > 0 &&
+            ` · осадки ${precipitationProbability}%`}
         </b>
         {advice && <span>Совет: {advice}</span>}
       </div>

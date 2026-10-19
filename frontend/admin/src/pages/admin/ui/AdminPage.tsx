@@ -16,9 +16,7 @@ export const AdminPage = () => (
         <CardDescription>Статистика, журнал действий и отчёты.</CardDescription>
       </CardHeader>
       <CardContent>
-        <Button asChild>
-          <a href="/dashboard/admin">Открыть инструменты</a>
-        </Button>
+        <Button render={<a href="/dashboard/admin" />}>Открыть инструменты</Button>
       </CardContent>
     </Card>
   </>

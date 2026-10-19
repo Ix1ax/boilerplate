@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 
+import { deepCamelKeys } from './caseTransform';
 import {
   API_BASE_URL,
   API_TIMEOUT,
@@ -14,6 +15,12 @@ export const API = axios.create({
   timeout: API_TIMEOUT,
 });
 
+// Go отдаёт JSON в snake_case — переводим ключи в camelCase один раз, на границе API.
+API.interceptors.response.use((response) => {
+  response.data = deepCamelKeys(response.data);
+  return response;
+});
+
 API.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -23,7 +30,10 @@ API.interceptors.response.use(
     const apiError = toApiError(error);
     if (
       apiError.isUnauthorized &&
-      error.config?.url !== SILENT_UNAUTHORIZED_URL
+      error.config?.url !== SILENT_UNAUTHORIZED_URL &&
+      !['/auth/local/login', '/auth/local/register'].includes(
+        error.config?.url ?? '',
+      )
     )
       getApiConfig().onUnauthorized();
     return Promise.reject(apiError);

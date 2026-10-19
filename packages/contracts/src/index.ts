@@ -37,6 +37,7 @@ export type Organizer = Schemas['Organizer'];
 export type Event = Schemas['Event'];
 export type EventPage = Schemas['EventPage'];
 export type EventInput = Schemas['EventInput'];
+export type EventPatch = Schemas['EventPatch'];
 export type EventLevel = Event['level'];
 export type JoinMode = Event['join_mode'];
 export type MyParticipation = Schemas['MyParticipation'];
@@ -54,6 +55,14 @@ export type Profile = Schemas['Profile'];
 export type CompanyRequest = Schemas['CompanyRequest'];
 export type CompanyRequestInput = Schemas['CompanyRequestInput'];
 export type Demand = Schemas['Demand'];
+
+// Модерация (админ): заявки организаций, мероприятия во всех статусах, жалобы, справочник направлений.
+export type Reason = Schemas['Reason'];
+export type HistoryEntry = Schemas['HistoryEntry'];
+export type AdminSport = Schemas['AdminSport'];
+export type MyReport = Schemas['MyReport'];
+export type Report = Schemas['Report'];
+export type ReportPage = Schemas['ReportPage'];
 
 // Запрос к LLM-шлюзу. Пределы совпадают с проверкой в Go (server/llm): длина считается в символах.
 export const llmPromptSchema = z.object({
@@ -83,6 +92,14 @@ export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;
 
 // Кейс «Платформа совместных спортивных активностей»: типы, схемы форм и подписи статусов.
 export * from './sport';
+<<<<<<< HEAD
+
+export * from './admin';
+
+export * from "./company";
+
+export * from './profile';
+=======
 export * from './demand-live';
 export * from './social';
 export * from './online';
@@ -93,3 +110,4 @@ export type RecommendationPage = Schemas['RecommendationPage'];
 export type RecommendedEvent = Schemas['RecommendedEvent'];
 export type PersonalProgress = Schemas['PersonalProgress'];
 export type Achievement = Schemas['Achievement'];
+>>>>>>> main

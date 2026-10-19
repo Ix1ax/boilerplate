@@ -16,4 +16,5 @@ export {
   levelShort,
   organizerKind,
   toCityDate,
+  toCityInput,
 } from './format';

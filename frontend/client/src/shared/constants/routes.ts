@@ -1,10 +1,11 @@
 export const STATIC_ROUTES = {
   HOME: '/',
-  PROFILE: '/profile',
   LOGIN: '/login',
   EVENTS: '/events',
   EVENT_NEW: '/events/new',
+  MAP: '/map',
   MY: '/my',
+  SETTINGS: '/settings',
   COMPANY: '/company',
   CLUB: '/club',
   ABOUT: '/about',

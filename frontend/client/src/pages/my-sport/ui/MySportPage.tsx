@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 
+import { MaxConnectCard } from '@/features/notifications';
+
+import { useCompanyRequests } from '@/entities/company';
 import {
   formatDayShort,
   formatTime,
@@ -23,7 +26,7 @@ import {
   TabsTrigger,
 } from '@/shared/ui';
 
-type Tab = 'part' | 'org';
+type Tab = 'part' | 'org' | 'requests';
 
 const STATUS = {
   confirmed: <Badge variant="success">✓ Вы записаны</Badge>,
@@ -50,16 +53,15 @@ const EntryRow = ({ entry }: { entry: MyEntry }) => {
       <span className="flex min-w-0 flex-col gap-1">
         <b className="text-xl">{e.title}</b>
         <span className="text-ink-soft dark:text-muted-foreground">
-          {formatDayShort(e.starts_at)}, {formatTime(e.starts_at)} ·{' '}
-          {e.location}
+          {formatDayShort(e.startsAt)}, {formatTime(e.startsAt)} · {e.location}
         </span>
-        {entry.status === 'rejected' && entry.decision_reason && (
+        {entry.status === 'rejected' && entry.decisionReason && (
           <span className="text-[15px] text-danger">
-            Причина: {entry.decision_reason}
+            Причина: {entry.decisionReason}
           </span>
         )}
-        {withdrawn && e.moderation_reason && (
-          <span className="text-[15px]">Причина: {e.moderation_reason}</span>
+        {withdrawn && e.moderationReason && (
+          <span className="text-[15px]">Причина: {e.moderationReason}</span>
         )}
       </span>
       <span className="max-sm:col-span-2">
@@ -78,6 +80,7 @@ export const MySportPage = () => {
   const { data: user } = useCurrentUser();
   const part = useMyParticipations();
   const mine = useMyEvents();
+  const requests = useCompanyRequests();
   const active = tab === 'part' ? part : mine;
 
   const entries = (part.data ?? []).filter((x) => x.status !== 'cancelled');
@@ -85,10 +88,57 @@ export const MySportPage = () => {
     (x) =>
       x.status === 'confirmed' &&
       x.event.status === 'published' &&
-      new Date(x.event.starts_at) > new Date(),
+      new Date(x.event.startsAt) > new Date(),
   );
 
   const renderList = () => {
+    if (tab === 'requests')
+      return (
+        <div className="grid gap-4">
+          <Button render={<Link to={STATIC_ROUTES.COMPANY} />}>
+            Новый запрос и подбор встреч
+          </Button>
+          {requests.isPending && <p role="status">Загружаем запросы…</p>}
+          {requests.isError && (
+            <div role="alert">
+              Не удалось загрузить запросы.{' '}
+              <Button onClick={() => void requests.refetch()}>Повторить</Button>
+            </div>
+          )}
+          {requests.data?.items.length === 0 && (
+            <p>
+              Вы пока не ищете компанию. Создайте запрос, чтобы получать
+              подходящие встречи.
+            </p>
+          )}
+          {requests.data?.items.map((item) => (
+            <Link
+              key={item.id}
+              className="grid gap-2 rounded-3xl bg-card p-6"
+              to={STATIC_ROUTES.COMPANY}
+            >
+              <b>
+                {item.sport.name}
+                {item.area && ` · ${item.area}`}
+              </b>
+              <span>
+                {
+                  {
+                    active: 'Запрос сохранён',
+                    closed: 'Запрос закрыт',
+                    expired: 'Срок истёк',
+                  }[item.status]
+                }{' '}
+                · подходящих встреч: {item.matchesCount}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Это ещё не запись на встречу.
+              </span>
+            </Link>
+          ))}
+        </div>
+      );
+
     if (active.isPending)
       return (
         <>
@@ -144,13 +194,13 @@ export const MySportPage = () => {
           </div>
           <b className="text-xl">{e.title}</b>
           <span className="text-ink-soft dark:text-muted-foreground">
-            {formatDayShort(e.starts_at)}, {formatTime(e.starts_at)} · в составе{' '}
-            {e.confirmed_count}
-            {e.pending_count > 0 && ` · заявок: ${e.pending_count}`}
+            {formatDayShort(e.startsAt)}, {formatTime(e.startsAt)} · в составе{' '}
+            {e.confirmedCount}
+            {e.pendingCount > 0 && ` · заявок: ${e.pendingCount}`}
           </span>
         </div>
-        <Button render={<Link to={DYNAMIC_ROUTES.EVENT(e.id)} />}>
-          Открыть
+        <Button render={<Link to={DYNAMIC_ROUTES.EVENT_MANAGE(e.id)} />}>
+          Управлять
         </Button>
       </div>
     ));
@@ -177,6 +227,9 @@ export const MySportPage = () => {
             >
               Организую · {mine.data?.total ?? 0}
             </TabsTrigger>
+            <TabsTrigger value="requests">
+              Мои запросы · {requests.data?.items.length ?? 0}
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </HeroBand>
@@ -191,8 +244,8 @@ export const MySportPage = () => {
             <div className="flex flex-col gap-2.5 rounded-[28px] bg-ink p-6 text-paper">
               <Eyebrow className="text-gold">ближайшая встреча</Eyebrow>
               <b className="title-display text-2xl">
-                {formatDayShort(next.event.starts_at)},{' '}
-                {formatTime(next.event.starts_at)}
+                {formatDayShort(next.event.startsAt)},{' '}
+                {formatTime(next.event.startsAt)}
               </b>
               <span>
                 {next.event.title} · {next.event.location}
@@ -206,6 +259,7 @@ export const MySportPage = () => {
               </Button>
             </div>
           )}
+          <MaxConnectCard />
         </aside>
       </div>
     </>

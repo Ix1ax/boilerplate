@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 
 import {
@@ -7,14 +6,12 @@ import {
   useEventFilters,
 } from '@/features/event-filters';
 
-import { EventCard, EventCardSkeleton, useEvents } from '@/entities/event';
+import { EventCard, EventCardSkeleton, useEventPages } from '@/entities/event';
 import { useSports } from '@/entities/sport';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { Lift, Reveal, staggerDelay } from '@/shared/motion';
 import { Button, HeroBand, RadarRings } from '@/shared/ui';
-
-const PAGE = 24;
 
 const GRID =
   'grid grid-cols-[repeat(auto-fill,minmax(min(320px,100%),1fr))] gap-5';
@@ -48,15 +45,23 @@ const CompanyTeaser = () => (
 
 export const EventsPage = () => {
   const { filters, setFilter, reset, params } = useEventFilters();
-  const [limit, setLimit] = useState(PAGE);
-  const { data, isPending, isError, isFetching, refetch } = useEvents({
-    ...params,
-    limit,
-  });
+  const {
+    data,
+    isPending,
+    isError,
+    isFetching,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchNextPageError,
+  } = useEventPages(params);
   const { data: sports } = useSports();
 
-  const items = data?.items ?? [];
-  const total = data?.total ?? 0;
+  const items = data?.pages.flatMap((page) => page.items) ?? [];
+  const total = data?.pages[0]?.total ?? 0;
+  let moreLabel = 'Показать ещё';
+  if(isFetchNextPageError) moreLabel = 'Повторить загрузку следующей страницы';
+  if(isFetching) moreLabel = 'Загружаем…';
 
   return (
     <>
@@ -75,7 +80,6 @@ export const EventsPage = () => {
         <EventFiltersPanel
           filters={filters}
           onChange={(key, value) => {
-            setLimit(PAGE);
             setFilter(key, value);
           }}
         />
@@ -188,15 +192,15 @@ export const EventsPage = () => {
               </div>
             )}
 
-            {items.length < total && (
+            {hasNextPage && (
               <Button
                 variant="outline"
                 size="lg"
                 className="self-center"
                 disabled={isFetching}
-                onClick={() => setLimit((value) => value + PAGE)}
+                onClick={() => void fetchNextPage()}
               >
-                {isFetching ? 'Загружаем…' : 'Показать ещё'}
+                {moreLabel}
               </Button>
             )}
           </div>

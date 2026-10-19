@@ -5,19 +5,19 @@ import { Button } from '@/shared/ui';
 type Row = { label: string; value: string | null; hint?: string };
 
 const rowsOf = (event: Event): Row[] => {
-  const buddy = event.my_participation?.buddy;
+  const buddy = event.myParticipation?.buddy;
   let buddyText: string | null = null;
   if (buddy) buddyText = `${buddy.name} — встретит вас на месте`;
-  else if (event.buddies_count > 0)
-    buddyText = `Готовы встретить новичков: ${event.buddies_count}. Отметьте «Иду впервые» при записи`;
+  else if (event.buddiesCount > 0)
+    buddyText = `Готовы встретить новичков: ${event.buddiesCount}. Отметьте «Иду впервые» при записи`;
   let meetingPoint: string | null = null;
-  if (event.private_info.trim()) meetingPoint = event.private_info;
-  else if (event.has_private_info)
+  if (event.privateInfo.trim()) meetingPoint = event.privateInfo;
+  else if (event.hasPrivateInfo)
     meetingPoint = 'Откроется после подтверждения записи';
   return [
     { label: 'Опыт', value: LEVEL_FIRST_MEETING[event.level] },
     { label: 'Что взять с собой', value: event.requirements.trim() || null },
-    { label: 'Стоимость', value: event.price_note.trim() || null },
+    { label: 'Стоимость', value: event.priceNote.trim() || null },
     {
       label: 'Кто встретит',
       value: buddyText,

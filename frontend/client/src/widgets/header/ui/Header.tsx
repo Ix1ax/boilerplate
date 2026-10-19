@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { cn } from 'cn';
 import {
@@ -5,6 +6,7 @@ import {
   LogOutIcon,
   MoonIcon,
   PlusIcon,
+  SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
   TrophyIcon,
@@ -17,6 +19,7 @@ import { useTheme } from '@/features/theme';
 import { hasRole, useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
+import { useEventListener } from '@/shared/hooks';
 import { initialOf } from '@/shared/lib';
 import { Lift } from '@/shared/motion';
 import {
@@ -33,6 +36,7 @@ import {
 
 const NAV = [
   { to: STATIC_ROUTES.EVENTS, label: 'Найти встречу' },
+  { to: STATIC_ROUTES.MAP, label: 'Карта' },
   { to: STATIC_ROUTES.MY, label: 'Мой спорт' },
   { to: STATIC_ROUTES.COMPANY, label: 'Собрать компанию' },
 ];
@@ -80,6 +84,10 @@ const UserMenu = ({ name, isAdmin }: { name: string; isAdmin: boolean }) => {
               Администрирование
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem render={<Link to={STATIC_ROUTES.SETTINGS} />}>
+            <SettingsIcon aria-hidden />
+            Профиль и настройки
+          </DropdownMenuItem>
           <DropdownMenuItem
             closeOnClick={false}
             onClick={() => setTheme(isDark ? 'light' : 'dark')}
@@ -106,10 +114,25 @@ export const Header = ({ tone = 'light' }: HeaderProps) => {
   const { data: user, isLoading } = useCurrentUser();
   const dark = tone === 'dark';
 
+  // Шапка прячется при скролле вниз и возвращается, как только пользователь начинает скроллить вверх.
+  const [hidden, setHidden] = useState(false);
+  const lastY = useRef(0);
+  useEventListener('scroll', () => {
+    const y = window.scrollY;
+    const delta = y - lastY.current;
+    if (y < 80) {
+      setHidden(false);
+    } else if (Math.abs(delta) > 4) {
+      setHidden(delta > 0);
+    }
+    lastY.current = y;
+  });
+
   return (
     <header
       className={cn(
-        'relative z-10',
+        'sticky top-0 z-30 transition-transform duration-300 will-change-transform',
+        hidden && '-translate-y-full',
         dark
           ? 'bg-ink text-paper'
           : 'border-b border-line bg-card dark:border-border',

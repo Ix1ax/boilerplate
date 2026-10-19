@@ -4,6 +4,7 @@ import { ArrowLeftIcon } from 'lucide-react';
 
 import { Discussion, DISCUSSION_INPUT_ID } from '@/features/event-discussion';
 import { JoinPanel } from '@/features/event-join';
+import { ReportButton } from '@/features/report';
 
 import {
   type Event,
@@ -14,6 +15,7 @@ import {
   useEvent,
 } from '@/entities/event';
 import { getSportVisual, SportGlyph } from '@/entities/sport';
+import { useCurrentUser } from '@/entities/user';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { Badge, Button, Notice } from '@/shared/ui';
@@ -63,11 +65,11 @@ const EventHero = ({ event }: { event: Event }) => {
             {event.sport.name}
           </Badge>
           <Badge
-            className={`border-[1.5px] border-ink bg-white px-3.5 py-1.5 text-[15px] font-bold text-ink ${event.join_mode === 'request' ? 'border-dashed' : ''}`}
+            className={`border-[1.5px] border-ink bg-white px-3.5 py-1.5 text-[15px] font-bold text-ink ${event.joinMode === 'request' ? 'border-dashed' : ''}`}
           >
-            {JOIN_MODE_LABELS[event.join_mode]}
+            {JOIN_MODE_LABELS[event.joinMode]}
           </Badge>
-          {event.sport.is_custom && (
+          {event.sport.isCustom && (
             <Badge variant="gold" className="px-3.5 py-1.5 text-[15px]">
               Новое направление
             </Badge>
@@ -87,11 +89,11 @@ const EventHero = ({ event }: { event: Event }) => {
 };
 
 const QuorumNote = ({ event }: { event: Event }) => {
-  if (!event.min_participants || event.quorum_status === 'none') return null;
-  const left = Math.max(event.min_participants - event.confirmed_count, 0);
-  if (event.quorum_status === 'reached')
+  if (!event.minParticipants || event.quorumStatus === 'none') return null;
+  const left = Math.max(event.minParticipants - event.confirmedCount, 0);
+  if (event.quorumStatus === 'reached')
     return <Badge variant="success">✓ Состав собран — встреча состоится</Badge>;
-  if (event.quorum_status === 'failed')
+  if (event.quorumStatus === 'failed')
     return (
       <Badge variant="destructive">
         ✕ Не собрали состав — встреча отменена
@@ -100,9 +102,9 @@ const QuorumNote = ({ event }: { event: Event }) => {
   return (
     <p className="max-w-[720px] text-lg">
       <b>Соберём состав:</b> встреча состоится, если запишутся минимум{' '}
-      {event.min_participants}. Осталось {left}
-      {event.quorum_deadline &&
-        ` — до ${formatDayShort(event.quorum_deadline).toLowerCase()}, ${formatTime(event.quorum_deadline)}`}
+      {event.minParticipants}. Осталось {left}
+      {event.quorumDeadline &&
+        ` — до ${formatDayShort(event.quorumDeadline).toLowerCase()}, ${formatTime(event.quorumDeadline)}`}
       .
     </p>
   );
@@ -116,6 +118,7 @@ const EventDetails = ({
   onRefresh: () => void;
 }) => {
   const [draft, setDraft] = useState('');
+  const {data:user} = useCurrentUser();
   const closed = event.status !== 'published' || isPast(event);
 
   const ask = (topic: string) => {
@@ -144,15 +147,38 @@ const EventDetails = ({
               className="rounded-[22px] px-6 py-5"
             >
               <span className="text-paper/85">
-                {event.moderation_reason
-                  ? `Причина: ${event.moderation_reason}.`
+                {event.moderationReason
+                  ? `Причина: ${event.moderationReason}.`
                   : 'Причина не указана.'}{' '}
-                Новые записи закрыты.
+                Ваша запись сохранена. Новые записи закрыты.
               </span>
             </Notice>
           )}
 
+          {event.status !== 'published' && (
+            <div className="flex flex-wrap gap-3">
+              <Button render={<Link to={STATIC_ROUTES.EVENTS} />}>
+                Найти другую встречу
+              </Button>
+              <Button variant="outline" render={<Link to={STATIC_ROUTES.MY} />}>
+                Мой спорт
+              </Button>
+            </div>
+          )}
           <EventFacts event={event} />
+          <div className="flex flex-wrap gap-2">
+            {event.zone && <Badge>{event.zone}</Badge>}
+            {event.stepFree && <Badge>Без ступеней / есть пандус</Badge>}
+            {event.companionAllowed && <Badge>Можно с сопровождающим</Badge>}
+          </div>
+          {event.meetingHost && (
+            <p>
+              <b>Кто встретит:</b> {event.meetingHost}
+            </p>
+          )}
+          {!!user && !event.isOrganizer && event.status === 'published' && (
+            <ReportButton eventId={event.id} />
+          )}
 
           {event.outdoor && !closed && <EventWeatherNote eventId={event.id} />}
 
@@ -167,13 +193,13 @@ const EventDetails = ({
 
           <FirstMeeting
             event={event}
-            canAsk={!event.is_organizer && !closed}
+            canAsk={!!user && !event.isOrganizer && !closed}
             onAsk={ask}
           />
 
           <section className="flex flex-col gap-2.5">
             <h2 className="title-display text-[26px]">Как попасть в состав</h2>
-            {event.join_mode === 'open' ? (
+            {event.joinMode === 'open' ? (
               <p className="max-w-[720px] text-lg leading-relaxed">
                 <b>Свободная запись — сразу в составе.</b> Организатор увидит
                 вас в списке. Напомним о встрече за сутки и за 2 часа.
@@ -203,7 +229,7 @@ const EventDetails = ({
             </div>
             <Discussion
               eventId={event.id}
-              isOrganizer={event.is_organizer}
+              isOrganizer={event.isOrganizer}
               closed={closed}
               draft={draft}
               onDraftChange={setDraft}
@@ -218,9 +244,9 @@ const EventDetails = ({
           <JoinPanel event={event} onRefresh={onRefresh} />
           {event.capacity != null && event.status === 'published' && (
             <p className="px-2 text-sm text-muted-foreground">
-              {event.spots_left
-                ? `Свободно мест: ${event.spots_left} из ${event.capacity}.`
-                : `Все ${event.capacity} мест заняты${event.waitlist_count ? `, в очереди: ${event.waitlist_count}` : ''}.`}
+              {event.spotsLeft
+                ? `Свободно мест: ${event.spotsLeft} из ${event.capacity}.`
+                : `Все ${event.capacity} мест заняты${event.waitlistCount ? `, в очереди: ${event.waitlistCount}` : ''}.`}
             </p>
           )}
         </aside>
