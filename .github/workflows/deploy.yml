@@ -3,6 +3,8 @@ name: Деплой
 on:
   push:
     branches: [main]
+  # Ручной запуск нужен для повторной попытки после правки .env на сервере.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,6 +23,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/srv/boilerplate' }}
@@ -33,47 +36,86 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for variable in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+          umask 077
+          for variable in DEPLOY_HOST DEPLOY_USER DEPLOY_KNOWN_HOSTS; do
             if [[ -z "${!variable}" ]]; then
               echo "::error::Не задан секрет $variable"
               exit 1
             fi
           done
+          # Ровно один способ входа: иначе при отказе непонятно, какой из них проверять.
+          if [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_PASSWORD" ]]; then
+            echo "::error::Заданы и DEPLOY_SSH_KEY, и DEPLOY_PASSWORD: оставьте один секрет"
+            exit 1
+          fi
+          if [[ -z "$DEPLOY_SSH_KEY" && -z "$DEPLOY_PASSWORD" ]]; then
+            echo "::error::Задайте DEPLOY_SSH_KEY (вход по ключу) или DEPLOY_PASSWORD (вход по паролю)"
+            exit 1
+          fi
           [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
           [[ "$DEPLOY_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
           [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] && (( 10#$DEPLOY_PORT > 0 && 10#$DEPLOY_PORT < 65536 ))
           [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_/-]+$ && "$DEPLOY_PATH" != / ]]
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/deploy_known_hosts"
-          chmod 600 "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/deploy_known_hosts"
+          chmod 600 "$RUNNER_TEMP/deploy_known_hosts"
           cat > "$RUNNER_TEMP/deploy_ssh_config" <<EOF
           Host deploy-target
             HostName $DEPLOY_HOST
             User $DEPLOY_USER
             Port $DEPLOY_PORT
-            IdentityFile $RUNNER_TEMP/deploy_key
             UserKnownHostsFile $RUNNER_TEMP/deploy_known_hosts
             StrictHostKeyChecking yes
-            BatchMode yes
-            IdentitiesOnly yes
             ConnectTimeout 15
             ServerAliveInterval 30
             ServerAliveCountMax 6
           EOF
+          # Обёртка deploy_auth скрывает выбранный способ входа от остальных шагов.
+          if [[ -n "$DEPLOY_SSH_KEY" ]]; then
+            printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+            chmod 600 "$RUNNER_TEMP/deploy_key"
+            cat >> "$RUNNER_TEMP/deploy_ssh_config" <<EOF
+            IdentityFile $RUNNER_TEMP/deploy_key
+            IdentitiesOnly yes
+            PasswordAuthentication no
+            BatchMode yes
+          EOF
+            printf '%s\n' '#!/usr/bin/env bash' 'exec "$@"' > "$RUNNER_TEMP/deploy_auth"
+          else
+            # BatchMode здесь запрещён: он отключает сам запрос пароля, который заполняет sshpass.
+            if ! command -v sshpass >/dev/null; then
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq sshpass
+            fi
+            printf '%s\n' "$DEPLOY_PASSWORD" > "$RUNNER_TEMP/deploy_password"
+            chmod 600 "$RUNNER_TEMP/deploy_password"
+            cat >> "$RUNNER_TEMP/deploy_ssh_config" <<EOF
+            PubkeyAuthentication no
+            PreferredAuthentications password,keyboard-interactive
+            NumberOfPasswordPrompts 1
+          EOF
+            printf '%s\n' '#!/usr/bin/env bash' \
+              'exec sshpass -f "$RUNNER_TEMP/deploy_password" "$@"' > "$RUNNER_TEMP/deploy_auth"
+          fi
+          chmod 700 "$RUNNER_TEMP/deploy_auth"
           git archive --format=tar.gz "$GITHUB_SHA" > "$RUNNER_TEMP/source.tar.gz"
       - name: Доставить и развернуть весь стек
         shell: bash
         run: |
           set -euo pipefail
-          ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target "mkdir -m 700 '$REMOTE_DIR'"
-          scp -F "$RUNNER_TEMP/deploy_ssh_config" "$RUNNER_TEMP/source.tar.gz" deploy/deploy.sh "deploy-target:$REMOTE_DIR/"
-          ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target \
+          "$RUNNER_TEMP/deploy_auth" ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target \
+            "mkdir -m 700 '$REMOTE_DIR'"
+          "$RUNNER_TEMP/deploy_auth" scp -F "$RUNNER_TEMP/deploy_ssh_config" \
+            "$RUNNER_TEMP/source.tar.gz" deploy/deploy.sh "deploy-target:$REMOTE_DIR/"
+          "$RUNNER_TEMP/deploy_auth" ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target \
             "bash '$REMOTE_DIR/deploy.sh' '$DEPLOY_PATH' '$GITHUB_SHA' '$REMOTE_DIR/source.tar.gz'"
       - name: Удалить временные файлы
         if: always()
         shell: bash
         run: |
-          if [[ -f "$RUNNER_TEMP/deploy_ssh_config" ]]; then
-            ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target "rm -rf -- '$REMOTE_DIR'" || true
+          if [[ -x "$RUNNER_TEMP/deploy_auth" && -f "$RUNNER_TEMP/deploy_ssh_config" ]]; then
+            "$RUNNER_TEMP/deploy_auth" ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target \
+              "rm -rf -- '$REMOTE_DIR'" || true
           fi
-          rm -f "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/deploy_known_hosts" "$RUNNER_TEMP/deploy_ssh_config" "$RUNNER_TEMP/source.tar.gz"
+          rm -f "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/deploy_password" \
+            "$RUNNER_TEMP/deploy_known_hosts" "$RUNNER_TEMP/deploy_ssh_config" \
+            "$RUNNER_TEMP/deploy_auth" "$RUNNER_TEMP/source.tar.gz"

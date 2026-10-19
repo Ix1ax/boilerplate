@@ -117,7 +117,7 @@ Vite слушает порт 3000 и проксирует `/api`, `/auth` и `/h
 | `make fmt`                             | Форматирование                                              |
 | `make backup`                          | Дампы четырёх доменных БД в `.local/backups/`               |
 
-`make check` требует установленных зависимостей. Для `make integration` нужны `.env`, PostgreSQL и Redis; для `make smoke` — весь стек. GitHub Actions запускает только деплой на сервер при push в `main`, включая слияние PR. Проверки запускаются локально. Подготовка VPS, доменов и четырёх SSH-секретов описана в [инструкции деплоя](docs/deployment.md#автоматический-деплой).
+`make check` требует установленных зависимостей. Для `make integration` нужны `.env`, PostgreSQL и Redis; для `make smoke` — весь стек. GitHub Actions запускает только деплой на сервер при push в `main`, включая слияние PR, и по кнопке Run workflow. Проверки запускаются локально. Пошаговая настройка CI/CD — DNS, сервер, секреты, вход по ключу или по паролю — в [docs/ci-cd.md](docs/ci-cd.md); устройство деплоя и восстановление — в [docs/deployment.md](docs/deployment.md#автоматический-деплой).
 
 ## Серверный стенд
 
