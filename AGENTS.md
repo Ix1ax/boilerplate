@@ -6,21 +6,21 @@
 
 ## Карта репозитория
 
-| Путь                           | Что это                                                                                                                                                             |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `server/gateway`               | Единственный публичный вход (:8080): «Столото ID» (Keycloak OIDC/PKCE) и обычная регистрация, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы         |
-| `server/identity`              | Учётные записи обычной регистрации: почта и пароль (Argon2id), защита от подбора, блокировка админом (`/api/v1/admin/accounts`). Сессии выдаёт gateway              |
-| `server/events`                | **Домен кейса**: мероприятия, организации с допуском, записи и заявки, обсуждение, модерация (`docs/data-model.md`)                                                 |
-| `server/moderation`            | Админка-аналитика: дашборд, журнал модерации, лента сообщений, CSV. Строит свои таблицы из доменных событий `domain.*.changed` сервиса events, чужие базы не читает |
-| `server/tasks`, `server/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `server/tasks`**                                                                                           |
-| `server/notifications`         | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                                                                         |
-| `server/audit`                 | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit`                                             |
-| `server/realtime`              | WebSocket `GET /api/v1/ws`: каналы `user:<id>`, `room:<имя>`, `broadcast`; реплики связаны через RabbitMQ                                                           |
-| `server/llm`                   | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                                                             |
-| `frontend/client`, `frontend/admin` | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                                                               |
-| `packages/contracts`           | Общий OpenAPI (собирается `make openapi` из `server/*/api/openapi.yaml`), TS-типы, Zod-схемы                                                                        |
-| `compose.yaml`, `Makefile`     | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                                                                     |
-| `docs/`                        | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)                                                     |
+| Путь                                | Что это                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/gateway`                    | Единственный публичный вход (:8080): «Столото ID» (Keycloak OIDC/PKCE) и обычная регистрация, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы         |
+| `server/identity`                   | Учётные записи обычной регистрации: почта и пароль (Argon2id), защита от подбора, блокировка админом (`/api/v1/admin/accounts`). Сессии выдаёт gateway              |
+| `server/events`                     | **Домен кейса**: мероприятия, организации с допуском, записи и заявки, обсуждение, модерация (`docs/data-model.md`)                                                 |
+| `server/moderation`                 | Админка-аналитика: дашборд, журнал модерации, лента сообщений, CSV. Строит свои таблицы из доменных событий `domain.*.changed` сервиса events, чужие базы не читает |
+| `server/tasks`, `server/files`      | Примеры доменных сервисов. **Шаблон для нового сервиса — `server/tasks`**                                                                                           |
+| `server/notifications`              | Уведомления пользователя: подписан на `notification.requested` в RabbitMQ, API колокольчика                                                                         |
+| `server/audit`                      | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit`                                             |
+| `server/realtime`                   | WebSocket `GET /api/v1/ws`: каналы `user:<id>`, `room:<имя>`, `broadcast`; реплики связаны через RabbitMQ                                                           |
+| `server/llm`                        | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                                                             |
+| `frontend/client`, `frontend/admin` | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                                                                     |
+| `packages/contracts`                | Общий OpenAPI (собирается `make openapi` из `server/*/api/openapi.yaml`), TS-типы, Zod-схемы                                                                        |
+| `compose.yaml`, `Makefile`          | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                                                                     |
+| `docs/`                             | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)                                                     |
 
 Каждый Go-модуль независим: свой `go.mod`, база, миграции, Dockerfile. Общего Go-кода нет — обвязку (`internal/platform`) копируем, а не выносим.
 

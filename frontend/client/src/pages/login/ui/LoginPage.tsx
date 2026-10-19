@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router';
 import { ArrowRightIcon } from 'lucide-react';
 
-import { DemoAccounts, LoginForm } from '@/features/auth';
+import { LoginForm } from '@/features/auth';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { BrandMark, RadarRings } from '@/shared/ui';
@@ -23,10 +23,10 @@ export const LoginPage = () => {
         />
         <Link
           to={STATIC_ROUTES.HOME}
-          aria-label="Вместе — на главную"
           className="relative flex min-h-11 items-center self-start"
         >
           <BrandMark tone="dark" />
+          <span className="sr-only"> — на главную</span>
         </Link>
         <div className="relative">
           <p className="display-caps text-[clamp(52px,6.4vw,96px)] leading-[.86] tracking-[-0.045em]">
@@ -57,7 +57,6 @@ export const LoginPage = () => {
           </div>
         )}
         <LoginForm />
-        <DemoAccounts />
       </section>
     </div>
   );

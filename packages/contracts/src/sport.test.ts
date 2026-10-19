@@ -111,8 +111,12 @@ describe('joinAction', () => {
     expect(joinAction(with_({ my_participation: { status: 'pending' } }))).toBe(
       'leave',
     );
+    // Отказ окончателен на сервере: кнопки «записаться снова» быть не должно.
     expect(
       joinAction(with_({ my_participation: { status: 'rejected' } })),
+    ).toBe('refused');
+    expect(
+      joinAction(with_({ my_participation: { status: 'cancelled' } })),
     ).toBe('rejoin');
   });
 });
