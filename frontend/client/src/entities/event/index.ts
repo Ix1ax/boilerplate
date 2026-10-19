@@ -51,6 +51,7 @@ export {
   type MyEntry,
   type MyParticipation,
   type Organizer,
+  type Participant,
   type ParticipationStatus,
   useAdminEventHistory,
   useAdminEvents,

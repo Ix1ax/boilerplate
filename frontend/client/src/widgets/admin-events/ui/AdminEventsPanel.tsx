@@ -153,7 +153,7 @@ export const AdminEventsPanel = () => {
                 <TableCell className="max-w-48 truncate" title={event.organizer.name}>
                   {event.organizer.name}
                 </TableCell>
-                <TableCell>{formatDate(event.starts_at)}</TableCell>
+                <TableCell>{formatDate(event.startsAt)}</TableCell>
                 <TableCell>
                   <Badge variant={STATUS_BADGE[event.status]}>
                     {STATUS_LABEL[event.status]}

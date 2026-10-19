@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import type { Participant } from '@starter/contracts';
+
+import type { Participant } from '@/entities/event';
 
 import { DYNAMIC_ROUTES } from '@/shared/constants';
 import { Badge, Button, Label, Textarea } from '@/shared/ui';
@@ -30,7 +31,7 @@ export const ParticipantRow = ({
         </Link>
         <Badge>{participantLabels[participant.status]}</Badge>
       </div>
-      {participant.first_time && (
+      {participant.firstTime && (
         <p className="text-sm text-muted-foreground">
           Впервые на такой встрече
         </p>
@@ -38,8 +39,8 @@ export const ParticipantRow = ({
       {participant.message && (
         <p className="whitespace-pre-line">{participant.message}</p>
       )}
-      {participant.decision_reason && (
-        <p>Причина решения: {participant.decision_reason}</p>
+      {participant.decisionReason && (
+        <p>Причина решения: {participant.decisionReason}</p>
       )}
       {participant.status === 'pending' && (
         <>

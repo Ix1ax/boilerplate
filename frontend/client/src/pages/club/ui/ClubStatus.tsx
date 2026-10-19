@@ -23,7 +23,7 @@ export const ClubStatus = ({ organization }: ClubStatusProps) => (
     )}
     {organization.status === 'rejected' && (
       <>
-        <p>Причина отказа: {organization.review_reason}</p>
+        <p>Причина отказа: {organization.reviewReason}</p>
         <p>Исправьте профиль и отправьте его повторно.</p>
       </>
     )}

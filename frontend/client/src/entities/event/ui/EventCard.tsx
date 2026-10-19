@@ -29,7 +29,7 @@ interface EventCardProps {
 
 /** Карточка встречи: радар-обложка, для кого, где, кто организует и сколько в составе. */
 export const EventCard = ({ event, className }: EventCardProps) => {
-  const status = event.my_participation?.status;
+  const status = event.myParticipation?.status;
   return (
     <Lift className="flex h-full w-full rounded-3xl">
       <Link
@@ -41,24 +41,24 @@ export const EventCard = ({ event, className }: EventCardProps) => {
       >
         <SportCoverArt sport={event.sport.name} className="h-[170px] shrink-0">
           <span className="absolute top-3.5 left-3.5 rounded-full bg-ink px-3 py-1.5 text-sm font-semibold text-paper">
-            {formatWhen(event.starts_at)}
+            {formatWhen(event.startsAt)}
           </span>
           <span
             className={cn(
               'absolute right-3.5 bottom-3.5 rounded-full border-[1.5px] border-ink bg-white px-3 py-1.5 text-sm font-semibold text-ink',
-              event.join_mode === 'request' && 'border-dashed',
+              event.joinMode === 'request' && 'border-dashed',
             )}
           >
-            {JOIN_MODE_LABELS[event.join_mode]}
+            {JOIN_MODE_LABELS[event.joinMode]}
           </span>
         </SportCoverArt>
         <div className="flex flex-1 flex-col gap-2.5 px-[22px] pt-5 pb-[22px]">
           <div className="flex flex-wrap gap-1.5">
             <Badge variant="soft">{event.sport.name}</Badge>
-            {event.sport.is_custom && (
+            {event.sport.isCustom && (
               <Badge variant="gold">Новое направление</Badge>
             )}
-            {event.is_organizer && (
+            {event.isOrganizer && (
               <Badge variant="outline">Вы организатор</Badge>
             )}
             {status === 'confirmed' && (

@@ -13,6 +13,7 @@ export type {
   MyEntry,
   MyParticipation,
   Organizer,
+  Participant,
   ParticipationStatus,
 } from './types';
 export {

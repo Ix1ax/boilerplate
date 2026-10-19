@@ -1,18 +1,17 @@
-import type { ComponentProps } from 'react';
+import * as React from 'react';
+import { cn } from 'cn';
 
-import { cn } from './utils';
-
-interface CardProps extends ComponentProps<'div'> {
-  size?: 'default' | 'sm';
-}
-
-const Card = ({ className, size = 'default', ...props }: CardProps) => {
+const Card = ({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<'div'> & { size?: 'default' | 'sm' }) => {
   return (
     <div
       data-slot="card"
       data-size={size}
       className={cn(
-        'group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl border border-border bg-card py-(--card-spacing) text-sm text-card-foreground [--card-spacing:--spacing(6)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl',
+        'group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-3xl bg-card py-(--card-spacing) text-base text-card-foreground [--card-spacing:--spacing(6)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-3xl *:[img:last-child]:rounded-b-3xl',
         className,
       )}
       {...props}
@@ -20,14 +19,12 @@ const Card = ({ className, size = 'default', ...props }: CardProps) => {
   );
 };
 
-type CardHeaderProps = ComponentProps<'div'>;
-
-const CardHeader = ({ className, ...props }: CardHeaderProps) => {
+const CardHeader = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="card-header"
       className={cn(
-        'group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)',
+        'group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-3xl px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)',
         className,
       )}
       {...props}
@@ -35,14 +32,12 @@ const CardHeader = ({ className, ...props }: CardHeaderProps) => {
   );
 };
 
-type CardTitleProps = ComponentProps<'div'>;
-
-const CardTitle = ({ className, ...props }: CardTitleProps) => {
+const CardTitle = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="card-title"
       className={cn(
-        'font-heading text-lg leading-snug font-semibold group-data-[size=sm]/card:text-base',
+        'font-heading text-xl leading-tight font-extrabold tracking-tight group-data-[size=sm]/card:text-lg',
         className,
       )}
       {...props}
@@ -50,21 +45,20 @@ const CardTitle = ({ className, ...props }: CardTitleProps) => {
   );
 };
 
-type CardDescriptionProps = ComponentProps<'div'>;
-
-const CardDescription = ({ className, ...props }: CardDescriptionProps) => {
+const CardDescription = ({
+  className,
+  ...props
+}: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="card-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-[15px] text-muted-foreground', className)}
       {...props}
     />
   );
 };
 
-type CardActionProps = ComponentProps<'div'>;
-
-const CardAction = ({ className, ...props }: CardActionProps) => {
+const CardAction = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="card-action"
@@ -77,9 +71,7 @@ const CardAction = ({ className, ...props }: CardActionProps) => {
   );
 };
 
-type CardContentProps = ComponentProps<'div'>;
-
-const CardContent = ({ className, ...props }: CardContentProps) => {
+const CardContent = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="card-content"
@@ -89,14 +81,12 @@ const CardContent = ({ className, ...props }: CardContentProps) => {
   );
 };
 
-type CardFooterProps = ComponentProps<'div'>;
-
-const CardFooter = ({ className, ...props }: CardFooterProps) => {
+const CardFooter = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="card-footer"
       className={cn(
-        'flex items-center rounded-b-xl border-t bg-muted/50 p-(--card-spacing)',
+        'flex items-center rounded-b-3xl border-t bg-muted/50 p-(--card-spacing)',
         className,
       )}
       {...props}
@@ -106,10 +96,10 @@ const CardFooter = ({ className, ...props }: CardFooterProps) => {
 
 export {
   Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
+  CardFooter,
   CardTitle,
+  CardAction,
+  CardDescription,
+  CardContent,
 };

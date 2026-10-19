@@ -41,7 +41,7 @@ export const EventManagement = ({
         <Button onClick={() => void event.refetch()}>Повторить</Button>
       </div>
     );
-  if (!event.data.is_organizer)
+  if (!event.data.isOrganizer)
     return (
       <div className="w-full">
         <h2 className="title-display text-[26px]">
@@ -51,15 +51,15 @@ export const EventManagement = ({
     );
   const closed =
     event.data.status !== 'published' ||
-    new Date(event.data.starts_at) <= new Date();
+    new Date(event.data.startsAt) <= new Date();
   return (
     <>
       <div className="w-full">
         <div className="max-w-[960px]">
           <h2 className="title-display text-[26px]">{event.data.title}</h2>
           <div className="mt-6 flex flex-wrap items-center gap-4">
-            <Badge>В составе: {event.data.confirmed_count}</Badge>
-            <Badge>В очереди: {event.data.waitlist_count}</Badge>
+            <Badge>В составе: {event.data.confirmedCount}</Badge>
+            <Badge>В очереди: {event.data.waitlistCount}</Badge>
             {!closed && (
               <Button
                 size="lg"

@@ -21,7 +21,7 @@ export const useEventManage = (
   const participants = useQuery({
     queryKey: [...EVENT_KEYS.DETAIL(eventId), 'participants'],
     queryFn: () => listParticipants(eventId),
-    enabled: Boolean(event.data?.is_organizer),
+    enabled: Boolean(event.data?.isOrganizer),
     meta: { silent: true },
   });
   const [feedback, setFeedback] = useState('');

@@ -79,16 +79,16 @@ export const organizerKind = (organizer: Organizer) =>
 
 /** «В составе: 4» / «В составе: 4 из 10» / «Пока никто не записался». */
 export const formatTeamCount = (
-  event: Pick<Event, 'confirmed_count' | 'capacity'>,
+  event: Pick<Event, 'confirmedCount' | 'capacity'>,
 ) => {
   if (event.capacity)
-    return `В составе: ${event.confirmed_count} из ${event.capacity}`;
-  if (event.confirmed_count === 0) return 'Пока никто не записался';
-  return `В составе: ${event.confirmed_count}`;
+    return `В составе: ${event.confirmedCount} из ${event.capacity}`;
+  if (event.confirmedCount === 0) return 'Пока никто не записался';
+  return `В составе: ${event.confirmedCount}`;
 };
 
-export const isPast = (event: Pick<Event, 'starts_at' | 'ends_at'>) =>
-  new Date(event.ends_at ?? event.starts_at).getTime() < Date.now();
+export const isPast = (event: Pick<Event, 'startsAt' | 'endsAt'>) =>
+  new Date(event.endsAt ?? event.startsAt).getTime() < Date.now();
 
 export type DayRange = 'week' | 'today' | 'tomorrow' | 'weekend' | 'all';
 

@@ -145,7 +145,7 @@ export const AdminOrganizationsPanel = () => {
                 <TableCell className="max-w-48 truncate" title={org.owner?.name}>
                   {org.owner?.name ?? '—'}
                 </TableCell>
-                <TableCell>{formatDate(org.created_at)}</TableCell>
+                <TableCell>{formatDate(org.createdAt)}</TableCell>
                 <TableCell>
                   {org.status === 'pending' && (
                     <div className="flex gap-2">

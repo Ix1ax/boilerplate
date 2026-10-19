@@ -1,15 +1,13 @@
-'use client';
+import { Switch as SwitchPrimitive } from '@base-ui/react/switch';
+import { cn } from 'cn';
 
-import type { ComponentProps } from 'react';
-import { Switch as SwitchPrimitive } from 'radix-ui';
-
-import { cn } from './utils';
-
-interface SwitchProps extends ComponentProps<typeof SwitchPrimitive.Root> {
+const Switch = ({
+  className,
+  size = 'default',
+  ...props
+}: SwitchPrimitive.Root.Props & {
   size?: 'sm' | 'default';
-}
-
-const Switch = ({ className, size = 'default', ...props }: SwitchProps) => {
+}) => {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"

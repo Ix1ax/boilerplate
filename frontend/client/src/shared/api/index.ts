@@ -1,4 +1,5 @@
 export { API, request } from './client';
+export { type Camelize } from './camelize';
 export { ApiError, toApiError } from './errors';
 export { setErrorHandler, queryClient } from './queryClient';
 export {

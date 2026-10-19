@@ -1,4 +1,8 @@
-import { type Event,levelLabels } from '@starter/contracts';
+import { levelLabels } from '@starter/contracts';
+
+import { LocationField } from '@/features/location-picker';
+
+import type { Event } from '@/entities/event';
 
 import {
   Button,
@@ -111,6 +115,15 @@ export const EventEditForm = ({ event }: EventEditFormProps) => {
               <FormMessage role="alert" />
             </FormItem>
           )}
+        />
+        <LocationField
+          lat={form.watch('lat')}
+          lng={form.watch('lng')}
+          onChange={({ lat, lng, address }) => {
+            form.setValue('lat', lat);
+            form.setValue('lng', lng);
+            if (address) form.setValue('location', address);
+          }}
         />
         <FormField
           control={form.control}

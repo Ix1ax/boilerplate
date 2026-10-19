@@ -44,19 +44,19 @@ export const CompanyRequestCard = ({
           ? item.weekdays.map((day) => weekdayLabels[day - 1]).join(', ')
           : 'Любой день'}{' '}
         ·{' '}
-        {item.day_parts.length
-          ? item.day_parts.map((part) => dayPartLabels[part]).join(', ')
+        {item.dayParts.length
+          ? item.dayParts.map((part) => dayPartLabels[part]).join(', ')
           : 'Любое время'}
       </p>
       {item.note && <p>{item.note}</p>}
       <p>
-        Подходящих встреч: {item.matches_count} · Ещё ищут компанию:{' '}
-        {item.others_count}
+        Подходящих встреч: {item.matchesCount} · Ещё ищут компанию:{' '}
+        {item.othersCount}
       </p>
       {item.status === 'active' && (
         <p className="text-sm text-muted-foreground">
           Запрос действует до{' '}
-          {new Date(item.expires_at).toLocaleDateString('ru-RU')}
+          {new Date(item.expiresAt).toLocaleDateString('ru-RU')}
         </p>
       )}
       <div className="flex flex-wrap gap-3">

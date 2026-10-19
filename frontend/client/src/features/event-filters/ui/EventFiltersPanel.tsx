@@ -46,7 +46,7 @@ export const EventFiltersPanel = ({
   onChange,
 }: EventFiltersPanelProps) => {
   const { data: sports = [] } = useSports();
-  const base = sports.filter((sport) => !sport.is_custom);
+  const base = sports.filter((sport) => !sport.isCustom);
   const chips = [
     ...base.slice(0, MAX_CHIPS),
     // Выбранное по ссылке направление показываем, даже если оно не попало в чипы.

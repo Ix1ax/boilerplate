@@ -1,187 +1,217 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './base-variants.css';
+@import '@fontsource-variable/golos-text';
+@import '@fontsource-variable/unbounded';
+@import '@fontsource-variable/jetbrains-mono';
+
 @source "./**/*.tsx";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, monospace;
-  --color-hover: var(--hover);
-  --color-brand-text: var(--brand-text);
-  --color-caption: var(--caption);
-  --color-inactive: var(--inactive);
-  --color-token: var(--token);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-media-overlay: var(--media-overlay);
-  --color-media-foreground: var(--media-foreground);
-  --color-warning: var(--warning);
-  --color-success-soft: var(--success-soft);
-  --color-warning-soft: var(--warning-soft);
-  --color-overlay: var(--overlay);
-  --shadow-popover: var(--shadow-popover);
-  --shadow-sm: none;
-  --shadow-md: var(--shadow-popover);
-  --shadow-lg: var(--shadow-popover);
-  --shadow-xl: var(--shadow-popover);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --color-brand: var(--brand);
-  --color-brand-soft: var(--brand-soft);
-  --color-surface: var(--surface);
-  --radius-sm: 6px; /* бейдж, метка */
-  --radius-md: 8px; /* метка, пункт меню, сегмент вкладок */
-  --radius-lg: 10px; /* кнопка, поле, селект, строка списка */
-  --radius-xl: 14px; /* карточка, панель */
-  --radius-2xl: 18px; /* шапка, заголовок страницы, поповер, диалог, sheet */
-  --radius-3xl: 18px; /* устарело: использовать 2xl */
-  --radius-4xl: 18px; /* устарело: использовать 2xl */
-  --container-page: 80rem; /* 1280px — общий контейнер шапки, страниц и футера */
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  /* Статусы записи: текст и фон, контраст не ниже 4,5:1. */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-interest: var(--interest);
+  --color-interest-soft: var(--interest-soft);
+  --font-heading: var(--font-display);
+  --font-sans: 'Golos Text Variable', system-ui, sans-serif;
+  --font-display: 'Unbounded Variable', 'Arial Black', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+/* Фирменная палитра «Вместе» не зависит от темы: тёмные и цветные секции заданы явно. */
+@theme {
+  --color-ink: #121212;
+  --color-ink-soft: #3d424c;
+  --color-night: #1a1d24;
+  --color-paper: #eef0ea;
+  --color-stone: #e3e6de;
+  --color-line: #daddd4;
+  --color-line-strong: #c9cdc3;
+  --color-field: #7a7f76;
+  --color-blue: #2340d8;
+  --color-blue-hover: #1a2fa3;
+  --color-blue-soft: #e8e8fe;
+  --color-blue-pale: #c8cff6;
+  --color-gold: #fad553;
+  --color-gold-soft: #fff3c4;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2.25rem;
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
-  color-scheme: light;
-  --background: #f5f5f7;
-  --foreground: #1b1c21;
+  --radius: 0.875rem;
+  --background: #eef0ea;
+  --foreground: #121212;
   --card: #ffffff;
-  --card-foreground: var(--foreground);
-  --popover: var(--card);
-  --popover-foreground: var(--foreground);
-  --muted: #f6f6f7;
-  --muted-foreground: #545864;
-  --hover: #eeeef0;
-  --border: #e2e3e5;
-  --input: #c8c9ca;
-  --primary: #402fff;
+  --card-foreground: #121212;
+  --popover: #ffffff;
+  --popover-foreground: #121212;
+  --primary: #2340d8;
   --primary-foreground: #ffffff;
-  --secondary: var(--card);
-  --secondary-foreground: var(--foreground);
-  --accent: #eceaff;
-  --accent-foreground: var(--foreground);
-  --ring: #402fff;
-  --destructive: #c4122a;
-  --brand: var(--primary);
-  --brand-soft: var(--accent);
-  --brand-text: #402fff;
-  --surface: var(--card);
-  --caption: #6b6f7b;
-  --inactive: #b5b6b8;
-  --token: rgba(64, 47, 255, 0.08);
-  --brand-red: #ec1d35;
-  --success: #13784a;
-  --success-foreground: #ffffff;
-  --media-overlay: rgba(0, 0, 0, 0.6);
-  --media-foreground: #ffffff;
-  --warning: #8a5d00;
-  --success-soft: rgba(19, 120, 74, 0.08);
-  --warning-soft: rgba(138, 93, 0, 0.08);
-  --overlay: rgba(27, 28, 33, 0.35);
-  --shadow-popover: 0 16px 48px rgba(27, 28, 33, 0.16);
-  --radius: 0.625rem;
-  --sidebar: var(--card);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ring);
-  --chart-1: #402fff;
-  --chart-2: #a79fff;
-  --chart-3: #ec1d35;
-  --chart-4: #c9cacd;
-  --chart-5: var(--caption);
+  --secondary: #e3e6de;
+  --secondary-foreground: #121212;
+  --muted: #e3e6de;
+  --muted-foreground: #4a505b;
+  --accent: #fad553;
+  --accent-foreground: #121212;
+  --destructive: #8a1f0b;
+  --border: #daddd4;
+  --input: #7a7f76;
+  --ring: #121212;
+  --success: #0e5a33;
+  --success-soft: #d6f2e1;
+  --warning: #6e4700;
+  --warning-soft: #ffedb8;
+  --danger: #8a1f0b;
+  --danger-soft: #ffe1da;
+  --neutral: #3d414a;
+  --neutral-soft: #e4e5e8;
+  --interest: #2340d8;
+  --interest-soft: #e8e8fe;
+  --chart-1: #2340d8;
+  --chart-2: #fad553;
+  --chart-3: #121212;
+  --chart-4: #7a7f76;
+  --chart-5: #c8cff6;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #121212;
+  --sidebar-primary: #2340d8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fad553;
+  --sidebar-accent-foreground: #121212;
+  --sidebar-border: #daddd4;
+  --sidebar-ring: #121212;
 }
+
 .dark {
-  color-scheme: dark;
-  --background: #0f1014;
-  --foreground: #f2f3f5;
-  --card: #16171c;
-  --muted: #1e2026;
-  --muted-foreground: #adb2c1;
-  --hover: #24262d;
-  --border: #272930;
-  --input: #3a3d47;
-  --accent: #221e52;
-  --ring: #a79fff;
-  --brand-text: #a79fff;
-  --destructive: #ff8d98;
-  --caption: #7f8494;
-  --inactive: #4a4e5a;
-  --chart-1: #6a5dff;
-  --chart-2: #b9b2ff;
-  --chart-3: #ff4f63;
-  --chart-4: #3a3d47;
-  --token: rgba(64, 47, 255, 0.18);
-  --success: #86ddb3;
-  --success-foreground: #0f1014;
-  --warning: #e8c778;
-  --success-soft: rgba(134, 221, 179, 0.12);
-  --warning-soft: rgba(232, 199, 120, 0.12);
-  --overlay: rgba(5, 6, 8, 0.6);
-  --shadow-popover: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --background: #121212;
+  --foreground: #eef0ea;
+  --card: #1a1d24;
+  --card-foreground: #eef0ea;
+  --popover: #1a1d24;
+  --popover-foreground: #eef0ea;
+  --primary: #2340d8;
+  --primary-foreground: #ffffff;
+  --secondary: #2b2f37;
+  --secondary-foreground: #eef0ea;
+  --muted: #2b2f37;
+  --muted-foreground: #b9bdb4;
+  --accent: #fad553;
+  --accent-foreground: #121212;
+  --destructive: #ff8f78;
+  --border: rgb(238 240 234 / 14%);
+  --input: rgb(238 240 234 / 45%);
+  --ring: #fad553;
+  --success: #8fe0b0;
+  --success-soft: rgb(14 90 51 / 45%);
+  --warning: #ffd580;
+  --warning-soft: rgb(110 71 0 / 45%);
+  --danger: #ffb4a3;
+  --danger-soft: rgb(138 31 11 / 45%);
+  --neutral: #d4d6db;
+  --neutral-soft: rgb(61 65 74 / 60%);
+  --interest: #aab6ff;
+  --interest-soft: rgb(35 64 216 / 30%);
+  --chart-1: #6b82ff;
+  --chart-2: #fad553;
+  --chart-3: #eef0ea;
+  --chart-4: #7a7f76;
+  --chart-5: #2b2f37;
+  --sidebar: #1a1d24;
+  --sidebar-foreground: #eef0ea;
+  --sidebar-primary: #fad553;
+  --sidebar-primary-foreground: #121212;
+  --sidebar-accent: #2b2f37;
+  --sidebar-accent-foreground: #eef0ea;
+  --sidebar-border: rgb(238 240 234 / 14%);
+  --sidebar-ring: #fad553;
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
   body {
-    @apply m-0 min-h-screen bg-background text-foreground antialiased;
+    @apply bg-background text-[17px] leading-normal text-foreground;
   }
-  button,
-  a,
-  input,
-  textarea {
-    @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring;
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  /* Фокус виден на любом фоне: чёрная рамка и золотой ореол. */
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6px var(--color-gold);
   }
 }
 
-@utility container-page {
-  width: 100%;
-  max-width: 80rem;
-  margin-inline: auto;
-  padding-inline: 1rem;
-  @media (width >= 48rem) {
-    padding-inline: 2rem;
-  }
+/* Заголовки разделов: Unbounded 900, капс, плотная разрядка. */
+@utility display-caps {
+  font-family: var(--font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.04em;
+  line-height: 0.92;
 }
-@utility page-rhythm {
-  padding-top: 1.5rem;
-  padding-bottom: 2.5rem;
-  @media (width >= 48rem) {
-    padding-top: 2.5rem;
-    padding-bottom: 4rem;
-  }
+
+/* Заголовки экранов и карточек: Unbounded 800. */
+@utility title-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }

@@ -1,29 +1,25 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  type Event,
-  eventPatchSchema,
-  type EventPatchValues,
-} from '@starter/contracts';
+import { eventPatchSchema, type EventPatchValues } from '@starter/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { EVENT_KEYS, updateEvent } from '@/entities/event';
+import { type Event, EVENT_KEYS, updateEvent } from '@/entities/event';
 
 import { toApiError } from '@/shared/api';
 
 const toFormValues = (event: Event): EventPatchValues => ({
   title: event.title,
   description: event.description,
-  starts_at: event.starts_at,
-  ends_at: event.ends_at ?? null,
+  starts_at: event.startsAt,
+  ends_at: event.endsAt ?? null,
   location: event.location,
   lat: event.lat ?? null,
   lng: event.lng ?? null,
   level: event.level,
   requirements: event.requirements,
-  price_note: event.price_note,
-  private_info: event.private_info,
+  price_note: event.priceNote,
+  private_info: event.privateInfo,
   capacity: event.capacity ?? null,
   outdoor: event.outdoor,
 });

@@ -42,10 +42,10 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
   const [firstTime, setFirstTime] = useState(false);
   const [message, setMessage] = useState('');
 
-  const me = event.my_participation;
+  const me = event.myParticipation;
   const status = me?.status;
-  const isFree = event.join_mode === 'open';
-  const full = event.spots_left === 0;
+  const isFree = event.joinMode === 'open';
+  const full = event.spotsLeft === 0;
   const conflict = join.error instanceof ApiError && join.error.status === 409;
 
   const submit = () =>
@@ -84,7 +84,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
   let stateKey = 'idle';
   if (event.status !== 'published') stateKey = 'closed';
   else if (isPast(event)) stateKey = 'past';
-  else if (event.is_organizer) stateKey = 'organizer';
+  else if (event.isOrganizer) stateKey = 'organizer';
   else if (conflict) stateKey = 'conflict';
   else if (join.isPending) stateKey = 'sending';
   else if (status) stateKey = status;
@@ -116,7 +116,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
         </Notice>
       );
     }
-    if (event.is_organizer) {
+    if (event.isOrganizer) {
       return (
         <div className="flex flex-col gap-2.5">
           <Badge variant="gold" className="text-[15px]">
@@ -124,7 +124,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
           </Badge>
           <span>
             {formatTeamCount(event)}
-            {event.pending_count > 0 && ` · заявок: ${event.pending_count}`}.
+            {event.pendingCount > 0 && ` · заявок: ${event.pendingCount}`}.
             Заявки, состав и ответы — в управлении встречей.
           </span>
           <Button
@@ -248,7 +248,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
         >
           <span>
             Вы не в составе.
-            {me?.decision_reason && <> Причина: «{me.decision_reason}».</>}
+            {me?.decisionReason && <> Причина: «{me.decisionReason}».</>}
           </span>
           <Link
             to={STATIC_ROUTES.EVENTS}
@@ -306,7 +306,7 @@ export const JoinPanel = ({ event, onRefresh }: JoinPanelProps) => {
       />
       <div className="relative flex flex-col gap-0.5 pr-16">
         <span className="font-mono text-[13px] text-muted-foreground uppercase">
-          {formatDayShort(event.starts_at)} · {formatTime(event.starts_at)}
+          {formatDayShort(event.startsAt)} · {formatTime(event.startsAt)}
         </span>
         <b className="text-[22px] leading-snug">{event.location}</b>
       </div>

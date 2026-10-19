@@ -101,7 +101,7 @@ export const MapPage = () => {
                         : 'text-muted-foreground'
                     }
                   >
-                    {formatWhen(event.starts_at)}
+                    {formatWhen(event.startsAt)}
                   </Eyebrow>
                   <b>{event.title}</b>
                   <span className="text-sm opacity-80">{event.location}</span>
@@ -110,7 +110,7 @@ export const MapPage = () => {
                       {event.sport.name}
                     </Badge>
                     <Badge variant="outline">
-                      {JOIN_MODE_LABELS[event.join_mode]}
+                      {JOIN_MODE_LABELS[event.joinMode]}
                     </Badge>
                   </div>
                 </button>

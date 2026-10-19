@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import type { Event, OrganizerStats } from '@starter/contracts';
 
-import { EventCard } from '@/entities/event';
+import { type Event,EventCard } from '@/entities/event';
+import type { Profile } from '@/entities/profile';
 
 import { STATIC_ROUTES } from '@/shared/constants';
 import { Button, HeroBand } from '@/shared/ui';
@@ -11,7 +11,7 @@ interface OrganizerProfileProps {
   name: string;
   description: string;
   eyebrow: string;
-  stats: OrganizerStats;
+  stats: Profile['stats'];
   events: Event[];
   children?: ReactNode;
 }
@@ -30,9 +30,9 @@ export const OrganizerProfile = ({
       {children}
       <dl className="grid grid-cols-1 gap-4 rounded-3xl bg-card p-6 sm:grid-cols-3">
         {[
-          ['Проведено встреч', stats.events_held],
-          ['Подтверждённых записей на прошедшие встречи', stats.people_came],
-          ['Ближайших встреч', stats.upcoming_events],
+          ['Проведено встреч', stats.eventsHeld],
+          ['Подтверждённых записей на прошедшие встречи', stats.peopleCame],
+          ['Ближайших встреч', stats.upcomingEvents],
         ].map(([label, value]) => (
           <div key={label}>
             <dt className="text-muted-foreground">{label}</dt>

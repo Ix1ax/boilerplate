@@ -12,12 +12,12 @@ export const DemandHint = ({ sportId, sportName }: DemandHintProps) => {
   const { data, isPending } = useDemand({ sportId, sportName });
   if (isPending || !data || data.count === 0) return null;
 
-  const dayPartEntries = Object.entries(data.by_day_part) as [
+  const dayPartEntries = Object.entries(data.byDayPart) as [
     keyof typeof dayPartLabels,
     number,
   ][];
   const busiestPart = dayPartEntries.reduce((a, b) => (b[1] > a[1] ? b : a));
-  const busiestWeekday = data.by_weekday.reduce(
+  const busiestWeekday = data.byWeekday.reduce(
     (best, count, index) => (count > best.count ? { index, count } : best),
     { index: 0, count: 0 },
   );

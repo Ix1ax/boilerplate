@@ -1,14 +1,10 @@
-import type { ComponentProps } from 'react';
+import { cn } from 'cn';
 
-import { cn } from './utils';
-
-type SkeletonProps = ComponentProps<'div'>;
-
-const Skeleton = ({ className, ...props }: SkeletonProps) => {
+const Skeleton = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
       data-slot="skeleton"
-      className={cn('animate-pulse rounded-md bg-foreground/8', className)}
+      className={cn('animate-pulse rounded-md bg-muted', className)}
       {...props}
     />
   );

@@ -42,10 +42,10 @@ export const EventFacts = ({ event }: { event: Event }) => {
       className="grid grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] gap-3"
     >
       <Tile label="Когда">
-        <b className="text-xl leading-snug">{formatDayLong(event.starts_at)}</b>
+        <b className="text-xl leading-snug">{formatDayLong(event.startsAt)}</b>
         <span>
-          начало в {formatTime(event.starts_at)}
-          {event.ends_at && `, до ${formatTime(event.ends_at)}`} · по
+          начало в {formatTime(event.startsAt)}
+          {event.endsAt && `, до ${formatTime(event.endsAt)}`} · по
           Красноярску
         </span>
       </Tile>
@@ -66,8 +66,8 @@ export const EventFacts = ({ event }: { event: Event }) => {
         <b className="text-xl leading-snug">{LEVEL_LABELS[event.level]}</b>
         <span>
           {formatTeamCount(event)}
-          {event.first_timers_count > 0 &&
-            ` · впервые: ${event.first_timers_count}`}
+          {event.firstTimersCount > 0 &&
+            ` · впервые: ${event.firstTimersCount}`}
         </span>
       </Tile>
       <Link

@@ -1,7 +1,19 @@
-import type { Event, Organization, Profile } from '@starter/contracts';
+import type {
+  Organization as OrganizationDto,
+  OrganizationDetail as OrganizationDetailDto,
+  OrganizationPage as OrganizationPageDto,
+} from '@starter/contracts';
 
-export type { Organization, OrganizationValues } from '@starter/contracts';
-export type { OrganizationDetail, OrganizationPage } from '@starter/contracts';
+import type { Event } from '@/entities/event';
+import type { Profile } from '@/entities/profile';
+
+import type { Camelize } from '@/shared/api';
+
+export type { OrganizationValues } from '@starter/contracts';
+
+export type Organization = Camelize<OrganizationDto>;
+export type OrganizationDetail = Camelize<OrganizationDetailDto>;
+export type OrganizationPage = Camelize<OrganizationPageDto>;
 
 export type PublicOrganization = {
   organization: Organization;

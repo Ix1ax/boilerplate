@@ -142,7 +142,7 @@ export const HomePage = () => {
   const signedIn = !userPending && Boolean(user);
   const { data } = useEvents({ limit: 6 }, { enabled: signedIn });
   const { data: allSports } = useSports({ enabled: signedIn });
-  const sports = (allSports ?? []).filter((sport) => !sport.is_custom);
+  const sports = (allSports ?? []).filter((sport) => !sport.isCustom);
   // Направления из макета остаются доступны для поиска при недоступном справочнике.
   const sportOptions =
     sports.length > 0

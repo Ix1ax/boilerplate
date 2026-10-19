@@ -1,5 +1,7 @@
 import { levelLabels } from '@starter/contracts';
 
+import { LocationField } from '@/features/location-picker';
+
 import { Button, Form, Notice } from '@/shared/ui';
 
 import { useEventCreate } from '../model';
@@ -89,6 +91,15 @@ export const EventCreateForm = () => {
           form={form}
           name={'location'}
           label={'Место и адрес'}
+        />
+        <LocationField
+          lat={form.watch('lat')}
+          lng={form.watch('lng')}
+          onChange={({ lat, lng, address }) => {
+            form.setValue('lat', lat);
+            form.setValue('lng', lng);
+            if (address) form.setValue('location', address);
+          }}
         />
         <EventTextField form={form} name={'description'} label={'О встрече'} />
         <div className="grid gap-6 sm:grid-cols-2">

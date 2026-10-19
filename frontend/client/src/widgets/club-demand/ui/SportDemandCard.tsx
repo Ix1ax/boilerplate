@@ -1,6 +1,6 @@
-import { dayPartLabels, type Sport } from '@starter/contracts';
+import { dayPartLabels } from '@starter/contracts';
 
-import { useDemand } from '@/entities/sport';
+import { type Sport, useDemand } from '@/entities/sport';
 
 import { Skeleton } from '@/shared/ui';
 
@@ -17,7 +17,7 @@ export const SportDemandCard = ({ sport }: SportDemandCardProps) => {
   if (isPending) return <Skeleton className="h-28 w-full rounded-2xl" />;
   if (!data || data.count === 0) return null;
 
-  const max = Math.max(...DAY_PARTS.map((part) => data.by_day_part[part]), 1);
+  const max = Math.max(...DAY_PARTS.map((part) => data.byDayPart[part]), 1);
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl bg-card p-5">
@@ -34,7 +34,7 @@ export const SportDemandCard = ({ sport }: SportDemandCardProps) => {
               <div
                 className="w-full rounded-t-md bg-blue"
                 style={{
-                  height: `${(data.by_day_part[part] / max) * 100}%`,
+                  height: `${(data.byDayPart[part] / max) * 100}%`,
                 }}
               />
             </div>
@@ -42,7 +42,7 @@ export const SportDemandCard = ({ sport }: SportDemandCardProps) => {
               {dayPartLabels[part]}
             </span>
             <span className="text-sm font-semibold">
-              {data.by_day_part[part]}
+              {data.byDayPart[part]}
             </span>
           </div>
         ))}

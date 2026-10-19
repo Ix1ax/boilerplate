@@ -116,14 +116,14 @@ export const AdminReportsPanel = () => {
                   <Badge variant="outline">
                     {REASON_LABEL[report.reason] ?? report.reason}
                   </Badge>
-                  {report.open_on_target > 1 && (
+                  {report.openOnTarget > 1 && (
                     <Badge variant="destructive">
-                      Жалоб на эту цель: {report.open_on_target}
+                      Жалоб на эту цель: {report.openOnTarget}
                     </Badge>
                   )}
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {formatDate(report.created_at)}
+                  {formatDate(report.createdAt)}
                 </span>
               </div>
               <p className="font-bold">{report.target.title}</p>
@@ -138,7 +138,7 @@ export const AdminReportsPanel = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  render={<Link to={DYNAMIC_ROUTES.EVENT(report.event_id)} />}
+                  render={<Link to={DYNAMIC_ROUTES.EVENT(report.eventId)} />}
                 >
                   К мероприятию
                 </Button>

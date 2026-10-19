@@ -66,7 +66,7 @@ export const AdminEventHistoryDialog = ({
                   </span>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {formatDate(entry.created_at)} · {entry.actor}
+                  {formatDate(entry.createdAt)} · {entry.actor}
                 </p>
                 {entry.comment && <p className="mt-1">{entry.comment}</p>}
               </li>

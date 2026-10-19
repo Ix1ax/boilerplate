@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 
+import { deepCamelKeys } from './caseTransform';
 import {
   API_BASE_URL,
   API_TIMEOUT,
@@ -12,6 +13,12 @@ import { toApiError } from './errors';
 export const API = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
+});
+
+// Go отдаёт JSON в snake_case — переводим ключи в camelCase один раз, на границе API.
+API.interceptors.response.use((response) => {
+  response.data = deepCamelKeys(response.data);
+  return response;
 });
 
 API.interceptors.response.use(

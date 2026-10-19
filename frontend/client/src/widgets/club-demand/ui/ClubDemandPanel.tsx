@@ -1,4 +1,4 @@
-import type { Sport } from '@starter/contracts';
+import type { Sport } from '@/entities/sport';
 
 import { Eyebrow } from '@/shared/ui';
 

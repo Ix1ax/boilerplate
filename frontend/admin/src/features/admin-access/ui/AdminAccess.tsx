@@ -30,8 +30,10 @@ export const AdminAccess = () => {
           Вход в панель администратора
         </h1>
         <p className="mb-4">Войдите с учётной записью администратора.</p>
-        <Button asChild>
-          <a href={`/auth/login?next=${encodeURIComponent(next)}`}>Войти</a>
+        <Button
+          render={<a href={`/auth/login?next=${encodeURIComponent(next)}`} />}
+        >
+          Войти
         </Button>
       </section>
     );

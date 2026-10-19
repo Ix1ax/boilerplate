@@ -50,16 +50,16 @@ const EntryRow = ({ entry }: { entry: MyEntry }) => {
       <span className="flex min-w-0 flex-col gap-1">
         <b className="text-xl">{e.title}</b>
         <span className="text-ink-soft dark:text-muted-foreground">
-          {formatDayShort(e.starts_at)}, {formatTime(e.starts_at)} ·{' '}
+          {formatDayShort(e.startsAt)}, {formatTime(e.startsAt)} ·{' '}
           {e.location}
         </span>
-        {entry.status === 'rejected' && entry.decision_reason && (
+        {entry.status === 'rejected' && entry.decisionReason && (
           <span className="text-[15px] text-danger">
-            Причина: {entry.decision_reason}
+            Причина: {entry.decisionReason}
           </span>
         )}
-        {withdrawn && e.moderation_reason && (
-          <span className="text-[15px]">Причина: {e.moderation_reason}</span>
+        {withdrawn && e.moderationReason && (
+          <span className="text-[15px]">Причина: {e.moderationReason}</span>
         )}
       </span>
       <span className="max-sm:col-span-2">
@@ -85,7 +85,7 @@ export const MySportPage = () => {
     (x) =>
       x.status === 'confirmed' &&
       x.event.status === 'published' &&
-      new Date(x.event.starts_at) > new Date(),
+      new Date(x.event.startsAt) > new Date(),
   );
 
   const renderList = () => {
@@ -144,9 +144,9 @@ export const MySportPage = () => {
           </div>
           <b className="text-xl">{e.title}</b>
           <span className="text-ink-soft dark:text-muted-foreground">
-            {formatDayShort(e.starts_at)}, {formatTime(e.starts_at)} · в составе{' '}
-            {e.confirmed_count}
-            {e.pending_count > 0 && ` · заявок: ${e.pending_count}`}
+            {formatDayShort(e.startsAt)}, {formatTime(e.startsAt)} · в составе{' '}
+            {e.confirmedCount}
+            {e.pendingCount > 0 && ` · заявок: ${e.pendingCount}`}
           </span>
         </div>
         <Button render={<Link to={DYNAMIC_ROUTES.EVENT(e.id)} />}>
@@ -191,8 +191,8 @@ export const MySportPage = () => {
             <div className="flex flex-col gap-2.5 rounded-[28px] bg-ink p-6 text-paper">
               <Eyebrow className="text-gold">ближайшая встреча</Eyebrow>
               <b className="title-display text-2xl">
-                {formatDayShort(next.event.starts_at)},{' '}
-                {formatTime(next.event.starts_at)}
+                {formatDayShort(next.event.startsAt)},{' '}
+                {formatTime(next.event.startsAt)}
               </b>
               <span>
                 {next.event.title} · {next.event.location}
