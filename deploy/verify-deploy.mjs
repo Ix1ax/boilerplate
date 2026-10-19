@@ -129,9 +129,11 @@ test('деплой собирает все приложения и ждёт уж
     'files-service',
     'notifications-service',
     'audit-service',
+    'events-service',
     'realtime-service',
     'llm-service',
     'gateway-service',
+    'admin-service',
     'web-service',
   ]);
 
@@ -140,6 +142,7 @@ test('деплой собирает все приложения и ждёт уж
   const backupDirectory = path.join(root, 'backups', backups[0]);
   assert.deepEqual(readdirSync(backupDirectory).sort(), [
     'audit.dump',
+    'events.dump',
     'files.dump',
     'keycloak.dump',
     'notifications.dump',
@@ -169,6 +172,7 @@ test('деплой собирает все приложения и ждёт уж
     'files-migrate',
     'notifications-migrate',
     'audit-migrate',
+    'events-migrate',
     'llm-ollama-pull',
   ]) {
     const recreateIndex = calls.findIndex(
@@ -373,7 +377,14 @@ test('production setup создаёт HTTPS-настройки и сохраня
   ]);
   assert.deepEqual(
     realm.users.map((user) => user.credentials[0].value),
-    ['${DEMO_PASSWORD}', '${SECOND_DEMO_PASSWORD}', '${ADMIN_DEMO_PASSWORD}'],
+    [
+      '${DEMO_PASSWORD}',
+      '${SECOND_DEMO_PASSWORD}',
+      '${ORG_DEMO_PASSWORD}',
+      '${ORG_PENDING_DEMO_PASSWORD}',
+      '${ORG_REJECTED_DEMO_PASSWORD}',
+      '${ADMIN_DEMO_PASSWORD}',
+    ],
   );
   assert.equal(run().status, 0);
   assert.equal(readFileSync(path.join(root, '.env'), 'utf8'), environment);

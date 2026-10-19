@@ -6,6 +6,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['client/src/**/*.test.ts', 'packages/**/*.test.ts'],
+    include: [
+      'client/src/**/*.test.ts',
+      'admin/src/**/*.test.ts',
+      'packages/**/*.test.ts',
+    ],
   },
 });

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Нет подключения к интернету</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        font:
+          1rem/1.6 system-ui,
+          sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+      main {
+        max-width: 30rem;
+        padding: 2rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+        line-height: 1.2;
+      }
+      a {
+        display: inline-block;
+        padding: 0.75rem 1rem;
+        border: 1px solid currentColor;
+        border-radius: 0.5rem;
+        color: inherit;
+        text-underline-offset: 0.2em;
+      }
+      a:focus-visible {
+        outline: 3px solid currentColor;
+        outline-offset: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Нет подключения к интернету</h1>
+      <p>
+        Для просмотра событий и отправки заявок нужна сеть. Проверьте
+        подключение и попробуйте снова.
+      </p>
+      <a href="">Попробовать снова</a>
+    </main>
+  </body>
+</html>

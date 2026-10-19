@@ -43,6 +43,8 @@ go mod tidy
 
 ## Фронтенд
 
+Две самостоятельные SPA — `client` (`/`) и `admin` (`/admin/`), общий origin и gateway. `npm run dev` / `make web` запускает обе; открывайте admin через `http://localhost:3000/admin/`. Сборки независимы: `npm run build:client` и `npm run build:admin`. Детали границ, Docker и браузерной проверки — [microfrontends.md](microfrontends.md).
+
 Vite, React Router, React Query, React Hook Form, Zod и Tailwind v4. `@/` указывает на `src`. Импорты только вниз по `app → pages → widgets → features → entities → shared`; ESLint проверяет алиасные импорты между слоями. Схема создания задачи и DTO берутся из `@starter/contracts`.
 
 Основной UI находится в `shared/ui` на Base UI, тема — `src/app/globals.css`. Независимый `@starter/ui` на Radix сохранён как дополнительный набор. Сообщения и документация — по-русски. Ошибки загрузки показывайте с повтором, серверные ошибки читайте из `error.message`.

@@ -75,6 +75,9 @@ services:
       APP_ENV: production
       SESSION_COOKIE_SECURE: 'true'
       METRICS_TOKEN: ${METRICS_TOKEN:?задайте METRICS_TOKEN для /metrics}
+  admin-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/admin:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
   web-service:
     image: ${COMPOSE_PROJECT_NAME:?required}/web:${DEPLOY_REVISION:?required}
     ports: !reset []

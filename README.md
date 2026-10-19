@@ -77,6 +77,8 @@ scripts/                      # Настройка, экспорт и smoke-пр
 
 Основной UI нового фронтенда находится в `client/src/shared/ui` и использует Base UI. `packages/ui` — отдельный набор на Radix, он не импортирует приложение. При добавлении компонентов выбирайте один набор для конкретного экрана.
 
+Фронтенд разделён на две независимые SPA: `client` на `/` и `admin` на `/admin/`. `npm run dev` запускает обе, `npm run build` собирает обе; доступны отдельные `dev:client`, `dev:admin`, `build:client`, `build:admin`. Admin пока содержит каркас с проверкой доступа; текущие инструменты сохранены на `/dashboard/admin`. Архитектура, границы и проверки описаны в [microfrontends.md](docs/microfrontends.md).
+
 ## Локальная разработка
 
 ```sh
@@ -161,3 +163,11 @@ make up
 - API не готов: `docker compose --profile app logs api migrate postgres redis s3 keycloak`.
 
 Удаление томов не входит в обычную остановку. Результаты проверки этой версии — [docs/verification.md](docs/verification.md).
+
+## PWA: установка на устройство
+
+Production-сборка поддерживает установку через меню браузера «Установить приложение» (Chrome/Edge/Android), на iPhone/iPad — через Safari → «Поделиться» → «На экран Домой». Приложение запускается в отдельном окне. Требуется HTTPS; для локальной проверки подходит `localhost`.
+
+Проверка: `npm run build`, затем `npm run preview -w @starter/client -- --host 127.0.0.1`. Откройте выданный адрес, дождитесь активации service worker (DevTools → Application → Service Workers) и перезагрузите страницу без сети. При открытии любого клиентского маршрута появится страница «Нет подключения к интернету» с повторной попыткой для того же адреса.
+
+В Cache Storage хранится только общая страница без сети. События, заявки, персональные данные и ответы API не кэшируются; вход и отправка изменений требуют соединения. Push-уведомления и фоновая отправка заявок не реализованы. В `vite dev` service worker не регистрируется. При обновлении `offline.html` нужно повысить версию `CACHE_NAME` в `client/public/sw.js`; новый worker активируется после закрытия старых вкладок. Название приложения задаётся в `client/public/manifest.webmanifest` и `client/index.html`, иконки находятся в `client/public/icons/`.

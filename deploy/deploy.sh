@@ -57,7 +57,7 @@ trap diagnose ERR
 "${compose[@]}" config -q
 "${compose[@]}" pull --ignore-buildable
 # На небольшом VPS параллельные Go-сборки могут исчерпать память.
-for service in tasks-service files-service notifications-service audit-service events-service moderation-service realtime-service llm-service gateway-service web-service; do
+for service in tasks-service files-service notifications-service audit-service events-service moderation-service realtime-service llm-service gateway-service admin-service web-service; do
   "${compose[@]}" build "$service"
 done
 
@@ -86,7 +86,7 @@ for service in tasks files notifications audit events moderation; do
 done
 run_once llm-ollama-pull
 "${compose[@]}" up -d --no-build --pull never --wait --wait-timeout 900
-# Nginx разрешает IP gateway при старте; после обновления gateway нужен новый web-контейнер.
+# Nginx разрешает IP gateway и admin при старте; после их обновления нужен новый web-контейнер.
 "${compose[@]}" up -d --no-deps --no-build --pull never --force-recreate --wait --wait-timeout 120 web-service
 "${compose[@]}" exec -T web-service wget -q -O /dev/null http://gateway-service:8080/readyz
 
