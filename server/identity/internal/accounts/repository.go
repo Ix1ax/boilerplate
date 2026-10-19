@@ -44,11 +44,11 @@ type Repository struct{ db *pgxpool.Pool }
 
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
-const accountSelect = `SELECT id::text, email, display_name, status, block_reason, last_login_at, created_at FROM accounts`
+const accountSelect = `SELECT id::text, email, display_name, status, block_reason, last_login_at, created_at, password_changed_at FROM accounts`
 
 func scanAccount(row pgx.Row, extra ...any) (Account, error) {
 	var a Account
-	err := row.Scan(append([]any{&a.ID, &a.Email, &a.Name, &a.Status, &a.BlockReason, &a.LastLoginAt, &a.CreatedAt}, extra...)...)
+	err := row.Scan(append([]any{&a.ID, &a.Email, &a.Name, &a.Status, &a.BlockReason, &a.LastLoginAt, &a.CreatedAt, &a.PasswordChangedAt}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -79,7 +79,7 @@ func (r *Repository) Create(ctx context.Context, email, name, hash string) (Acco
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		a, err = scanAccount(tx.QueryRow(ctx, `INSERT INTO accounts(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)
-RETURNING id::text, email, display_name, status, block_reason, last_login_at, created_at`, id, email, name, hash))
+RETURNING id::text, email, display_name, status, block_reason, last_login_at, created_at, password_changed_at`, id, email, name, hash))
 		var pg *pgconn.PgError
 		if errors.As(err, &pg) && pg.Code == "23505" {
 			return ErrEmailTaken
@@ -102,7 +102,7 @@ func (r *Repository) CredentialsByID(ctx context.Context, id string) (credential
 
 func (r *Repository) credentials(ctx context.Context, where string, arg string) (credentials, error) {
 	var c credentials
-	a, err := scanAccount(r.db.QueryRow(ctx, `SELECT id::text, email, display_name, status, block_reason, last_login_at, created_at,
+	a, err := scanAccount(r.db.QueryRow(ctx, `SELECT id::text, email, display_name, status, block_reason, last_login_at, created_at, password_changed_at,
 password_hash, locked_until FROM accounts WHERE `+where, arg), &c.Hash, &c.LockedUntil)
 	c.Account = a
 	return c, err
@@ -128,7 +128,8 @@ WHERE id=$1`, id, maxFailures, lockFor.String())
 
 func (r *Repository) SetPassword(ctx context.Context, id, hash string) error {
 	return r.inTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, "UPDATE accounts SET password_hash=$2, password_changed_at=now(), failed_logins=0, locked_until=NULL, updated_at=now() WHERE id=$1", id, hash)
+		// Даже две смены в одну микросекунду должны получить разные версии для отзыва сессий.
+		tag, err := tx.Exec(ctx, "UPDATE accounts SET password_hash=$2, password_changed_at=GREATEST(clock_timestamp(),password_changed_at+interval '1 microsecond'), failed_logins=0, locked_until=NULL, updated_at=now() WHERE id=$1", id, hash)
 		if err != nil {
 			return err
 		}

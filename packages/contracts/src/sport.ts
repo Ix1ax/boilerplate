@@ -228,6 +228,7 @@ const eventFields = {
 export const eventInputSchema = z
   .object({
     ...eventFields,
+    format: z.enum(['offline', 'online']).default('offline'),
     description: eventFields.description.default(''),
     level: level.default('any'),
     requirements: eventFields.requirements.default(''),

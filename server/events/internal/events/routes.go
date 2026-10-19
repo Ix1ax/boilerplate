@@ -255,6 +255,11 @@ func Register(parent *gin.RouterGroup, s *Service) {
 	registerGatherings(g, s)
 	registerExtras(g, s)
 	registerReports(g, s)
+	RegisterDemandLive(g, s)
+	RegisterSocial(g, s)
+	RegisterOnline(g, s)
+	RegisterRecommendations(g, s)
+	RegisterProgress(g, s)
 }
 
 // RegisterAdmin — модерация. Роль admin проверяется и в gateway, и здесь.
@@ -275,6 +280,9 @@ func RegisterAdmin(g *gin.RouterGroup, s *Service) {
 		if !ok || !valid {
 			fail(c, 400, "invalid_query", "Проверьте status (pending, approved, rejected), limit и offset")
 			return
+		}
+		if len(statuses) == 0 {
+			statuses = []string{"pending", "approved", "rejected"}
 		}
 		page, err := s.ListOrganizations(c.Request.Context(), actor(c), c.Query("q"), statuses, limit, offset)
 		if handle(c, err) {

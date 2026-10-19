@@ -83,3 +83,13 @@ export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;
 
 // Кейс «Платформа совместных спортивных активностей»: типы, схемы форм и подписи статусов.
 export * from './sport';
+export * from './demand-live';
+export * from './social';
+export * from './online';
+export * from './recommendations';
+
+export type RecommendationPreferences = Schemas['RecommendationPreferences'];
+export type RecommendationPage = Schemas['RecommendationPage'];
+export type RecommendedEvent = Schemas['RecommendedEvent'];
+export type PersonalProgress = Schemas['PersonalProgress'];
+export type Achievement = Schemas['Achievement'];

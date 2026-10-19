@@ -67,6 +67,9 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if a.PasswordChangedAt.IsZero() || !d.PasswordChangedAt.After(a.PasswordChangedAt) {
+		t.Fatalf("версия пароля не увеличилась: %v -> %v", a.PasswordChangedAt, d.PasswordChangedAt)
+	}
 	var actions []string
 	for _, h := range d.History {
 		actions = append(actions, h.Action)

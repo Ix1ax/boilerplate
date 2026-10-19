@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -15,10 +16,11 @@ import (
 
 // fakeAccounts — identity в памяти: проверяем поведение gateway, а не хеширование.
 type fakeAccounts struct {
-	users    map[string]Identity
-	passes   map[string]string
-	blocked  map[string]bool
-	statuses int
+	users               map[string]Identity
+	passes              map[string]string
+	blocked             map[string]bool
+	statuses            int
+	afterPasswordChange func()
 }
 
 func newFakeAccounts() *fakeAccounts {
@@ -29,7 +31,7 @@ func (f *fakeAccounts) Register(_ context.Context, email, password, name string)
 	if _, ok := f.users[email]; ok {
 		return Identity{}, &UpstreamError{Status: 409, Body: []byte(`{"error":{"code":"email_taken","message":"Эта почта уже зарегистрирована"}}`)}
 	}
-	i := Identity{Subject: "id-" + email, Email: email, Name: name, Provider: ProviderLocal}
+	i := Identity{Subject: "id-" + email, Email: email, Name: name, Provider: ProviderLocal, PasswordChangedAt: time.Now().UTC()}
 	i.RealmAccess.Roles = []string{"user"}
 	f.users[email], f.passes[email] = i, password
 	return i, nil
@@ -62,6 +64,11 @@ func (f *fakeAccounts) ChangePassword(_ context.Context, subject, current, next 
 				return &UpstreamError{Status: 422, Body: []byte(`{"error":{"code":"validation_error","field":"current_password","message":"Текущий пароль указан неверно"}}`)}
 			}
 			f.passes[email] = next
+			i.PasswordChangedAt = time.Now().UTC()
+			f.users[email] = i
+			if f.afterPasswordChange != nil {
+				f.afterPasswordChange()
+			}
 			return nil
 		}
 	}
@@ -227,5 +234,51 @@ func TestProvidersWithoutIdentity(t *testing.T) {
 	}
 	if w := call(r, "POST", "/auth/local/login", `{}`); w.Code != 404 {
 		t.Fatalf("маршрут без identity: %d", w.Code)
+	}
+}
+
+func TestPasswordChangeRevokeSurvivesRequestCancellation(t *testing.T) {
+	r, accounts, _ := localRouter(t)
+	first := sessionOf(t, call(r, "POST", "/auth/local/register", `{"email":"cancel@example.ru","password":"OldPassword2026","name":"Анна"}`))
+	second := sessionOf(t, call(r, "POST", "/auth/local/login", `{"email":"cancel@example.ru","password":"OldPassword2026"}`))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	accounts.afterPasswordChange = cancel
+	req := httptest.NewRequest("POST", "/auth/local/password", strings.NewReader(`{"current_password":"OldPassword2026","new_password":"NewPassword2027"}`)).WithContext(ctx)
+	req.Header.Set("Origin", testOrigin)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(second)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != 204 {
+		t.Fatalf("change: %d %s", w.Code, w.Body.String())
+	}
+	if w := call(r, "GET", "/api/v1/me", "", first); w.Code != 401 {
+		t.Fatalf("old session: %d", w.Code)
+	}
+	if w := call(r, "GET", "/api/v1/me", "", second); w.Code != 200 {
+		t.Fatalf("current session: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPasswordChangeRedisFailureHasDurableRevocation(t *testing.T) {
+	r, accounts, mr := localRouter(t)
+	first := sessionOf(t, call(r, "POST", "/auth/local/register", `{"email":"failure@example.ru","password":"OldPassword2026","name":"Анна"}`))
+	second := sessionOf(t, call(r, "POST", "/auth/local/login", `{"email":"failure@example.ru","password":"OldPassword2026"}`))
+	accounts.afterPasswordChange = func() { mr.SetError("temporary redis failure") }
+	w := call(r, "POST", "/auth/local/password", `{"current_password":"OldPassword2026","new_password":"NewPassword2027"}`, second)
+	if w.Code != 503 {
+		t.Fatalf("silent revocation failure: %d %s", w.Code, w.Body.String())
+	}
+	mr.SetError("")
+	mr.FastForward(statusTTL + time.Second)
+	for _, cookie := range []*http.Cookie{first, second} {
+		if w := call(r, "GET", "/api/v1/me", "", cookie); w.Code != 401 {
+			t.Fatalf("old password generation accepted: %d %s", w.Code, w.Body.String())
+		}
+	}
+	accounts.afterPasswordChange = nil
+	if w := call(r, "POST", "/auth/local/login", `{"email":"failure@example.ru","password":"NewPassword2027"}`); w.Code != 200 {
+		t.Fatalf("new password: %d", w.Code)
 	}
 }

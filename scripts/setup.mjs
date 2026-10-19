@@ -4,7 +4,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const production = process.argv.includes('--production');
+let production = process.argv.includes('--production');
 const addMissing = (existing, template) => {
   let merged = existing;
   for (const line of template.split('\n')) {
@@ -28,6 +28,8 @@ const values = Object.fromEntries(
       return [line.slice(0, i), line.slice(i + 1)];
     }),
 );
+// Повторный make setup на рабочем окружении не должен вернуть тестовых пользователей.
+production ||= values.APP_ENV === 'production';
 const setValue = (name, value) => {
   values[name] = value;
   text = new RegExp(`^${name}=`, 'm').test(text)
@@ -67,12 +69,8 @@ for (const name of [
   'INTERNAL_TOKEN',
   'S3_SECRET_KEY',
   'KEYCLOAK_ADMIN_PASSWORD',
-  'DEMO_PASSWORD',
-  'ADMIN_DEMO_PASSWORD',
-  'SECOND_DEMO_PASSWORD',
-  'ORG_DEMO_PASSWORD',
-  'ORG_PENDING_DEMO_PASSWORD',
-  'ORG_REJECTED_DEMO_PASSWORD',
+  ...(!production ? ['DEMO_PASSWORD', 'ADMIN_DEMO_PASSWORD', 'SECOND_DEMO_PASSWORD',
+    'ORG_DEMO_PASSWORD', 'ORG_PENDING_DEMO_PASSWORD', 'ORG_REJECTED_DEMO_PASSWORD'] : []),
   'MAILPIT_PASSWORD',
   ...(production ? ['METRICS_TOKEN'] : []),
 ]) {
@@ -123,8 +121,8 @@ for (const client of realm.clients) {
     client.webOrigins = origins;
   }
 }
-// Демо-аккаунты кейса: имена видны в обсуждениях и списках участников.
-realm.users = [
+// Рабочий realm начинается без тестовых пользователей, в том числе без демоадминистратора.
+realm.users = production ? [] : [
   ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Анна', 'Смирнова', ['user']],
   ['SECOND_DEMO_EMAIL', 'SECOND_DEMO_PASSWORD', 'Игорь', 'Волков', ['user']],
   ['ORG_DEMO_EMAIL', 'ORG_DEMO_PASSWORD', 'Олег', 'Ладьин', ['user']],

@@ -15,14 +15,15 @@ import (
 
 // Account — учётная запись без хеша пароля: её можно отдавать gateway и админке.
 type Account struct {
-	ID          string     `json:"id"`
-	Email       string     `json:"email"`
-	Name        string     `json:"name"`
-	Status      string     `json:"status"`
-	BlockReason string     `json:"block_reason"`
-	Roles       []string   `json:"roles"`
-	LastLoginAt *time.Time `json:"last_login_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID                string     `json:"id"`
+	Email             string     `json:"email"`
+	Name              string     `json:"name"`
+	Status            string     `json:"status"`
+	BlockReason       string     `json:"block_reason"`
+	Roles             []string   `json:"roles"`
+	LastLoginAt       *time.Time `json:"last_login_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	PasswordChangedAt time.Time  `json:"password_changed_at"`
 }
 
 // HistoryEntry — регистрация, блокировки и смены пароля.

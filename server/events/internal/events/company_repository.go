@@ -81,6 +81,11 @@ func (r *Repository) CreateCompanyRequest(ctx context.Context, a Actor, in Compa
 		if err != nil {
 			return err
 		}
+		// Истёкший запрос больше не занимает уникальное место активного поиска.
+		if _, err = tx.Exec(ctx, `UPDATE company_requests SET status='closed',updated_at=now()
+WHERE user_id=$1 AND sport_id=$2 AND status='active' AND expires_at<=now()`, a.ID, sportID); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `INSERT INTO company_requests(id,user_id,sport_id,level,day_parts,weekdays,area,lat,lng,radius_km,note,expires_at)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 ON CONFLICT (user_id, sport_id) WHERE status='active' DO NOTHING`,

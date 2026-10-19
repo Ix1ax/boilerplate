@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"strings"
+	"time"
 )
 
 // Identity — пользователь из проверенного токена. Subject (sub в Keycloak) — постоянный
@@ -20,7 +21,8 @@ type Identity struct {
 	} `json:"realm_access"`
 	// Provider — способ входа: sso («Столото ID», Keycloak) или local (почта и пароль).
 	// В токене Keycloak такого поля нет, его выставляет Middleware.
-	Provider string `json:"provider,omitempty"`
+	Provider          string    `json:"provider,omitempty"`
+	PasswordChangedAt time.Time `json:"password_changed_at,omitempty"`
 }
 
 const (
