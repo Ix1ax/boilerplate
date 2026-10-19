@@ -172,7 +172,6 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?required}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
-      ADMIN_DEMO_PASSWORD: ${ADMIN_DEMO_PASSWORD:-}
       SECOND_DEMO_PASSWORD: ${SECOND_DEMO_PASSWORD:-}
       ORG_DEMO_PASSWORD: ${ORG_DEMO_PASSWORD:-}
       ORG_PENDING_DEMO_PASSWORD: ${ORG_PENDING_DEMO_PASSWORD:-}
@@ -281,6 +280,10 @@ services:
     environment:
       DATABASE_URL: postgres://${IDENTITY_DB_USER}:${IDENTITY_DB_PASSWORD}@identity-postgres:5432/${IDENTITY_DB_NAME}?sslmode=disable
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+      # Первый суперадминистратор админки; создаётся один раз, дальше пароль меняют в админке.
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?run make setup}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?run make setup}
+      SUPERADMIN_NAME: ${SUPERADMIN_NAME:-Суперадминистратор}
     restart: on-failure:3
     depends_on:
       identity-migrate: { condition: service_completed_successfully }
@@ -316,6 +319,8 @@ services:
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       WEATHER_URL: ${WEATHER_URL:-}
+      # Подсказка модератору по жалобе; без Qwen (make llm) остаются правила.
+      LLM_SERVICE_URL: http://llm-service:8080
       S3_ENDPOINT: http://files-s3:8333
       S3_REGION: us-east-1
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?required}

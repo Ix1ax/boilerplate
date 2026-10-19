@@ -45,9 +45,21 @@ export type ReportPage = Schemas['ReportPage'];
 export type MyReport = Schemas['MyReport'];
 export type ReportReason = Schemas['ReportInput']['reason'];
 export type ReportStatus = MyReport['status'];
+export type ReportTargetType = Report['target_type'];
+export type ReportAnalysis = Schemas['ReportAnalysis'];
+export type ReportAnalysisFlag = ReportAnalysis['flags'][number]['code'];
 export type Account = Schemas['Account'];
 export type AccountPage = Schemas['AccountPage'];
 export type AccountDetail = Schemas['AccountDetail'];
+/** Администратор текущей админской сессии (GET /api/v1/admin/me) — отдельный вход, не CurrentUser. */
+export type AdminUser = Schemas['AdminUser'];
+/** Учётная запись администратора (управляет суперадминистратор: /api/v1/admin/admins). */
+// Имена Administrator*, а не AdminAccount*: AdminAccount в admin.ts — учётная запись пользователя в админке.
+export type Administrator = Schemas['Admin'];
+export type AdministratorPage = Schemas['AdminPage'];
+export type AdministratorDetail = Schemas['AdminDetail'];
+export type AdminRole = Administrator['role'];
+export type AdminStatus = Administrator['status'];
 /** Текущий пользователь (GET /api/v1/me); provider — способ входа. */
 export type CurrentUser = Schemas['User'];
 export type AuthProvider = CurrentUser['provider'];
@@ -102,6 +114,40 @@ export const reportStatusLabels: Record<ReportStatus, string> = {
   open: 'На рассмотрении',
   resolved: 'Меры приняты',
   dismissed: 'Нарушений не нашли',
+};
+
+/** На что жалоба — подпись для очереди жалоб в админке и для «моих жалоб». */
+export const reportTargetLabels: Record<ReportTargetType, string> = {
+  event: 'Мероприятие',
+  comment: 'Сообщение в обсуждении',
+  review: 'Отзыв',
+  story: 'История',
+  direct_message: 'Личное сообщение',
+};
+
+/** Подсказка ИИ по жалобе: решает админ, подписи не должны звучать как приговор. */
+export const aiVerdictLabels: Record<ReportAnalysis['verdict'], string> = {
+  ok: 'Признаков нарушения не видно',
+  needs_review: 'Есть признаки нарушения — проверьте',
+};
+
+export const aiRiskLabels: Record<
+  NonNullable<ReportAnalysis['advice']>['risk'],
+  string
+> = {
+  low: 'Низкий риск',
+  medium: 'Средний риск',
+  high: 'Высокий риск',
+};
+
+export const aiFlagLabels: Record<ReportAnalysisFlag, string> = {
+  money: 'Деньги или реквизиты',
+  commerce: 'Реклама или продажа',
+  insult: 'Оскорбления',
+  link: 'Ссылка',
+  contact: 'Телефон или e-mail',
+  shouting: 'Заглавные буквы',
+  many_reports: 'Много жалоб',
 };
 
 export const authProviderLabels: Record<AuthProvider, string> = {
@@ -236,14 +282,11 @@ const eventFields = {
 export const eventInputSchema = z
   .object({
     ...eventFields,
-<<<<<<< HEAD
+    format: z.enum(['offline', 'online']).default('offline'),
     zone: eventFields.zone.default(''),
     meeting_host: eventFields.meeting_host.default(''),
     step_free: eventFields.step_free.default(false),
     companion_allowed: eventFields.companion_allowed.default(false),
-=======
-    format: z.enum(['offline', 'online']).default('offline'),
->>>>>>> main
     description: eventFields.description.default(''),
     level: level.default('any'),
     requirements: eventFields.requirements.default(''),
@@ -360,6 +403,10 @@ export type CommentValues = z.output<typeof commentSchema>;
 export const reasonSchema = z.object({
   reason: chars(1, 1000, 'Укажите причину: её увидит другая сторона'),
 });
+/** Причина решения по отзыву, истории или личному сообщению: уходит автору, сервер ограничивает 500 символами. */
+export const socialModerationReasonSchema = z.object({
+  reason: chars(1, 500, 'Укажите причину до 500 символов: её увидит автор'),
+});
 /** Необязательная причина: отказ в заявке участника, отмена события организатором — тоже обязательна на сервере. */
 export const optionalReasonSchema = z.object({
   reason: optionalText(1000, 'Причина — не длиннее 1000 символов'),
@@ -421,7 +468,7 @@ export const profilePatchSchema = z.object({
 });
 export type ProfilePatchValues = z.output<typeof profilePatchSchema>;
 
-/** Жалоба на мероприятие или сообщение. Для «Другое» пояснение обязательно, как на сервере. */
+/** Жалоба на мероприятие, сообщение, отзыв, историю или личное сообщение. Для «Другое» пояснение обязательно, как на сервере. */
 export const reportSchema = z
   .object({
     reason: z.enum(
@@ -481,3 +528,58 @@ export const changePasswordSchema = z
     message: 'Новый пароль совпадает с текущим',
   });
 export type ChangePasswordValues = z.output<typeof changePasswordSchema>;
+
+// ── Вход в админку (отдельные учётные записи администраторов) ───────────────
+// Пароль администратора длиннее: от 12 символов. Сервер проверяет то же самое и список частых паролей.
+
+const adminPassword = chars(
+  12,
+  128,
+  'Пароль администратора — от 12 до 128 символов',
+).refine(
+  (v) => /\p{L}/u.test(v) && /\p{N}/u.test(v),
+  'Пароль должен содержать буквы и цифры',
+);
+
+/** Вход в админку (POST /auth/admin/login). */
+export const adminLoginSchema = loginSchema;
+export type AdminLoginValues = LoginValues;
+
+/** Смена своего пароля администратора (POST /auth/admin/password). */
+export const adminChangePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, 'Введите текущий пароль'),
+    new_password: adminPassword,
+  })
+  .refine((v) => v.current_password !== v.new_password, {
+    path: ['new_password'],
+    message: 'Новый пароль совпадает с текущим',
+  });
+export type AdminChangePasswordValues = z.output<
+  typeof adminChangePasswordSchema
+>;
+
+/** Новый администратор (POST /api/v1/admin/admins) — только суперадминистратор. */
+export const adminCreateSchema = z.object({
+  email,
+  name: chars(2, 100, 'Имя — от 2 до 100 символов'),
+  password: adminPassword,
+});
+export type AdminCreateValues = z.output<typeof adminCreateSchema>;
+
+/** Новый пароль администратору (POST /api/v1/admin/admins/{id}/password). */
+export const adminResetPasswordSchema = z.object({ password: adminPassword });
+export type AdminResetPasswordValues = z.output<
+  typeof adminResetPasswordSchema
+>;
+
+export const adminRoleLabels: Record<AdminRole, string> = {
+  superadmin: 'Суперадминистратор',
+  admin: 'Администратор',
+};
+
+export const adminStatusLabels: Record<AdminStatus, string> = {
+  active: 'Активен',
+  blocked: 'Заблокирован',
+  deleted: 'Удалён',
+};

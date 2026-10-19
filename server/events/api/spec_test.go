@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"example.com/hackathon/server/events/api"
+	"example.com/hackathon/server/events/internal/copilot"
 	"example.com/hackathon/server/events/internal/events"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
@@ -16,6 +17,7 @@ func register(api *gin.RouterGroup) {
 	s := events.New(nil)
 	events.Register(api, s)
 	events.RegisterAdmin(api, s)
+	copilot.Register(api.Group("/admin"), copilot.New(nil, nil))
 }
 
 var httpMethods = map[string]bool{"get": true, "post": true, "put": true, "patch": true, "delete": true, "head": true, "options": true}

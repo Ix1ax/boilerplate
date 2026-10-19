@@ -56,7 +56,7 @@ make e2e          # Playwright против живого стека (UI + ИИ-�
 
 ## Архитектурные инварианты (нарушать нельзя)
 
-1. Браузер ходит **только в gateway**. Сервисы не публикуют порты и принимают запросы только с `X-Internal-Token` + `X-User-ID` (`platform.TrustGateway`). Владелец записи — всегда `platform.Owner(c)`, проверка владельца — **в SQL** (`WHERE owner_id=$1`). Роли приходят в `X-User-Roles`, почта — в `X-User-Email` (`platform.Email(ctx)`): админские маршруты закрывайте `platform.RequireRole("admin")` в сервисе **и** `auth.RequireRole` в gateway.
+1. Браузер ходит **только в gateway**. Сервисы не публикуют порты и принимают запросы только с `X-Internal-Token` + `X-User-ID` (`platform.TrustGateway`). Владелец записи — всегда `platform.Owner(c)`, проверка владельца — **в SQL** (`WHERE owner_id=$1`). Роли приходят в `X-User-Roles`, почта — в `X-User-Email` (`platform.Email(ctx)`): админские маршруты кладите под `/api/v1/admin/*`: gateway пускает туда только отдельную админскую сессию (`auth.AdminSessions`, вход `/auth/admin/login`), а в сервисе закрывайте `platform.RequireRole("admin")`. Роль `admin` у пользовательских сессий и токенов «Столото ID» gateway вырезает.
 2. Роли и доступ проверяет Go, не клиент. Токены не хранятся в браузере.
 3. Сервисы не импортируют друг друга и не читают чужие базы (у каждого свой Postgres). Связь — HTTP через gateway или события в RabbitMQ через transactional outbox (образец — `server/tasks/internal/broker`). Обработчики событий идемпотентны.
 4. Миграции — только новыми файлами в `internal/database/migrations` сервиса; применённые не правим.

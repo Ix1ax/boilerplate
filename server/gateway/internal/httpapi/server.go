@@ -39,6 +39,8 @@ type Options struct {
 	AppOrigin string
 	// OIDCIssuer — публичный адрес realm Keycloak; подставляется в Swagger для входа.
 	OIDCIssuer string
+	// Admin — отдельный вход в админку (nil — админка недоступна: /api/v1/admin/* отвечает 503).
+	Admin *auth.AdminSessions
 }
 
 // NewGateway собирает роутер. Порядок обработки запроса:
@@ -90,6 +92,10 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 		sessions[0].Register(r)
 		sessions[0].RegisterProviders(r)
 	}
+	if opts.Admin != nil {
+		opts.Admin.Register(r)
+	}
+	registerAdmin(r, d, up, opts)
 	api := r.Group("/api/v1", auth.Middleware(verifier, sessions...))
 	api.GET("/me", func(c *gin.Context) {
 		i := auth.Current(c)
@@ -99,7 +105,6 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 		}
 		c.JSON(200, gin.H{"id": i.Subject, "email": i.Email, "name": i.Name, "roles": roles, "provider": i.Provider})
 	})
-	api.GET("/admin/ping", auth.RequireRole("admin"), func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	if d != nil {
 		// Счётчик общий для экземпляров API. Без Redis изменять данные временно нельзя.
 		api.Use(limit(d, "rate", 60, true), idempotency(d))
@@ -119,8 +124,6 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 			})
 			g.Any("", h)
 			g.Any("/*path", h)
-			// Админские отчёты сервиса задач: роль проверяется и здесь, и в самом сервисе.
-			api.GET("/admin/tasks/*path", auth.RequireRole("admin"), h)
 		}
 		if up.LLM != nil {
 			// Генерация дорогая (CPU): отдельный, более строгий лимит на любой метод.
@@ -135,9 +138,6 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 			// соединения (это проверяет TestWebsocketSurvivesServerTimeouts).
 			api.GET("/ws", websocketGuard(opts.AppOrigin), proxy(up.Realtime, internalToken))
 		}
-		if up.Audit != nil {
-			api.GET("/admin/audit", auth.RequireRole("admin"), proxy(up.Audit, internalToken))
-		}
 		if up.Notifications != nil {
 			// slowUpstream: поток /notifications/stream (SSE) живёт до нескольких минут.
 			h := proxy(up.Notifications, internalToken, slowUpstream)
@@ -151,23 +151,6 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 				api.Any(prefix, h)
 				api.Any(prefix+"/*path", h)
 			}
-			// Модерация: роль проверяется и здесь, и в самом сервисе.
-			for _, prefix := range []string{"/admin/events", "/admin/organizations", "/admin/comments", "/admin/sports", "/admin/domain", "/admin/reports"} {
-				api.Any(prefix, auth.RequireRole("admin"), h)
-				api.Any(prefix+"/*path", auth.RequireRole("admin"), h)
-			}
-		}
-		if up.Moderation != nil {
-			// Админка-аналитика: читает проекции, построенные из доменных событий events.
-			h := proxy(up.Moderation, internalToken)
-			api.Any("/admin/moderation", auth.RequireRole("admin"), h)
-			api.Any("/admin/moderation/*path", auth.RequireRole("admin"), h)
-		}
-		if up.Identity != nil {
-			// Учётные записи обычной регистрации: поиск и блокировка — только админ.
-			h := proxy(up.Identity, internalToken)
-			api.Any("/admin/accounts", auth.RequireRole("admin"), h)
-			api.Any("/admin/accounts/*path", auth.RequireRole("admin"), h)
 		}
 		if up.Files != nil {
 			h := proxy(up.Files, internalToken)
@@ -184,6 +167,61 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 		c.Status(404)
 	})
 	return r
+}
+
+// registerAdmin подключает /api/v1/admin/* — только по админской сессии (своя cookie, свой вход).
+// Пользовательская сессия и Bearer сюда не попадают: у этих маршрутов нет auth.Middleware.
+// Роль admin проверяется и здесь, и в каждом сервисе.
+func registerAdmin(r *gin.Engine, d *platform.Dependencies, up Upstreams, opts Options) {
+	guard := func(c *gin.Context) {
+		c.AbortWithStatusJSON(503, gin.H{"error": gin.H{"code": "admin_unavailable", "message": "Вход в админку не настроен"}})
+	}
+	if opts.Admin != nil {
+		guard = opts.Admin.Middleware()
+	}
+	g := r.Group("/api/v1/admin", guard, auth.RequireRole("admin"))
+	g.GET("/me", auth.Me)
+	g.GET("/ping", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
+	if d == nil {
+		return
+	}
+	g.Use(limit(d, "rate", 60, true), idempotency(d))
+	if opts.Audit != nil {
+		g.Use(auditTrail(opts.Audit))
+	}
+	// Подсказка модератору по жалобе (POST /admin/reports/:id/analyze) может вызвать модель:
+	// тот же строгий лимит, что у /llm и ИИ-проверки задач.
+	costly := limit(d, "rate:llm", 10, false)
+	g.Use(func(c *gin.Context) {
+		if c.Request.Method == http.MethodPost && strings.HasSuffix(c.Request.URL.Path, "/analyze") {
+			costly(c)
+			return
+		}
+		c.Next()
+	})
+	proxyAll := func(target *url.URL, prefixes ...string) {
+		if target == nil {
+			return
+		}
+		h := proxy(target, opts.InternalToken)
+		for _, prefix := range prefixes {
+			g.Any(prefix, h)
+			g.Any(prefix+"/*path", h)
+		}
+	}
+	// Отчёты образца задач и журнал действий — только чтение.
+	if up.Tasks != nil {
+		g.GET("/tasks/*path", proxy(up.Tasks, opts.InternalToken))
+	}
+	if up.Audit != nil {
+		g.GET("/audit", proxy(up.Audit, opts.InternalToken))
+	}
+	// Модерация домена: решения принимает events, аналитику отдаёт moderation.
+	// /reviews, /stories, /messages — решения по жалобам на отзывы, истории и личные сообщения.
+	proxyAll(up.Events, "/events", "/organizations", "/comments", "/sports", "/domain", "/reports", "/profiles", "/reviews", "/stories", "/messages")
+	proxyAll(up.Moderation, "/moderation")
+	// Учётные записи пользователей (admin) и администраторы (только superadmin — проверяет identity).
+	proxyAll(up.Identity, "/accounts", "/admins")
 }
 
 func upstreamsReady(ctx context.Context, up Upstreams) bool {

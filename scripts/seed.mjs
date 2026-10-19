@@ -47,7 +47,6 @@ const fixture = async (name) =>
 const users = {
   demo: [env.DEMO_EMAIL, env.DEMO_PASSWORD],
   second: [env.SECOND_DEMO_EMAIL, env.SECOND_DEMO_PASSWORD],
-  admin: [env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD],
   org: [env.ORG_DEMO_EMAIL, env.ORG_DEMO_PASSWORD],
   org_pending: [env.ORG_PENDING_DEMO_EMAIL, env.ORG_PENDING_DEMO_PASSWORD],
   org_rejected: [env.ORG_REJECTED_DEMO_EMAIL, env.ORG_REJECTED_DEMO_PASSWORD],
@@ -60,7 +59,7 @@ const token = async (user) => {
 };
 const tasks = await fixture('tasks.json');
 const files = await fixture('files.json');
-for (const user of ['demo', 'second', 'admin']) {
+for (const user of ['demo', 'second']) {
   const auth = await token(user);
   const existing = await (await call('/api/v1/tasks?limit=1', auth)).json();
   if (existing.total > 0) {
@@ -117,11 +116,45 @@ const json = async (response, status, what) => {
   assert.equal(response.status, status, `${what}: ${response.status} ${text}`);
   return text ? JSON.parse(text) : null;
 };
-const as = async (user, path, method = 'GET', body) =>
-  call(path, await token(user), {
+// Админка — отдельный вход: решения модератора идут от суперадминистратора по админской cookie
+// (Origin обязателен — gateway проверяет его у админских запросов).
+let adminCookie;
+const adminLogin = async () => {
+  const response = await fetch(`${base}/auth/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: env.APP_ORIGIN },
+    body: JSON.stringify({
+      email: env.SUPERADMIN_EMAIL,
+      password: env.SUPERADMIN_PASSWORD,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  assert.equal(
+    response.status,
+    200,
+    'Не удалось войти в админку суперадминистратором',
+  );
+  return response.headers
+    .get('set-cookie')
+    .match(/starter_admin_session=[^;]+/)[0];
+};
+const as = async (user, path, method = 'GET', body) => {
+  const init = {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  };
+  if (user !== 'admin') return call(path, await token(user), init);
+  adminCookie ??= await adminLogin();
+  return fetch(`${base}${path}`, {
+    ...init,
+    headers: {
+      Cookie: adminCookie,
+      Origin: env.APP_ORIGIN,
+      'Content-Type': 'application/json',
+    },
+    signal: AbortSignal.timeout(15_000),
   });
+};
 // Время событий — относительно момента сида по Красноярску (UTC+7): демо не устаревает.
 const at = (day, time, hours = 0) => {
   const local = new Date(Date.now() + 7 * 3600_000 + day * 86_400_000);

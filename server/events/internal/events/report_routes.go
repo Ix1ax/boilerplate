@@ -10,6 +10,9 @@ import (
 //
 //	POST   /events/:id/report                       пожаловаться на мероприятие
 //	POST   /events/:id/comments/:cid/report         пожаловаться на сообщение
+//	POST   /reviews/:review/report                  пожаловаться на отзыв
+//	POST   /stories/:story/report                   пожаловаться на историю (видна жалующемуся)
+//	POST   /chats/:chat/messages/:message/report    пожаловаться на личное сообщение (участник чата)
 //	DELETE /events/:id/comments/:cid                удалить своё сообщение
 //	GET    /my/reports                              мои жалобы и решения по ним
 //	POST   /events/:id/participants/:pid/remove     организатор исключает участника с причиной
@@ -37,6 +40,32 @@ func registerReports(g *gin.RouterGroup, s *Service) {
 	}
 	g.POST("/events/:id/report", report("event"))
 	g.POST("/events/:id/comments/:cid/report", report("comment"))
+	// Имена параметров совпадают с соседними маршрутами соцфункций: так требует дерево gin.
+	reportSocial := func(targetType, parentParam, idParam string) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			parent, target := "", c.Param(idParam)
+			if parentParam != "" {
+				parent = c.Param(parentParam)
+			}
+			if uuid.Validate(target) != nil || parentParam != "" && uuid.Validate(parent) != nil {
+				fail(c, 400, "invalid_id", "Ожидается идентификатор UUID")
+				return
+			}
+			var in ReportInput
+			if c.ShouldBindJSON(&in) != nil {
+				fail(c, 400, "invalid_body", "Ожидается JSON с полями reason и details")
+				return
+			}
+			r, err := s.Report(c.Request.Context(), actor(c), targetType, parent, target, in)
+			if handle(c, err) {
+				return
+			}
+			c.JSON(201, r)
+		}
+	}
+	g.POST("/reviews/:review/report", reportSocial("review", "", "review"))
+	g.POST("/stories/:story/report", reportSocial("story", "", "story"))
+	g.POST("/chats/:chat/messages/:message/report", reportSocial("direct_message", "chat", "message"))
 	g.DELETE("/events/:id/comments/:cid", withID(func(c *gin.Context, id string) {
 		cid := c.Param("cid")
 		if uuid.Validate(cid) != nil {
@@ -80,14 +109,14 @@ func registerReports(g *gin.RouterGroup, s *Service) {
 //	POST /admin/reports/:id/dismiss            отклонить все открытые жалобы на эту цель с пояснением
 //	POST /admin/comments/:id/restore           вернуть скрытое сообщение
 //
-// Принять жалобу — значит скрыть сообщение или снять событие обычными маршрутами модерации:
-// открытые жалобы на цель закрываются в той же транзакции.
+// Принять жалобу — значит скрыть или удалить цель обычными маршрутами модерации (сообщение,
+// событие, а для соцконтента — registerAdminSocial): открытые жалобы закрываются в той же транзакции.
 func registerAdminReports(admin *gin.RouterGroup, s *Service) {
 	admin.GET("/reports", func(c *gin.Context) {
 		limit, offset, ok := platform.ParsePagination(c.DefaultQuery("limit", "20"), c.DefaultQuery("offset", "0"))
 		status, target := c.Query("status"), c.Query("target_type")
-		if !ok || (status != "" && status != "open" && status != "resolved" && status != "dismissed") || (target != "" && target != "event" && target != "comment") {
-			fail(c, 400, "invalid_query", "Проверьте status (open, resolved, dismissed), target_type (event, comment), limit и offset")
+		if !ok || (status != "" && status != "open" && status != "resolved" && status != "dismissed") || (target != "" && !reportTargetTypes[target]) {
+			fail(c, 400, "invalid_query", "Проверьте status (open, resolved, dismissed), target_type (event, comment, review, story, direct_message), limit и offset")
 			return
 		}
 		page, err := s.AdminReports(c.Request.Context(), status, target, limit, offset)

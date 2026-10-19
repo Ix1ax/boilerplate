@@ -24,6 +24,12 @@ func TestLogged(t *testing.T) {
 		{"новое сообщение", Envelope{Entity: "comment", Kind: "comment", From: "none", To: "visible"}, false},
 		{"запись участника", Envelope{Entity: "participation", Kind: "participation", From: "pending", To: "confirmed"}, false},
 		{"переотправка снимка", Envelope{Entity: "event", Kind: "event", Actor: "snapshot"}, false},
+		{"отказ по жалобе", Envelope{Entity: "report", Kind: "report", From: "open", To: "dismissed", Actor: "Модератор"}, true},
+		{"жалоба принята — уже в журнале как скрытие цели", Envelope{Entity: "report", Kind: "report", From: "open", To: "resolved", Actor: "Модератор"}, false},
+		{"новая жалоба", Envelope{Entity: "report", Kind: "report", From: "none", To: "open", Actor: "Анна"}, false},
+		{"скрытие направления", Envelope{Entity: "sport", Kind: "sport", From: "visible", To: "hidden", Actor: "Модератор"}, true},
+		{"возврат направления", Envelope{Entity: "sport", Kind: "sport", From: "hidden", To: "visible", Actor: "Модератор"}, true},
+		{"новое направление", Envelope{Entity: "sport", Kind: "sport", From: "none", To: "visible", Actor: "Анна"}, false},
 	}
 	for _, tc := range cases {
 		if got := Logged(tc.e); got != tc.want {

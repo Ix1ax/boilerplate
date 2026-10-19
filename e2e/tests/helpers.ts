@@ -30,8 +30,13 @@ export const login = async (
 export const appReady = (page: Page) =>
   expect(page.locator('main')).toBeVisible({ timeout: 15_000 });
 
-export const loginAsAdmin = (page: Page) =>
-  login(page, env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+// У админки теперь свой вход (/auth/admin/login, cookie starter_admin_session): «Столото ID» и
+// пользовательская сессия админских данных не открывают. Экран входа делает команда фронтенда
+// во frontend/admin — до этого админские e2e помечены test.fixme.
+export const loginAsAdmin = async (page: Page) => {
+  void page;
+  throw new Error('Вход в админку ещё не перенесён во frontend/admin');
+};
 
 // Обучение (driver.js) запускается при первом входе и перекрывает экран: тесты сценариев
 // проверяют сами экраны, поэтому для всех вкладок контекста обучение считается пройденным.

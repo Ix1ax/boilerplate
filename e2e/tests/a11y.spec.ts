@@ -47,7 +47,8 @@ test('дашборд задач и визард доступны (axe)', async (
   await checkPage(page);
 });
 
-test('админский дашборд доступен (axe)', async ({ page }) => {
+// Админка переезжает на отдельный вход (frontend/admin): вернуть тест вместе с экраном входа.
+test.fixme('админский дашборд доступен (axe)', async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto('/dashboard/admin');
   await checkPage(page);

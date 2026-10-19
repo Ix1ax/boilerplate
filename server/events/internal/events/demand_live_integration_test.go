@@ -24,6 +24,13 @@ func TestDemandClaimAndArrival(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Чтение списка ничего не пересчитывает: предложения собирает только фоновое задание.
+	if before, err := repo.DemandProposals(ctx, actors[0]); err != nil || len(before) != 0 {
+		t.Fatalf("GET не должен собирать предложения: %+v %v", before, err)
+	}
+	if err := svc.RefreshDemandProposals(ctx); err != nil {
+		t.Fatal(err)
+	}
 	proposals, err := repo.DemandProposals(ctx, actors[0])
 	if err != nil || len(proposals) != 1 {
 		t.Fatalf("предложения: %+v %v", proposals, err)

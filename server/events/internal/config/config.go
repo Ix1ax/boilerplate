@@ -13,12 +13,14 @@ type Config struct {
 	// AMQPURL необязателен: без брокера уведомления копятся в outbox и уйдут позже.
 	AMQPURL string
 	// WeatherURL — прогноз Open-Meteo для уличных встреч; пусто — публичный API, off — выключить.
-	WeatherURL                                                                        string
+	WeatherURL string
+	// LLMServiceURL необязателен: без него подсказка модератору работает только по правилам.
+	LLMServiceURL                                                                     string
 	StoriesEndpoint, StoriesRegion, StoriesAccessKey, StoriesSecretKey, StoriesBucket string
 }
 
 func Load() (Config, error) {
-	c := Config{Addr: Value("HTTP_ADDR", ":8080"), DatabaseURL: os.Getenv("DATABASE_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"), AMQPURL: os.Getenv("AMQP_URL"), WeatherURL: os.Getenv("WEATHER_URL")}
+	c := Config{Addr: Value("HTTP_ADDR", ":8080"), DatabaseURL: os.Getenv("DATABASE_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"), AMQPURL: os.Getenv("AMQP_URL"), WeatherURL: os.Getenv("WEATHER_URL"), LLMServiceURL: os.Getenv("LLM_SERVICE_URL")}
 	c.StoriesEndpoint, c.StoriesRegion = os.Getenv("S3_ENDPOINT"), Value("S3_REGION", "us-east-1")
 	c.StoriesAccessKey, c.StoriesSecretKey, c.StoriesBucket = os.Getenv("S3_ACCESS_KEY"), os.Getenv("S3_SECRET_KEY"), os.Getenv("STORIES_S3_BUCKET")
 	if c.StoriesEndpoint != "" && (c.StoriesAccessKey == "" || c.StoriesSecretKey == "" || c.StoriesBucket == "") {

@@ -94,6 +94,18 @@ func TestReportsCommentsAndRemoval(t *testing.T) {
 		if _, err = s.DismissReport(ctx, admin, r.ID, "ещё раз"); !errors.Is(err, platform.ErrTransition) {
 			t.Fatalf("повторный отказ: %v", err)
 		}
+		// Отказ — решение админа: moderation получает снимок жалобы для журнала, дашборда и CSV.
+		var status, title, resolvedBy, comment string
+		must(db.QueryRow(ctx, `SELECT payload->'snapshot'->>'status', payload->'snapshot'->>'target_title', payload->'snapshot'->>'resolved_by', payload->>'comment'
+FROM outbox WHERE type='domain.report.changed' AND payload->>'id'=$1 AND payload->>'to'='dismissed'`, r.ID).Scan(&status, &title, &resolvedBy, &comment))
+		if status != "dismissed" || title != "«"+e.Title+"»" || resolvedBy == "" || comment != "Проверили — дорожка открыта" {
+			t.Fatalf("доменное событие отказа: %s %s %s %s", status, title, resolvedBy, comment)
+		}
+		var created int
+		must(db.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE type='domain.report.changed' AND payload->>'id'=$1 AND payload->>'from'='none'`, r.ID).Scan(&created))
+		if created != 1 {
+			t.Fatalf("событий о создании жалобы: %d", created)
+		}
 		var notified int
 		must(db.QueryRow(ctx, "SELECT count(*) FROM outbox WHERE type='notification.requested' AND user_id=$1 AND payload->>'title' LIKE 'Жалоба рассмотрена%'", anna.ID).Scan(&notified))
 		if notified != 2 {

@@ -69,8 +69,17 @@ for (const name of [
   'INTERNAL_TOKEN',
   'S3_SECRET_KEY',
   'KEYCLOAK_ADMIN_PASSWORD',
-  ...(!production ? ['DEMO_PASSWORD', 'ADMIN_DEMO_PASSWORD', 'SECOND_DEMO_PASSWORD',
-    'ORG_DEMO_PASSWORD', 'ORG_PENDING_DEMO_PASSWORD', 'ORG_REJECTED_DEMO_PASSWORD'] : []),
+  // Суперадминистратор админки нужен и на рабочем окружении: без него в админку войти некому.
+  'SUPERADMIN_PASSWORD',
+  ...(!production
+    ? [
+        'DEMO_PASSWORD',
+        'SECOND_DEMO_PASSWORD',
+        'ORG_DEMO_PASSWORD',
+        'ORG_PENDING_DEMO_PASSWORD',
+        'ORG_REJECTED_DEMO_PASSWORD',
+      ]
+    : []),
   'MAILPIT_PASSWORD',
   ...(production ? ['METRICS_TOKEN'] : []),
 ]) {
@@ -121,44 +130,46 @@ for (const client of realm.clients) {
     client.webOrigins = origins;
   }
 }
-// Рабочий realm начинается без тестовых пользователей, в том числе без демоадминистратора.
-realm.users = production ? [] : [
-  ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Анна', 'Смирнова', ['user']],
-  ['SECOND_DEMO_EMAIL', 'SECOND_DEMO_PASSWORD', 'Игорь', 'Волков', ['user']],
-  ['ORG_DEMO_EMAIL', 'ORG_DEMO_PASSWORD', 'Олег', 'Ладьин', ['user']],
-  [
-    'ORG_PENDING_DEMO_EMAIL',
-    'ORG_PENDING_DEMO_PASSWORD',
-    'Мария',
-    'Соснова',
-    ['user'],
-  ],
-  [
-    'ORG_REJECTED_DEMO_EMAIL',
-    'ORG_REJECTED_DEMO_PASSWORD',
-    'Пётр',
-    'Пульсов',
-    ['user'],
-  ],
-  [
-    'ADMIN_DEMO_EMAIL',
-    'ADMIN_DEMO_PASSWORD',
-    'Модератор',
-    'Платформы',
-    ['user', 'admin'],
-  ],
-].map(([email, password, firstName, lastName, realmRoles]) => ({
-  username: values[email],
-  email: values[email],
-  enabled: true,
-  emailVerified: true,
-  firstName,
-  lastName,
-  realmRoles,
-  credentials: [
-    { type: 'password', value: '${' + password + '}', temporary: false },
-  ],
-}));
+// Рабочий realm начинается без тестовых пользователей. Администраторов в Keycloak нет совсем:
+// у админки свой вход (SUPERADMIN_EMAIL и SUPERADMIN_PASSWORD, сервис identity).
+realm.users = production
+  ? []
+  : [
+      ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Анна', 'Смирнова', ['user']],
+      [
+        'SECOND_DEMO_EMAIL',
+        'SECOND_DEMO_PASSWORD',
+        'Игорь',
+        'Волков',
+        ['user'],
+      ],
+      ['ORG_DEMO_EMAIL', 'ORG_DEMO_PASSWORD', 'Олег', 'Ладьин', ['user']],
+      [
+        'ORG_PENDING_DEMO_EMAIL',
+        'ORG_PENDING_DEMO_PASSWORD',
+        'Мария',
+        'Соснова',
+        ['user'],
+      ],
+      [
+        'ORG_REJECTED_DEMO_EMAIL',
+        'ORG_REJECTED_DEMO_PASSWORD',
+        'Пётр',
+        'Пульсов',
+        ['user'],
+      ],
+    ].map(([email, password, firstName, lastName, realmRoles]) => ({
+      username: values[email],
+      email: values[email],
+      enabled: true,
+      emailVerified: true,
+      firstName,
+      lastName,
+      realmRoles,
+      credentials: [
+        { type: 'password', value: '${' + password + '}', temporary: false },
+      ],
+    }));
 await writeFile(
   path.join(root, '.local/keycloak/hackathon-realm.json'),
   JSON.stringify(realm, null, 2) + '\n',

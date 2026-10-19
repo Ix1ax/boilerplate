@@ -18,6 +18,7 @@ import (
 	"example.com/hackathon/server/events/api"
 	"example.com/hackathon/server/events/internal/broker"
 	"example.com/hackathon/server/events/internal/config"
+	"example.com/hackathon/server/events/internal/copilot"
 	"example.com/hackathon/server/events/internal/database"
 	"example.com/hackathon/server/events/internal/events"
 	"example.com/hackathon/server/events/internal/platform"
@@ -109,6 +110,12 @@ func run(logger *slog.Logger) error {
 	}
 	events.Register(group, service)
 	events.RegisterAdmin(group, service)
+	// Подсказка модератору по жалобе: без LLM_SERVICE_URL работает только на правилах.
+	var advisor copilot.Advisor
+	if c.LLMServiceURL != "" {
+		advisor = copilot.NewHTTPAdvisor(c.LLMServiceURL, c.InternalToken)
+	}
+	copilot.Register(group.Group("/admin", platform.RequireRole("admin")), copilot.New(repo, advisor))
 	go platform.Every(ctx, db, logger, "outbox-cleanup", time.Hour, repo.CleanupOutbox)
 	go platform.Every(ctx, db, logger, "story-media-cleanup", 10*time.Minute, func(ctx context.Context) error { return repo.CleanupStoryMedia(ctx, service.StoryMedia) })
 	// Срок сбора состава проверяем раз в минуту: отмена должна прийти вовремя, а не через час.

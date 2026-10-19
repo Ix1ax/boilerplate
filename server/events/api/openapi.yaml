@@ -313,9 +313,9 @@ paths:
       operationId: getEvent
       summary: Карточка мероприятия
       description:
-        Опубликованное видят все. Снятое, удалённое или отменённое — организатор, записавшиеся (с
-        причиной в `moderation_reason`) и админ; остальным — 404. `private_info` заполнено только для
-        организатора, подтверждённых участников и админа.
+        Опубликованное видят все. Снятое, удалённое или отменённое — организатор и записавшиеся (с
+        причиной в `moderation_reason`); остальным — 404. `private_info` заполнено только для
+        организатора и подтверждённых участников. Админ смотрит `GET /api/v1/admin/events/{id}`.
       responses:
         '200':
           description: Мероприятие
@@ -678,8 +678,9 @@ paths:
       operationId: listParticipants
       summary: Участники и заявки
       description:
-        Организатор и админ видят все записи (сначала ожидающие решения) с сообщениями к заявкам.
-        Остальные — только подтверждённых участников по имени («кто собирается»).
+        Организатор видит все записи (сначала ожидающие решения) с сообщениями к заявкам.
+        Остальные — только подтверждённых участников по имени («кто собирается»). Админ — `GET
+        /api/v1/admin/events/{id}/participants`.
       responses:
         '200':
           description: Список записей
@@ -780,7 +781,7 @@ paths:
         - Обсуждение
       operationId: listComments
       summary: Обсуждение мероприятия
-      description: Сообщения по времени. Скрытые модератором показываются пометкой без текста (текст видит только админ).
+      description: Сообщения по времени. Скрытые модератором показываются пометкой без текста (текст видит админ — `GET /api/v1/admin/events/{id}/comments`).
       responses:
         '200':
           description: Сообщения
@@ -1274,6 +1275,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminListOrganizations
+      security:
+        - adminCookie: []
       summary: Заявки и поиск организаций
       description: Все статусы; ожидающие решения первыми.
       parameters:
@@ -1312,6 +1315,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminGetOrganization
+      security:
+        - adminCookie: []
       summary: Карточка организации для админа
       description:
         Организация в любом статусе, её представитель, история допуска с причинами и все события (во всех
@@ -1338,6 +1343,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: approveOrganization
+      security:
+        - adminCookie: []
       summary: Допустить организацию
       description: После допуска организация публикует события без повторной модерации. Представитель получит уведомление.
       responses:
@@ -1366,6 +1373,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: rejectOrganization
+      security:
+        - adminCookie: []
       summary: Отклонить заявку организации
       description: Причина обязательна — представитель увидит её и сможет исправить профиль.
       requestBody:
@@ -1402,6 +1411,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminListEvents
+      security:
+        - adminCookie: []
       summary: Поиск мероприятий во всех статусах
       description: Те же фильтры, что у выдачи, плюс `status`. Из строки — переход к организатору и обсуждению.
       parameters:
@@ -1440,6 +1451,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: unpublishEvent
+      security:
+        - adminCookie: []
       summary: Снять мероприятие с публикации
       description:
         Событие пропадает из выдачи, запись закрывается (в том числе по прямой ссылке). Существующие
@@ -1480,6 +1493,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: deleteEvent
+      security:
+        - adminCookie: []
       summary: Удалить мероприятие
       description: Мягкое удаление с причиной; вернуть нельзя. Записи сохраняются для истории.
       requestBody:
@@ -1516,6 +1531,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: restoreEvent
+      security:
+        - adminCookie: []
       summary: Вернуть снятое мероприятие в публикацию
       responses:
         '200':
@@ -1543,6 +1560,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminEventHistory
+      security:
+        - adminCookie: []
       summary: История события
       description:
         Публикация, снятие, удаление, отмена и сбор состава — кто, когда и с какой причиной. `kind` —
@@ -1569,11 +1588,149 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminGetEvent
+      security:
+        - adminCookie: []
+      summary: Карточка мероприятия для админа
+      description:
+        Мероприятие в любом статусе, включая снятое, удалённое и отменённое, с `moderation_reason` и
+        `private_info`. Админка не вызывает пользовательские маршруты — у неё своя сессия.
+      responses:
+        '200':
+          description: Мероприятие
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/comments:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminListComments
+      security:
+        - adminCookie: []
+      summary: Обсуждение мероприятия для админа
+      description: Все сообщения по времени, включая скрытые и удалённые — с текстом и причиной скрытия.
+      responses:
+        '200':
+          description: Сообщения
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/participants:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminListParticipants
+      security:
+        - adminCookie: []
+      summary: Участники и заявки для админа
+      description:
+        Все записи (сначала ожидающие решения) с сообщениями к заявкам. Только просмотр — решения по
+        заявкам принимает организатор.
+      responses:
+        '200':
+          description: Список записей
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/profiles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Идентификатор пользователя (X-User-ID)
+        schema:
+          type: string
+          maxLength: 100
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminGetProfile
+      security:
+        - adminCookie: []
+      summary: Профиль пользователя для админа
+      description: Имя, о себе, статистика и ближайшие мероприятия — переход к организатору из события.
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/admin/sports:
     get:
       tags:
         - Модерация (админ)
       operationId: adminListSports
+      security:
+        - adminCookie: []
       summary: Справочник направлений для модерации
       description:
         Все направления, пользовательские и скрытые первыми; кто добавил, сколько событий и активных
@@ -1605,11 +1762,13 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminHideSport
+      security:
+        - adminCookie: []
       summary: Скрыть пользовательское направление
       description:
         Спам, оскорбление или дубль. Направление пропадает из справочника, новые события и запросы с ним
         создать нельзя; уже созданные события остаются (их снимают отдельно). Базовые направления не
-        скрываются — 409. Причина обязательна.
+        скрываются — 409. Причина обязательна. Решение попадает в журнал модерации (`domain.sport.changed`).
       requestBody:
         required: true
         content:
@@ -1646,6 +1805,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminShowSport
+      security:
+        - adminCookie: []
       summary: Вернуть направление в справочник
       responses:
         '200':
@@ -1669,10 +1830,12 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminRepublishDomain
+      security:
+        - adminCookie: []
       summary: Переотправить снимки в moderation
       description:
-        Ставит в outbox снимки всех организаций, событий, записей, сообщений и запросов «Ищу компанию»
-        (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор
+        Ставит в outbox снимки всех организаций, событий, записей, сообщений, запросов «Ищу компанию», жалоб
+        и направлений (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор
         безопасен.
       responses:
         '202':
@@ -1699,6 +1862,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: hideComment
+      security:
+        - adminCookie: []
       summary: Скрыть сообщение
       description:
         Скрывается одно сообщение; мероприятие и остальное обсуждение остаются. Автор получит уведомление
@@ -1792,6 +1957,152 @@ paths:
               $ref: '#/components/schemas/ReportInput'
             example:
               reason: spam
+      responses:
+        '201':
+          description: Жалоба принята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/reviews/{review}/report:
+    parameters:
+      - name: review
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Жалобы
+      operationId: reportReview
+      summary: Пожаловаться на отзыв
+      description: |
+        Жаловаться можно на видимый отзыв (не скрытый, мероприятие опубликовано), но не на свой (409).
+        Жалоба привязана к мероприятию отзыва: админ видит его в очереди. Повтор открытой жалобы — 409,
+        больше 20 жалоб в час — 429.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInput'
+            example:
+              reason: offensive
+              details: Оскорбляет организатора
+      responses:
+        '201':
+          description: Жалоба принята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/stories/{story}/report:
+    parameters:
+      - name: story
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Жалобы
+      operationId: reportStory
+      summary: Пожаловаться на историю
+      description: |
+        Пожаловаться может только тот, кто историю видит: друг автора, пока история не удалена и не истекла.
+        Для остальных — 404, чтобы по ответу нельзя было узнать о чужой истории. Своя история — 409.
+        У жалобы нет мероприятия (`event_id: null`). Фото или видео истории сохраняется для админа, пока
+        жалоба открыта, даже если история истечёт.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInput'
+            example:
+              reason: spam
+      responses:
+        '201':
+          description: Жалоба принята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/chats/{chat}/messages/{message}/report:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Жалобы
+      operationId: reportDirectMessage
+      summary: Пожаловаться на личное сообщение
+      description: |
+        Только участник переписки и только на сообщение собеседника (своё — 409). Посторонним — 404.
+        Админ увидит **только это сообщение**, а не переписку: ленты чатов в админке нет.
+        У жалобы нет мероприятия (`event_id: null`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInput'
+            example:
+              reason: offensive
       responses:
         '201':
           description: Жалоба принята
@@ -1916,14 +2227,27 @@ paths:
       tags:
         - Модерация (админ)
       operationId: adminReports
+      security:
+        - adminCookie: []
       summary: Очередь жалоб
       description: |
         Открытые жалобы первыми, среди них — цели с наибольшим числом жалоб. В каждой — краткое описание цели
-        (название и описание события или оригинальный текст сообщения, даже если оно уже скрыто) и автор.
+        (`target.title` понятен без типа: название события, «Отзыв о «…»», «История», «Личное сообщение»;
+        оригинальный текст, даже если цель уже скрыта) и автор. Из личной переписки виден только текст
+        сообщения, на которое пожаловались. Фото или видео истории — по `target.media_url`.
 
-        **Как принять жалобу:** скрыть сообщение (`POST /admin/comments/{id}/hide`) или снять событие
-        (`POST /admin/events/{id}/unpublish|delete`) — все открытые жалобы на цель закроются в той же
-        транзакции, их авторы получат уведомление. **Отклонить** — `POST /admin/reports/{id}/dismiss`.
+        **Как принять жалобу** (все открытые жалобы на цель закроются в той же транзакции, их авторы получат
+        уведомление, автор цели — тоже):
+
+        | target_type | действие |
+        | --- | --- |
+        | event | `POST /admin/events/{id}/unpublish` или `/delete` |
+        | comment | `POST /admin/comments/{id}/hide` |
+        | review | `POST /admin/reviews/{id}/hide` |
+        | story | `POST /admin/stories/{id}/delete` |
+        | direct_message | `POST /admin/messages/{id}/hide` |
+
+        **Отклонить** — `POST /admin/reports/{id}/dismiss`. **Подсказка ИИ** — `POST /admin/reports/{id}/analyze`.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -1942,6 +2266,9 @@ paths:
             enum:
               - event
               - comment
+              - review
+              - story
+              - direct_message
       responses:
         '200':
           description: Страница жалоб
@@ -1964,8 +2291,12 @@ paths:
       tags:
         - Модерация (админ)
       operationId: dismissReport
+      security:
+        - adminCookie: []
       summary: Отклонить жалобы на цель
-      description: Закрывает все открытые жалобы на ту же цель; пояснение обязательно и уходит авторам жалоб.
+      description:
+        Закрывает все открытые жалобы на ту же цель; пояснение обязательно и уходит авторам жалоб. Отказ попадает
+        в журнал модерации и выгрузку жалоб (`domain.report.changed`).
       requestBody:
         required: true
         content:
@@ -2002,6 +2333,222 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/admin/reviews/{id}/hide:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: adminHideReview
+      security:
+        - adminCookie: []
+      summary: Скрыть отзыв
+      description: |
+        Отзыв пропадает из профиля организатора. Причина обязательна (до 500 символов) и уходит автору
+        отзыва уведомлением. Открытые жалобы на отзыв закрываются как принятые, переход пишется в историю
+        статусов. Повтор для уже скрытого отзыва безопасен (204, ничего не меняется).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Оскорбление организатора
+      responses:
+        '204':
+          description: Решение применено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/admin/stories/{id}/delete:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: adminDeleteStory
+      security:
+        - adminCookie: []
+      summary: Удалить историю
+      description: |
+        Работает и для истёкшей истории с открытой жалобой. Причина обязательна и уходит автору; жалобы
+        на историю закрываются, файл медиа потом удаляет фоновое задание. Повтор для удалённой — 204.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Реклама
+      responses:
+        '204':
+          description: Решение применено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/admin/messages/{id}/hide:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: adminHideDirectMessage
+      security:
+        - adminCookie: []
+      summary: Скрыть личное сообщение
+      description: |
+        Только сообщение, на которое есть жалоба (иначе 404: админ не читает переписку без повода).
+        У собеседника текст заменяется на «Сообщение скрыто модератором» (`hidden: true`), автор получает
+        уведомление с причиной, жалобы закрываются. Уже скрытое — 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Оскорбление собеседника
+      responses:
+        '204':
+          description: Решение применено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/admin/stories/{id}/media:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Модерация (админ)
+      operationId: adminStoryMedia
+      security:
+        - adminCookie: []
+      summary: Фото или видео истории из жалобы
+      description: |
+        Только для истории, на которую жаловались; без проверки дружбы и срока. Пока жалоба открыта,
+        файл не удаляется даже у истёкшей истории.
+      responses:
+        '200':
+          description: Файл (image/jpeg, image/png, image/webp, video/mp4, video/webm)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/admin/reports/{id}/analyze:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Модерация (админ)
+      operationId: analyzeReport
+      security:
+        - adminCookie: []
+      summary: Подсказка ИИ по жалобе
+      description: |
+        Разбирает цель жалобы и советует, **решает админ** (`decision_required: true`). Ничего не скрывает,
+        не сохраняет и не меняет статусы.
+
+        1. **Правила** (детерминированно) ставят флаги по тексту цели: деньги и реквизиты, реклама и продажа,
+           оскорбления, ссылки, контакты, CAPS; плюс `many_reports` при 3+ открытых жалобах. Приоритет
+           `high` — при причине fraud или dangerous или 3+ жалобах.
+        2. **Модель** (Qwen через сервис llm) добавляет совет `advice` строго валидируемым JSON. Текст цели и
+           пояснение жалобы передаются ей как данные в тегах, не как инструкции. На флаги совет не влияет.
+        3. Если модель недоступна или ответила мусором, остаются правила: `source: rules`, `advice: null`.
+
+        `accept` и `dismiss` — обычные админские маршруты, которыми модератор применяет решение.
+        Вызов модели дорогой: в gateway действует лимит `rate:llm` — 10 запросов в минуту (429).
+      responses:
+        '200':
+          description: Подсказка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportAnalysis'
+              example:
+                report_id: 4b1e2c9a-7f0d-4e7b-9a51-2f3c8d6e1a10
+                target_type: review
+                target_id: 0c6f9a3e-2b7d-4d1a-8e45-9b2c7a1f3d22
+                verdict: needs_review
+                priority: normal
+                flags:
+                  - code: insult
+                    message: Есть оскорбительные слова
+                advice:
+                  summary: Отзыв оскорбляет организатора, а не оценивает встречу
+                  risk: medium
+                  suggestion: Скрыть отзыв как оскорбительный
+                source: rules+llm
+                accept:
+                  method: POST
+                  path: /api/v1/admin/reviews/0c6f9a3e-2b7d-4d1a-8e45-9b2c7a1f3d22/hide
+                dismiss:
+                  method: POST
+                  path: /api/v1/admin/reports/4b1e2c9a-7f0d-4e7b-9a51-2f3c8d6e1a10/dismiss
+                decision_required: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/admin/comments/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/ID'
@@ -2009,6 +2556,8 @@ paths:
       tags:
         - Модерация (админ)
       operationId: restoreComment
+      security:
+        - adminCookie: []
       summary: Вернуть скрытое сообщение
       description:
         Только для сообщения, скрытого модератором (удалённое автором не возвращается). Автор получит
@@ -2038,7 +2587,8 @@ paths:
         - Ищу компанию
       summary: Мои предложения встреч из общего спроса
       description: |
-        При чтении запускается детерминированный подбор из первых 1000 активных запросов.
+        Только чтение готовых предложений. Подбор выполняет фоновое задание раз в минуту:
+        детерминированно, из первых 1000 активных запросов.
         Минимум 3 человека, совместимый уровень, общий день и время, совпадающий район
         либо точка в радиусе каждого участника. Слоты 10:00, 14:00, 19:00 UTC+7 в ближайшие
         14 дней, не раньше чем через 2 часа. Место — район из запроса, точку подтверждает
@@ -3958,6 +4508,14 @@ paths:
           $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: starter_admin_session
+      description:
+        Сессия админки — отдельная от пользовательской. Ставится после `POST /auth/admin/login`, хранит
+        только случайный идентификатор. Пользовательская cookie и Bearer-токен к `/api/v1/admin/*` не
+        допускаются. Изменяющие запросы требуют заголовок `Origin`, равный адресу приложения.
     cookieAuth:
       type: apiKey
       in: cookie
@@ -5112,14 +5670,21 @@ components:
           enum:
             - event
             - comment
+            - review
+            - story
+            - direct_message
+          description: Мероприятие, сообщение в обсуждении, отзыв, история или личное сообщение
         target_id:
           type: string
           format: uuid
         event_id:
           type: string
           format: uuid
+          nullable: true
+          description: Мероприятие цели; null у истории и личного сообщения
         event_title:
           type: string
+          description: Название мероприятия; пусто у истории и личного сообщения
         reason:
           type: string
         status:
@@ -5164,13 +5729,18 @@ components:
           enum:
             - event
             - comment
+            - review
+            - story
+            - direct_message
+          description: Мероприятие, сообщение в обсуждении, отзыв, история или личное сообщение
         target_id:
           type: string
           format: uuid
         event_id:
           type: string
           format: uuid
-          description: Мероприятие — из жалобы на сообщение сразу видно обсуждение
+          nullable: true
+          description: Мероприятие — из жалобы на сообщение или отзыв сразу видно контекст; null у истории и личного сообщения
         reason:
           type: string
         details:
@@ -5192,19 +5762,26 @@ components:
             - text
             - author
             - status
+            - media_url
           properties:
             title:
               type: string
-              description: Название мероприятия
+              description: Понятный заголовок цели — название мероприятия, «Отзыв о «…»», «История», «Личное сообщение»
             text:
               type: string
-              description: Текст сообщения или начало описания события (до 500 символов)
+              description: Оригинальный текст цели (до 500 символов), даже если она уже скрыта
             author:
               $ref: '#/components/schemas/Person'
             status:
               type: string
-              description: Текущий статус цели — видно
-              принято ли уже решение: null
+              description:
+                Текущий статус цели — видно, принято ли уже решение. Сообщение и отзыв — visible, hidden
+                (и deleted у сообщения в обсуждении); история — active, expired, deleted; событие — его статус.
+            media_url:
+              type: string
+              nullable: true
+              description: Фото или видео истории по админскому адресу; у остальных целей null
+              example: /api/v1/admin/stories/0c6f9a3e-2b7d-4d1a-8e45-9b2c7a1f3d22/media
         open_on_target:
           type: integer
           description: Сколько открытых жалоб на ту же цель
@@ -5215,6 +5792,116 @@ components:
           type: string
           format: date-time
           nullable: true
+    ReportAnalysis:
+      type: object
+      required:
+        - report_id
+        - target_type
+        - target_id
+        - verdict
+        - priority
+        - flags
+        - advice
+        - source
+        - accept
+        - dismiss
+        - decision_required
+      properties:
+        report_id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+          enum:
+            - event
+            - comment
+            - review
+            - story
+            - direct_message
+        target_id:
+          type: string
+          format: uuid
+        verdict:
+          type: string
+          enum:
+            - ok
+            - needs_review
+          description: needs_review — правила или модель (risk high) видят признаки нарушения; ok — признаков нет
+        priority:
+          type: string
+          enum:
+            - high
+            - normal
+        flags:
+          type: array
+          description: Флаги правил; модель на них не влияет
+          items:
+            type: object
+            required:
+              - code
+              - message
+            properties:
+              code:
+                type: string
+                enum:
+                  - money
+                  - commerce
+                  - insult
+                  - link
+                  - contact
+                  - shouting
+                  - many_reports
+              message:
+                type: string
+        advice:
+          type: object
+          nullable: true
+          description: Совет модели; null, если модель недоступна
+          required:
+            - summary
+            - risk
+            - suggestion
+          properties:
+            summary:
+              type: string
+              maxLength: 300
+            risk:
+              type: string
+              enum:
+                - low
+                - medium
+                - high
+            suggestion:
+              type: string
+              maxLength: 500
+        source:
+          type: string
+          enum:
+            - rules
+            - rules+llm
+        accept:
+          $ref: '#/components/schemas/ReportAction'
+        dismiss:
+          $ref: '#/components/schemas/ReportAction'
+        decision_required:
+          type: boolean
+          enum:
+            - true
+          description: Всегда true — система советует, решает админ
+    ReportAction:
+      type: object
+      description: Админский маршрут, которым модератор применяет решение
+      required:
+        - method
+        - path
+      properties:
+        method:
+          type: string
+          enum:
+            - POST
+        path:
+          type: string
+          example: /api/v1/admin/comments/0c6f9a3e-2b7d-4d1a-8e45-9b2c7a1f3d22/hide
     ReportPage:
       type: object
       required:
@@ -5495,8 +6182,11 @@ components:
           description: ''
         body:
           type: string
-          description: ''
+          description: Текст; у скрытого модератором — «Сообщение скрыто модератором»
           maxLength: 2000
+        hidden:
+          type: boolean
+          description: Сообщение скрыто модератором по жалобе
         created_at:
           type: string
           description: ''

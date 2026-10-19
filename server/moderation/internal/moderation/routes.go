@@ -16,6 +16,7 @@ type Reader interface {
 	EventRows(ctx context.Context) ([][]string, error)
 	OrganizationRows(ctx context.Context) ([][]string, error)
 	LogRows(ctx context.Context) ([][]string, error)
+	ReportRows(ctx context.Context) ([][]string, error)
 }
 
 // Русские названия статусов для отчётов: Excel читают люди, а не программы.
@@ -25,6 +26,11 @@ var statusNames = map[string]string{
 	"visible": "видно", "hidden": "скрыто", "none": "—",
 	"gathering": "набираем", "reached": "собран", "failed": "не собран",
 	"event": "мероприятие", "organization": "организация", "comment": "сообщение",
+	"open": "открыта", "resolved": "принята", "dismissed": "отклонена",
+	"report": "жалоба", "sport": "направление", "review": "отзыв", "story": "история", "direct_message": "личное сообщение",
+	// Причины жалоб — как в интерфейсе (contracts, reportReasonLabels).
+	"spam": "спам или реклама", "offensive": "оскорбления", "fraud": "мошенничество",
+	"wrong_info": "неверные сведения", "dangerous": "угроза безопасности", "other": "другое",
 }
 
 func ru(v string) string {
@@ -42,6 +48,7 @@ func ru(v string) string {
 //	GET /admin/moderation/reports/events.csv     выгрузка мероприятий
 //	GET /admin/moderation/reports/organizations.csv
 //	GET /admin/moderation/reports/log.csv        журнал модерации
+//	GET /admin/moderation/reports/reports.csv    жалобы пользователей: открытые и рассмотренные
 //
 // Методы r вызываются только в обработчиках: тест сверки маршрутов передаёт nil.
 func Register(group *gin.RouterGroup, r Reader) {
@@ -85,6 +92,9 @@ func Register(group *gin.RouterGroup, r Reader) {
 	g.GET("/reports/log.csv", report("moderation-log",
 		[]string{"Когда (Красноярск)", "Объект", "Название", "Было", "Стало", "Кто", "Причина"},
 		func(ctx context.Context) ([][]string, error) { return r.LogRows(ctx) }, 1, 3, 4))
+	g.GET("/reports/reports.csv", report("reports",
+		[]string{"Когда (Красноярск)", "На что", "Событие", "Причина", "Подробности", "Статус", "Решение", "Кто решил"},
+		func(ctx context.Context) ([][]string, error) { return r.ReportRows(ctx) }, 1, 3, 5))
 }
 
 func list[T any](spec platform.ListSpec, load func(context.Context, platform.ListQuery) (Page[T], error)) gin.HandlerFunc {

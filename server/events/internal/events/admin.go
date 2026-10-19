@@ -117,7 +117,7 @@ func (r *Repository) SetSportHidden(ctx context.Context, a Actor, id string, hid
 		if !hidden {
 			from, to = to, from
 		}
-		return platform.RecordTransition(ctx, tx, "sport", id, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: reason})
+		return record(ctx, tx, "sport", id, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: reason})
 	})
 	if err != nil {
 		return AdminSport{}, err
@@ -141,7 +141,44 @@ func (r *Repository) SetSportHidden(ctx context.Context, a Actor, id string, hid
 //	GET  /admin/sports               справочник с пользовательскими направлениями и их использованием
 //	POST /admin/sports/:id/hide|show скрыть пользовательское направление с причиной / вернуть
 //	POST /admin/domain/republish     переотправить снимки в moderation (догнать после очистки)
+//	GET  /admin/events/:id           карточка события в любом статусе
+//	GET  /admin/events/:id/comments  обсуждение со скрытыми и удалёнными сообщениями (с текстом)
+//	GET  /admin/events/:id/participants  все записи и заявки с сообщениями
+//	GET  /admin/profiles/:id         профиль организатора или участника
 func registerAdminExtra(admin *gin.RouterGroup, s *Service) {
+	admin.GET("/events/:id", withID(func(c *gin.Context, id string) {
+		e, err := s.GetEvent(c.Request.Context(), actor(c), id)
+		if handle(c, err) {
+			return
+		}
+		c.JSON(200, e)
+	}))
+	admin.GET("/events/:id/comments", withID(func(c *gin.Context, id string) {
+		items, err := s.Comments(c.Request.Context(), actor(c), id)
+		if handle(c, err) {
+			return
+		}
+		c.JSON(200, gin.H{"items": items})
+	}))
+	admin.GET("/events/:id/participants", withID(func(c *gin.Context, id string) {
+		items, err := s.Participants(c.Request.Context(), actor(c), id)
+		if handle(c, err) {
+			return
+		}
+		c.JSON(200, gin.H{"items": items})
+	}))
+	admin.GET("/profiles/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		if id == "" || len(id) > 100 {
+			fail(c, 400, "invalid_id", "Некорректный идентификатор пользователя")
+			return
+		}
+		p, err := s.GetProfile(c.Request.Context(), actor(c), id)
+		if handle(c, err) {
+			return
+		}
+		c.JSON(200, p)
+	})
 	admin.GET("/organizations/:id", withID(func(c *gin.Context, id string) {
 		o, err := s.AdminOrganization(c.Request.Context(), actor(c), id)
 		if handle(c, err) {

@@ -272,8 +272,12 @@ func Register(parent *gin.RouterGroup, s *Service) {
 //	POST /admin/comments/:id/hide                  скрыть сообщение с причиной
 //	… карточки, история, справочник, переотправка    admin.go (registerAdminExtra)
 //	… очередь жалоб, возврат скрытого сообщения       report_routes.go
+//
+// Админ входит отдельно от пользователей (своя сессия в gateway) и пользовательских маршрутов
+// не вызывает, поэтому всё, что он читает, тоже лежит под /admin. profileSync здесь нет:
+// администраторы — не участники платформы и в profiles не попадают.
 func RegisterAdmin(g *gin.RouterGroup, s *Service) {
-	admin := g.Group("/admin", platform.RequireRole("admin"), profileSync(s))
+	admin := g.Group("/admin", platform.RequireRole("admin"))
 	admin.GET("/organizations", func(c *gin.Context) {
 		limit, offset, ok := platform.ParsePagination(c.DefaultQuery("limit", "20"), c.DefaultQuery("offset", "0"))
 		statuses, valid := parseStatuses(c.Query("status"), map[string]bool{"pending": true, "approved": true, "rejected": true})
@@ -351,6 +355,7 @@ func RegisterAdmin(g *gin.RouterGroup, s *Service) {
 	}))
 	registerAdminExtra(admin, s)
 	registerAdminReports(admin, s)
+	registerAdminSocial(admin, s)
 }
 
 func actor(c *gin.Context) Actor {

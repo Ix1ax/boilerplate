@@ -84,6 +84,28 @@ const doc = {
   paths: merged.paths,
   components,
 };
+// Контракты, которые фронтенд уже использует, а сервис ещё не реализовал: без этого слоя
+// каждый make openapi стирал бы их из общего файла и ломал типы фронтенда.
+const pendingFile = path.join(
+  root,
+  'packages',
+  'contracts',
+  'openapi.pending.yaml',
+);
+if (existsSync(pendingFile)) {
+  const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+  const overlay = (target, extra) => {
+    for (const [k, v] of Object.entries(extra)) {
+      if (isObj(v) && isObj(target[k])) overlay(target[k], v);
+      else if (Array.isArray(v) && Array.isArray(target[k]))
+        target[k].push(
+          ...v.filter((x) => !target[k].some((y) => isDeepStrictEqual(x, y))),
+        );
+      else target[k] = v;
+    }
+  };
+  overlay(doc, parse(readFileSync(pendingFile, 'utf8')) ?? {});
+}
 const out = path.join(root, 'packages', 'contracts', 'openapi.yaml');
 writeFileSync(
   out,

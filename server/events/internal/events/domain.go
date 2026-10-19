@@ -34,12 +34,25 @@ FROM participations p JOIN events e ON e.id=p.event_id LEFT JOIN profiles pr ON 
 FROM comments c JOIN events e ON e.id=c.event_id LEFT JOIN profiles pr ON pr.user_id=c.author_id WHERE c.id=$1::uuid) x`,
 	"company_request": `SELECT to_jsonb(x) FROM (SELECT r.id, r.user_id, s.name AS sport, r.level, r.status, r.created_at
 FROM company_requests r JOIN sports s ON s.id=r.sport_id WHERE r.id=$1::uuid) x`,
+	// У истории и личного сообщения нет мероприятия: event_id и event_title пустые, а target_title
+	// называет цель так же, как уведомление автору жалобы (reportSubject).
+	"report": `SELECT to_jsonb(x) FROM (SELECT r.id, r.target_type, r.target_id, r.event_id, COALESCE(e.title,'') AS event_title,
+  CASE r.target_type WHEN 'review' THEN 'Отзыв о «'||COALESCE(e.title,'')||'»' WHEN 'story' THEN 'История'
+    WHEN 'direct_message' THEN 'Личное сообщение' WHEN 'comment' THEN 'Сообщение в «'||COALESCE(e.title,'')||'»'
+    ELSE '«'||COALESCE(e.title,'')||'»' END AS target_title,
+  r.reason, left(r.details, 500) AS details, r.status, r.resolution, r.resolved_by, r.reporter_id,
+  COALESCE(pr.display_name,'') AS reporter_name, r.created_at, r.resolved_at
+FROM reports r LEFT JOIN events e ON e.id=r.event_id LEFT JOIN profiles pr ON pr.user_id=r.reporter_id WHERE r.id=$1::uuid) x`,
+	// Число событий направления в снимок не входит: оно меняется без перехода и сразу бы устарело.
+	"sport": `SELECT to_jsonb(x) FROM (SELECT s.id, s.name, s.is_custom, s.hidden, COALESCE(s.created_by,'') AS created_by,
+  COALESCE(pr.display_name,'') AS created_by_name, s.created_at
+FROM sports s LEFT JOIN profiles pr ON pr.user_id=s.created_by WHERE s.id=$1::uuid) x`,
 }
 
 // domainTables — где лежит счётчик версии снимка сущности.
 var domainTables = map[string]string{
 	"event": "events", "organization": "organizations", "participation": "participations",
-	"comment": "comments", "company_request": "company_requests",
+	"comment": "comments", "company_request": "company_requests", "report": "reports", "sport": "sports",
 }
 
 // entityOf — какая сущность описывает переход: смена состава — это изменение события.
@@ -85,6 +98,8 @@ func (r *Repository) RepublishDomain(ctx context.Context) (int, error) {
 		{"participation", "SELECT id::text FROM participations"},
 		{"comment", "SELECT id::text FROM comments"},
 		{"company_request", "SELECT id::text FROM company_requests"},
+		{"report", "SELECT id::text FROM reports"},
+		{"sport", "SELECT id::text FROM sports"},
 	} {
 		err := r.inTx(ctx, func(tx pgx.Tx) error {
 			rows, err := tx.Query(ctx, q.ids)

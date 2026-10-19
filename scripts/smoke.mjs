@@ -145,20 +145,114 @@ const request = (path, token, init = {}) =>
     },
     signal: AbortSignal.timeout(20_000),
   });
+// Админка — отдельный вход: своя cookie и Origin приложения у каждого запроса.
+const adminLogin = async (email, password) => {
+  const response = await fetch(`${base}/auth/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: env.APP_ORIGIN },
+    body: JSON.stringify({ email, password }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const cookie = response.headers
+    .get('set-cookie')
+    ?.match(/starter_admin_session=[^;]+/)?.[0];
+  return { status: response.status, cookie };
+};
+const superadmin = await adminLogin(
+  env.SUPERADMIN_EMAIL,
+  env.SUPERADMIN_PASSWORD,
+);
+assert.equal(superadmin.status, 200, 'Вход суперадминистратора в админку');
+const adminRequest = (path, cookie, init = {}) =>
+  fetch(`${base}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: env.APP_ORIGIN,
+      Cookie: cookie,
+      ...init.headers,
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+const admin = superadmin.cookie;
+// Пользовательский токен и cookie админку не открывают — даже у бывшего «модератора» Keycloak.
+for (const path of [
+  '/api/v1/admin/me',
+  '/api/v1/admin/accounts',
+  '/api/v1/admin/events',
+]) {
+  assert.equal(
+    (await request(path, owner)).status,
+    401,
+    `${path} с токеном пользователя`,
+  );
+}
+{
+  const me = await (await adminRequest('/api/v1/admin/me', admin)).json();
+  assert.ok(
+    me.roles.includes('superadmin'),
+    'Суперадминистратор видит свою роль',
+  );
+  // Суперадминистратор заводит админа; тот работает в админке, но управлять админами не может.
+  const email = `smoke-admin-${Date.now()}@example.test`;
+  const password = `SmokeAdmin${Date.now()}`;
+  const created = await adminRequest('/api/v1/admin/admins', admin, {
+    method: 'POST',
+    body: JSON.stringify({ email, name: 'Проверка Админ', password }),
+  });
+  assert.equal(created.status, 201, 'Создание администратора');
+  const moderator = await created.json();
+  const own = await adminLogin(email, password);
+  assert.equal(own.status, 200, 'Вход нового администратора');
+  assert.equal(
+    (await adminRequest('/api/v1/admin/events?limit=1', own.cookie)).status,
+    200,
+  );
+  assert.equal(
+    (await adminRequest('/api/v1/admin/admins', own.cookie)).status,
+    403,
+    'Обычный админ не управляет админами',
+  );
+  const blocked = await adminRequest(
+    `/api/v1/admin/admins/${moderator.id}/block`,
+    admin,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Проверка блокировки' }),
+    },
+  );
+  assert.equal(blocked.status, 200);
+  assert.equal(
+    (await adminLogin(email, password)).status,
+    403,
+    'Заблокированный админ не входит',
+  );
+  assert.equal(
+    (
+      await adminRequest(`/api/v1/admin/admins/${moderator.id}`, admin, {
+        method: 'DELETE',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await adminLogin(email, password)).status,
+    401,
+    'Удалённый админ не входит',
+  );
+}
 assert.equal((await request('/readyz')).status, 200);
 assert.equal((await request('/api/v1/me')).status, 401);
 assert.equal((await request('/api/v1/me', owner)).status, 200);
 {
-  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
-  assert.equal((await request('/api/v1/admin/accounts', owner)).status, 403);
-  const found = await request(
+  const found = await adminRequest(
     `/api/v1/admin/accounts?q=${encodeURIComponent(localEmail)}`,
     admin,
   );
   assert.equal(found.status, 200);
   const [account] = (await found.json()).items;
   assert.equal(account?.email, localEmail);
-  const blocked = await request(
+  const blocked = await adminRequest(
     `/api/v1/admin/accounts/${account.id}/block`,
     admin,
     {
@@ -175,9 +269,13 @@ assert.equal((await request('/api/v1/me', owner)).status, 200);
   assert.equal((await denied.json()).error.code, 'account_blocked');
   assert.equal(
     (
-      await request(`/api/v1/admin/accounts/${account.id}/unblock`, admin, {
-        method: 'POST',
-      })
+      await adminRequest(
+        `/api/v1/admin/accounts/${account.id}/unblock`,
+        admin,
+        {
+          method: 'POST',
+        },
+      )
     ).status,
     200,
   );
@@ -340,10 +438,9 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
 {
   assert.equal(
     (await request('/api/v1/admin/tasks/export.csv', owner)).status,
-    403,
+    401,
   );
-  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
-  const csv = await request('/api/v1/admin/tasks/export.csv', admin);
+  const csv = await adminRequest('/api/v1/admin/tasks/export.csv', admin);
   assert.equal(csv.status, 200);
   assert.match(csv.headers.get('content-type') ?? '', /text\/csv/);
   // text() отбрасывает BOM, поэтому проверяем байты.
@@ -356,26 +453,25 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
 }
 // Статистика, журнал аудита и вложения к записи.
 {
-  const admin = await login(env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
-  assert.equal((await request('/api/v1/admin/tasks/stats', owner)).status, 403);
+  assert.equal((await request('/api/v1/admin/tasks/stats', owner)).status, 401);
   const stats = await (
-    await request('/api/v1/admin/tasks/stats', admin)
+    await adminRequest('/api/v1/admin/tasks/stats', admin)
   ).json();
   assert.equal(stats.by_day.length, 14);
   // Свои задачи smoke удаляет выше, поэтому проверяем форму ответа, а не наличие чужих данных.
   assert.ok(Number.isInteger(stats.total) && stats.total >= 0);
-  assert.equal((await request('/api/v1/admin/audit', owner)).status, 403);
+  assert.equal((await request('/api/v1/admin/audit', owner)).status, 401);
   let audited = 0;
   for (let i = 0; i < 15 && !audited; i++) {
     const page = await (
-      await request('/api/v1/admin/audit?method=POST&limit=1', admin)
+      await adminRequest('/api/v1/admin/audit?method=POST&limit=1', admin)
     ).json();
     audited = page.total;
     if (!audited) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   assert.ok(audited > 0, 'Журнал аудита пуст: события audit.recorded не дошли');
   assert.equal(
-    (await request('/api/v1/admin/audit?sort=password', admin)).status,
+    (await adminRequest('/api/v1/admin/audit?sort=password', admin)).status,
     400,
   );
 
@@ -408,7 +504,8 @@ assert.equal((await fetch(`${base}/api/v1/llm/status`)).status, 401);
   );
   await request(`/api/v1/files/${attachment.id}`, owner, { method: 'DELETE' });
 }
-assert.equal((await request('/api/v1/admin/ping', owner)).status, 403);
+assert.equal((await request('/api/v1/admin/ping', owner)).status, 401);
+assert.equal((await adminRequest('/api/v1/admin/ping', admin)).status, 200);
 assert.equal(
   (
     await request('/api/v1/tasks', owner, {

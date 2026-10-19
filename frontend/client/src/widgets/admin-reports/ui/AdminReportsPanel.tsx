@@ -146,13 +146,16 @@ export const AdminReportsPanel = () => {
                 Автор жалобы: {report.reporter.name}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  render={<Link to={DYNAMIC_ROUTES.EVENT(report.eventId)} />}
-                >
-                  К мероприятию
-                </Button>
+                {/* У жалобы на историю или личное сообщение мероприятия нет. */}
+                {report.eventId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={<Link to={DYNAMIC_ROUTES.EVENT(report.eventId)} />}
+                  >
+                    К мероприятию
+                  </Button>
+                )}
                 {report.status === 'open' && (
                   <Button
                     size="sm"

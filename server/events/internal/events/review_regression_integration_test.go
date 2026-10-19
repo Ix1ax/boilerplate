@@ -90,6 +90,64 @@ func TestReviewRegressions(t *testing.T) {
 			t.Fatalf("уведомлений очереди: %d", notifications)
 		}
 	})
+	t.Run("перезапись из очереди не обгоняет стоящих", func(t *testing.T) {
+		one := 1
+		e := create(&one, nil)
+		holder, a, b := person(), person(), person()
+		for _, p := range []Actor{holder, a, b} {
+			_, err := s.Join(ctx, p, e.ID, "", false)
+			must(err)
+		}
+		// A встал в очередь раньше B; без сброса created_at повторная запись сохранила бы его место.
+		_, err := db.Exec(ctx, "UPDATE participations SET created_at=now()-interval '2 hours' WHERE event_id=$1 AND user_id=$2", e.ID, a.ID)
+		must(err)
+		_, err = db.Exec(ctx, "UPDATE participations SET created_at=now()-interval '1 hour' WHERE event_id=$1 AND user_id=$2", e.ID, b.ID)
+		must(err)
+		must(s.Leave(ctx, a, e.ID))
+		again, err := s.Join(ctx, a, e.ID, "", false)
+		must(err)
+		if again.Status != "waitlist" {
+			t.Fatalf("повторная запись: %s", again.Status)
+		}
+		must(s.Leave(ctx, holder, e.ID))
+		for p, want := range map[Actor]string{b: "confirmed", a: "waitlist"} {
+			got, err := s.GetEvent(ctx, p, e.ID)
+			must(err)
+			if got.MyParticipation.Status != want {
+				t.Fatalf("после освобождения места: ждали %s, получили %s", want, got.MyParticipation.Status)
+			}
+		}
+	})
+	t.Run("вернувшийся встаёт в конец очереди", func(t *testing.T) {
+		one := 1
+		e := create(&one, nil)
+		holder, returner, waiting := person(), person(), person()
+		for _, a := range []Actor{holder, returner} {
+			_, err := s.Join(ctx, a, e.ID, "", false)
+			must(err)
+		}
+		// Первая запись вернувшегося — самая давняя: без сброса created_at он обошёл бы очередь.
+		_, err := db.Exec(ctx, "UPDATE participations SET created_at=now()-interval '2 hours' WHERE event_id=$1 AND user_id=$2", e.ID, returner.ID)
+		must(err)
+		must(s.Leave(ctx, returner, e.ID))
+		_, err = s.Join(ctx, waiting, e.ID, "", false)
+		must(err)
+		_, err = db.Exec(ctx, "UPDATE participations SET created_at=now()-interval '1 hour' WHERE event_id=$1 AND user_id=$2", e.ID, waiting.ID)
+		must(err)
+		again, err := s.Join(ctx, returner, e.ID, "", false)
+		must(err)
+		if again.Status != "waitlist" {
+			t.Fatalf("повторная запись: %s", again.Status)
+		}
+		must(s.Leave(ctx, holder, e.ID))
+		waitingEvent, err := s.GetEvent(ctx, waiting, e.ID)
+		must(err)
+		returnerEvent, err := s.GetEvent(ctx, returner, e.ID)
+		must(err)
+		if waitingEvent.MyParticipation.Status != "confirmed" || returnerEvent.MyParticipation.Status != "waitlist" {
+			t.Fatalf("место ушло вернувшемуся: ждал %s, вернулся %s", waitingEvent.MyParticipation.Status, returnerEvent.MyParticipation.Status)
+		}
+	})
 	t.Run("правка после сбора состава", func(t *testing.T) {
 		two := 2
 		e := create(nil, &two)

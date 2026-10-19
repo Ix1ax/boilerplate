@@ -383,12 +383,22 @@ test('production setup создаёт HTTPS-настройки и сохраня
   ]);
   assert.deepEqual(realm.users, []);
   assert.doesNotMatch(environment, /^DEMO_PASSWORD=.+$/m);
-  assert.doesNotMatch(environment, /^ADMIN_DEMO_PASSWORD=.+$/m);
+  // Демопользователей нет, а суперадминистратор админки есть: иначе в админку войти некому.
+  assert.match(environment, /^SUPERADMIN_PASSWORD=.+$/m);
   assert.equal(run().status, 0);
   assert.equal(readFileSync(path.join(root, '.env'), 'utf8'), environment);
-  const noFlag = spawnSync(process.execPath, [path.join(root, 'scripts/setup.mjs')], { encoding: 'utf8' });
+  const noFlag = spawnSync(
+    process.execPath,
+    [path.join(root, 'scripts/setup.mjs')],
+    { encoding: 'utf8' },
+  );
   assert.equal(noFlag.status, 0, noFlag.stderr);
-  const repeatedRealm = JSON.parse(readFileSync(path.join(root, '.local/keycloak/hackathon-realm.json'), 'utf8'));
+  const repeatedRealm = JSON.parse(
+    readFileSync(
+      path.join(root, '.local/keycloak/hackathon-realm.json'),
+      'utf8',
+    ),
+  );
   assert.deepEqual(repeatedRealm.users, []);
 });
 

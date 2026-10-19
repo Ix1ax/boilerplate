@@ -14,6 +14,7 @@ import (
 // register подключает все маршруты сервиса так же, как cmd/identity/main.go (без зависимостей).
 func register(api *gin.RouterGroup) {
 	accounts.RegisterAdmin(api, accounts.New(nil, nil))
+	accounts.RegisterAdmins(api, accounts.NewAdmins(nil, nil))
 }
 
 var httpMethods = map[string]bool{"get": true, "post": true, "put": true, "patch": true, "delete": true, "head": true, "options": true}

@@ -220,7 +220,7 @@ curl -sS https://auth.example.org/realms/hackathon/.well-known/openid-configurat
   ```
 
 - Админка Keycloak — `https://auth.example.org/admin/`, логин `KEYCLOAK_ADMIN` и пароль `KEYCLOAK_ADMIN_PASSWORD` из того же файла.
-- Production-realm создаётся **без пользователей**. Первого администратора создайте руками: Keycloak → realm `hackathon` → Users → Add user → вкладка Credentials (пароль) → Role mapping → роль `admin`.
+- Production-realm создаётся **без пользователей**. Администраторов в Keycloak нет: у админки приложения свой вход (`https://APP_DOMAIN/admin/`). Суперадминистратора сервис `identity` создаёт при первом старте из `SUPERADMIN_EMAIL` и `SUPERADMIN_PASSWORD` в серверном `.env` (пароль генерирует `make setup`). Остальных админов он заводит в админке.
 
 Состояние контейнеров на сервере:
 

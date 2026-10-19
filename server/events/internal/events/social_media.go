@@ -60,13 +60,15 @@ WHERE f.user_a=LEAST($2,s.author_id) AND f.user_b=GREATEST($2,s.author_id) AND f
 }
 
 // CleanupStoryMedia повторяется после сбоя S3 или БД. Удаление S3 идемпотентно;
-// ссылка на живую историю исключена из выборки, незавершённым загрузкам даём час.
+// ссылка на живую историю исключена из выборки, незавершённым загрузкам даём час. Медиа истёкшей
+// истории с открытой жалобой ждёт решения админа: иначе ему нечего проверять.
 func (r *Repository) CleanupStoryMedia(ctx context.Context, blobs StoryBlobs) error {
 	if blobs == nil {
 		return nil
 	}
 	rows, err := r.db.Query(ctx, `SELECT o.object_key FROM story_media_objects o JOIN stories s ON s.id=o.story_id
-WHERE s.expires_at<=now() OR s.deleted_at IS NOT NULL OR (o.created_at<now()-interval '1 hour' AND s.media_key IS DISTINCT FROM o.object_key)
+WHERE (s.expires_at<=now() AND NOT EXISTS(SELECT 1 FROM reports x WHERE x.target_type='story' AND x.target_id=s.id AND x.status='open'))
+OR s.deleted_at IS NOT NULL OR (o.created_at<now()-interval '1 hour' AND s.media_key IS DISTINCT FROM o.object_key)
 ORDER BY o.created_at LIMIT 100`)
 	if err != nil {
 		return err

@@ -40,13 +40,12 @@ const accounts = {
   oleg: ['ORG_DEMO_EMAIL', 'ORG_DEMO_PASSWORD'],
   maria: ['ORG_PENDING_DEMO_EMAIL', 'ORG_PENDING_DEMO_PASSWORD'],
   petr: ['ORG_REJECTED_DEMO_EMAIL', 'ORG_REJECTED_DEMO_PASSWORD'],
-  admin: ['ADMIN_DEMO_EMAIL', 'ADMIN_DEMO_PASSWORD'],
 };
 const as = {};
-let adminToken = '';
+let petrToken = '';
 for (const [name, [email, password]] of Object.entries(accounts)) {
   const token = await login(env[email], env[password]);
-  if (name === 'admin') adminToken = token;
+  if (name === 'petr') petrToken = token;
   as[name] = async (path, method = 'GET', body) => {
     const response = await fetch(`${base}/api/v1${path}`, {
       method,
@@ -61,6 +60,32 @@ for (const [name, [email, password]] of Object.entries(accounts)) {
     return { status: response.status, body: text ? JSON.parse(text) : null };
   };
 }
+
+// Админка — отдельный вход суперадминистратора: своя cookie, Origin приложения у каждого запроса.
+const adminLogin = await fetch(`${base}/auth/admin/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Origin: env.APP_ORIGIN },
+  body: JSON.stringify({
+    email: env.SUPERADMIN_EMAIL,
+    password: env.SUPERADMIN_PASSWORD,
+  }),
+  signal: AbortSignal.timeout(15_000),
+});
+assert.equal(adminLogin.status, 200, 'Не удалось войти в админку');
+const adminCookie = adminLogin.headers
+  .get('set-cookie')
+  .match(/starter_admin_session=[^;]+/)[0];
+const adminHeaders = { Cookie: adminCookie, Origin: env.APP_ORIGIN };
+as.admin = async (path, method = 'GET', body) => {
+  const response = await fetch(`${base}/api/v1${path}`, {
+    method,
+    headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const text = await response.text();
+  return { status: response.status, body: text ? JSON.parse(text) : null };
+};
 
 const ok = (res, what) => {
   assert.ok(
@@ -544,7 +569,7 @@ try {
   );
   ok(await as.petr(`/events/${squad.id}/alternatives`), 'другие встречи');
   const ics = await fetch(`${base}/api/v1/events/${squad.id}/calendar.ics`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${petrToken}` },
   });
   assert.ok((await ics.text()).startsWith('BEGIN:VCALENDAR'), 'файл календаря');
   step(
@@ -599,8 +624,8 @@ try {
   );
   assert.equal(
     (await as.anna('/admin/moderation/dashboard')).status,
-    403,
-    'дашборд доступен не админу',
+    401,
+    'дашборд доступен без админской сессии',
   );
   let logged = false;
   for (let i = 0; i < 20 && !logged; i++) {
@@ -622,7 +647,7 @@ try {
   const csv = await fetch(
     `${base}/api/v1/admin/moderation/reports/events.csv`,
     {
-      headers: { Authorization: `Bearer ${adminToken}` },
+      headers: adminHeaders,
     },
   );
   assert.equal(csv.status, 200);
@@ -706,6 +731,16 @@ try {
       report && report.target.text.includes('протеин'),
       'админ видит текст сообщения в жалобе',
     );
+    // Подсказка ИИ только советует: без Qwen остаются правила (source: rules), решает админ.
+    const hint = ok(
+      await as.admin(`/admin/reports/${report.id}/analyze`, 'POST'),
+      'подсказка по жалобе',
+    );
+    assert.ok(
+      hint.decision_required &&
+        hint.accept.path === `/api/v1/admin/comments/${spam.id}/hide`,
+      'подсказка оставляет решение админу и называет его действие',
+    );
     ok(
       await as.admin(`/admin/comments/${spam.id}/hide`, 'POST', {
         reason: 'Реклама',
@@ -770,8 +805,44 @@ try {
       }),
       'отказ по жалобе',
     );
+    // Отказ доходит до moderation доменным событием: журнал, дашборд и CSV жалоб. Проекция отстаёт на секунды.
+    let reportLogged = false;
+    for (let i = 0; i < 20 && !reportLogged; i++) {
+      const journal = ok(
+        await as.admin(
+          `/admin/moderation/log?entity=report&entity_id=${eventReport.id}`,
+        ),
+        'журнал жалоб',
+      );
+      reportLogged = journal.items.some(
+        (e) => e.to === 'dismissed' && e.comment === 'Площадка на месте',
+      );
+      if (!reportLogged)
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    assert.ok(
+      reportLogged,
+      'отказ по жалобе не попал в журнал модерации за 20 секунд',
+    );
+    const reportBoard = ok(
+      await as.admin('/admin/moderation/dashboard'),
+      'дашборд с жалобами',
+    );
+    assert.ok(
+      reportBoard.reports.dismissed_week >= 1 && reportBoard.sports.custom >= 1,
+      'на дашборде нет жалоб или пользовательских направлений',
+    );
+    const reportsCsv = await fetch(
+      `${base}/api/v1/admin/moderation/reports/reports.csv`,
+      { headers: adminHeaders },
+    );
+    assert.equal(reportsCsv.status, 200);
+    assert.ok(
+      (await reportsCsv.text()).includes('Площадка на месте'),
+      'отказ по жалобе не попал в CSV',
+    );
     step(
-      '★ Модерация: жалобы, удаление и возврат сообщения, исключение участника с передачей места',
+      '★ Модерация: жалобы, удаление и возврат сообщения, исключение участника с передачей места, журнал и CSV жалоб',
     );
   }
 

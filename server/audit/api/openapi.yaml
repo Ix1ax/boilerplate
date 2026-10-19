@@ -29,6 +29,8 @@ paths:
       tags:
         - Журнал (админ)
       operationId: listAudit
+      security:
+        - adminCookie: []
       summary: Журнал действий
       description: Фильтры точные (несколько значений — через запятую), поиск `q` — по подстроке в пути и почте.
       parameters:
@@ -106,6 +108,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: starter_admin_session
+      description:
+        Сессия админки — отдельная от пользовательской. Ставится после `POST /auth/admin/login`, хранит
+        только случайный идентификатор. Пользовательская cookie и Bearer-токен к `/api/v1/admin/*` не
+        допускаются. Изменяющие запросы требуют заголовок `Origin`, равный адресу приложения.
     cookieAuth:
       type: apiKey
       in: cookie

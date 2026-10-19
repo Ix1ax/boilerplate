@@ -29,10 +29,13 @@ paths:
     get:
       tags: [Админка]
       operationId: moderationDashboard
+      security:
+        - adminCookie: []
       summary: Дашборд администратора
       description:
         Что требует решения (заявки организаций, самые давние — первыми) и как живёт платформа — события, записи,
-        новички, сообщения, «Ищу компанию», сбор состава, ряд за 14 дней по Красноярску и популярные направления.
+        новички, сообщения, «Ищу компанию», сбор состава, жалобы и пользовательские направления, ряд за 14 дней
+        по Красноярску и популярные направления.
       responses:
         '200':
           description: Дашборд
@@ -50,14 +53,17 @@ paths:
     get:
       tags: [Админка]
       operationId: moderationLog
+      security:
+        - adminCookie: []
       summary: Журнал модерации
       description:
         Решения по организациям, смена статуса мероприятий (снятие, удаление, возврат, отмена — в том числе
-        автоматическая, когда не собран состав) и скрытие сообщений. Кто, когда и с какой причиной.
+        автоматическая, когда не собран состав), скрытие сообщений, отказ по жалобе (принятая жалоба уже видна
+        как скрытие или удаление цели) и скрытие или возврат пользовательского направления. Кто, когда и с какой причиной.
       parameters:
         - name: entity
           in: query
-          description: 'organization, event или comment; несколько — через запятую'
+          description: 'organization, event, comment, report или sport; несколько — через запятую'
           schema: { type: string }
         - name: to
           in: query
@@ -94,6 +100,8 @@ paths:
     get:
       tags: [Админка]
       operationId: moderationComments
+      security:
+        - adminCookie: []
       summary: Лента сообщений
       description: Последние сообщения всех обсуждений в одном месте. Скрыть сообщение — `POST /api/v1/admin/comments/{id}/hide` сервиса events.
       parameters:
@@ -131,6 +139,8 @@ paths:
     get:
       tags: [Админка]
       operationId: moderationReportEvents
+      security:
+        - adminCookie: []
       summary: Выгрузка мероприятий
       description: 'Все мероприятия во всех статусах: организатор, время по Красноярску, режим, статус и причина, участники, заявки, новички, состав. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
       responses:
@@ -149,8 +159,33 @@ paths:
     get:
       tags: [Админка]
       operationId: moderationReportOrganizations
+      security:
+        - adminCookie: []
       summary: Выгрузка организаций
       description: 'Организации, представители, статус допуска и причина отказа, число событий. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/reports.csv:
+    get:
+      tags: [Админка]
+      operationId: moderationReportReports
+      security:
+        - adminCookie: []
+      summary: Выгрузка жалоб
+      description:
+        'До 10 000 жалоб, открытые первыми: когда подана, на что (мероприятие, сообщение, отзыв, история, личное
+        сообщение), мероприятие (пусто у истории и личного сообщения), причина, подробности, статус, решение и кто
+        решил. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы и причины по-русски.'
       responses:
         '200':
           description: Файл CSV
@@ -167,6 +202,8 @@ paths:
     get:
       tags: [Админка]
       operationId: moderationReportLog
+      security:
+        - adminCookie: []
       summary: Выгрузка журнала модерации
       description: 'До 10 000 последних решений. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
       responses:
@@ -183,6 +220,14 @@ paths:
           $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: starter_admin_session
+      description:
+        Сессия админки — отдельная от пользовательской. Ставится после `POST /auth/admin/login`, хранит
+        только случайный идентификатор. Пользовательская cookie и Bearer-токен к `/api/v1/admin/*` не
+        допускаются. Изменяющие запросы требуют заголовок `Origin`, равный адресу приложения.
     cookieAuth:
       type: apiKey
       in: cookie
@@ -292,6 +337,8 @@ components:
           comments,
           company_requests,
           quorum,
+          reports,
+          sports,
           series,
           top_sports,
           pending_organizations,
@@ -339,6 +386,29 @@ components:
             gathering: { $ref: '#/components/schemas/Counter' }
             reached: { $ref: '#/components/schemas/Counter' }
             failed: { $ref: '#/components/schemas/Counter' }
+        reports:
+          type: object
+          description: Жалобы пользователей на мероприятия, сообщения, отзывы, истории и личные сообщения
+          required: [open, resolved_week, dismissed_week, top_reason]
+          properties:
+            open: { $ref: '#/components/schemas/Counter' }
+            resolved_week: { $ref: '#/components/schemas/Counter' }
+            dismissed_week: { $ref: '#/components/schemas/Counter' }
+            top_reason:
+              type: string
+              nullable: true
+              enum: [spam, offensive, fraud, wrong_info, dangerous, other, null]
+              description: Самая частая причина среди открытых жалоб; null, если открытых нет
+          example:
+            { open: 4, resolved_week: 7, dismissed_week: 2, top_reason: spam }
+        sports:
+          type: object
+          description: Пользовательские направления («своё направление» при создании события)
+          required: [custom, hidden]
+          properties:
+            custom: { $ref: '#/components/schemas/Counter' }
+            hidden: { $ref: '#/components/schemas/Counter' }
+          example: { custom: 3, hidden: 1 }
         series:
           type: array
           description: 14 последних дней по Красноярску
@@ -377,7 +447,8 @@ components:
       type: object
       required: [entity, entity_id, title, from, to, actor, comment, at]
       properties:
-        entity: { type: string, enum: [organization, event, comment] }
+        entity:
+          { type: string, enum: [organization, event, comment, report, sport] }
         entity_id: { type: string, format: uuid }
         title: { type: string }
         from: { type: string }

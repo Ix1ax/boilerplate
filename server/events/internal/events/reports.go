@@ -19,7 +19,7 @@ import (
 // решение остаётся за человеком (админом), а пользователь видит, что его сигнал рассмотрен.
 
 var (
-	ErrOwnTarget      = errors.New("Нельзя пожаловаться на своё мероприятие или сообщение")
+	ErrOwnTarget      = errors.New("Нельзя пожаловаться на своё мероприятие, сообщение, отзыв или историю")
 	ErrReportExists   = errors.New("Вы уже пожаловались — жалоба ждёт рассмотрения")
 	ErrTooManyReports = errors.New("Слишком много жалоб за час. Если нарушений много, напишите в поддержку")
 	ErrNotAuthor      = errors.New("Удалить можно только своё сообщение")
@@ -38,10 +38,11 @@ type ReportInput struct {
 
 // Report — жалоба. Target — краткое описание цели, чтобы админ решал, не открывая её отдельно.
 type Report struct {
-	ID         string       `json:"id"`
-	TargetType string       `json:"target_type"`
-	TargetID   string       `json:"target_id"`
-	EventID    string       `json:"event_id"`
+	ID         string `json:"id"`
+	TargetType string `json:"target_type"`
+	TargetID   string `json:"target_id"`
+	// EventID — мероприятие цели; nil у истории и личного сообщения.
+	EventID    *string      `json:"event_id"`
 	Reason     string       `json:"reason"`
 	Details    string       `json:"details"`
 	Status     string       `json:"status"`
@@ -54,19 +55,25 @@ type Report struct {
 	ResolvedAt   *time.Time `json:"resolved_at"`
 }
 
+// ReportTarget — цель глазами админа. Title понятен без типа: «Отзыв о «…»», «История»,
+// «Личное сообщение». Status — в терминах цели: visible/hidden/deleted у сообщений и отзывов,
+// active/expired/deleted у истории, статус мероприятия у события.
 type ReportTarget struct {
 	Title  string `json:"title"`
 	Text   string `json:"text"`
 	Author Person `json:"author"`
 	Status string `json:"status"`
+	// MediaURL — фото или видео истории по админскому адресу (доступно и после истечения, пока жалоба открыта).
+	MediaURL *string `json:"media_url"`
 }
 
 // MyReport — что пользователь видит о своих жалобах.
 type MyReport struct {
-	ID         string     `json:"id"`
-	TargetType string     `json:"target_type"`
-	TargetID   string     `json:"target_id"`
-	EventID    string     `json:"event_id"`
+	ID         string  `json:"id"`
+	TargetType string  `json:"target_type"`
+	TargetID   string  `json:"target_id"`
+	EventID    *string `json:"event_id"`
+	// EventTitle — название мероприятия; у истории и личного сообщения пусто.
 	EventTitle string     `json:"event_title"`
 	Reason     string     `json:"reason"`
 	Status     string     `json:"status"`
@@ -117,29 +124,23 @@ func (s *Service) RemoveParticipant(ctx context.Context, a Actor, eventID, pid, 
 	return s.Store.RemoveParticipant(ctx, a, eventID, pid, reason)
 }
 
-// CreateReport проверяет цель в той же транзакции, что и запись: жалоба на скрытое или чужое
-// событие недоступного статуса невозможна, а на своё — бессмысленна.
-func (r *Repository) CreateReport(ctx context.Context, a Actor, targetType, eventID, targetID string, in ReportInput) (MyReport, error) {
+// reportTargetTypes — на что можно пожаловаться. Подписи для людей — в contracts (reportTargetLabels).
+var reportTargetTypes = map[string]bool{"event": true, "comment": true, "review": true, "story": true, "direct_message": true}
+
+// CreateReport проверяет цель в той же транзакции, что и запись: жалоба возможна только на то,
+// что жалующийся сейчас видит, и не на своё. parentID — мероприятие для event и comment,
+// переписка для direct_message; у отзыва и истории родителя в адресе нет.
+func (r *Repository) CreateReport(ctx context.Context, a Actor, targetType, parentID, targetID string, in ReportInput) (MyReport, error) {
+	if !reportTargetTypes[targetType] {
+		return MyReport{}, ErrNotFound
+	}
 	id := uuid.NewString()
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
-		// Событие должно быть видно жалующемуся (те же правила, что у карточки).
-		e, err := getEvent(ctx, tx, a, eventID)
+		eventID, author, err := reportTarget(ctx, tx, a, targetType, parentID, targetID)
 		if err != nil {
 			return err
 		}
-		isOwner := e.IsOrganizer
-		if targetType == "comment" {
-			var author, status string
-			err = tx.QueryRow(ctx, "SELECT author_id,status FROM comments WHERE id=$1 AND event_id=$2", targetID, eventID).Scan(&author, &status)
-			if errors.Is(err, pgx.ErrNoRows) || err == nil && status != "visible" {
-				return ErrNotFound
-			}
-			if err != nil {
-				return err
-			}
-			isOwner = author == a.ID
-		}
-		if isOwner {
+		if author == a.ID {
 			return ErrOwnTarget
 		}
 		var recent int
@@ -158,7 +159,8 @@ func (r *Repository) CreateReport(ctx context.Context, a Actor, targetType, even
 		if err != nil {
 			return err
 		}
-		return platform.RecordTransition(ctx, tx, "report", id, platform.Transition{From: "none", To: "open", Actor: actorLabel(a), Comment: in.Reason})
+		// Создание тоже событие: так moderation узнаёт о жалобе (в журнал оно не попадает).
+		return record(ctx, tx, "report", id, platform.Transition{From: "none", To: "open", Actor: actorLabel(a), Comment: in.Reason})
 	})
 	if err != nil {
 		return MyReport{}, err
@@ -166,8 +168,50 @@ func (r *Repository) CreateReport(ctx context.Context, a Actor, targetType, even
 	return r.myReport(ctx, r.db, a, id)
 }
 
-const myReportSelect = `SELECT r.id,r.target_type,r.target_id,r.event_id,e.title,r.reason,r.status,r.resolution,r.created_at,r.resolved_at
-FROM reports r JOIN events e ON e.id=r.event_id`
+// reportTarget находит цель жалобы с теми же правилами видимости, что у её обычного чтения, и
+// возвращает мероприятие (nil у истории и личного сообщения) и автора. Невидимая цель — 404,
+// чтобы по ответу нельзя было узнать о чужой истории или переписке.
+func reportTarget(ctx context.Context, tx pgx.Tx, a Actor, targetType, parentID, targetID string) (*string, string, error) {
+	var eventID *string
+	var author string
+	var err error
+	switch targetType {
+	case "event", "comment":
+		// Событие должно быть видно жалующемуся (те же правила, что у карточки).
+		var e Event
+		if e, err = getEvent(ctx, tx, a, parentID); err != nil {
+			return nil, "", err
+		}
+		eventID = &e.ID
+		if targetType == "event" {
+			if e.IsOrganizer {
+				return eventID, a.ID, nil
+			}
+			return eventID, "", nil
+		}
+		err = tx.QueryRow(ctx, "SELECT author_id FROM comments WHERE id=$1 AND event_id=$2 AND status='visible'", targetID, parentID).Scan(&author)
+	case "review":
+		// Отзыв виден в профиле организатора, пока не скрыт и мероприятие опубликовано.
+		err = tx.QueryRow(ctx, `SELECT r.event_id::text,r.author_id FROM event_reviews r JOIN events e ON e.id=r.event_id
+WHERE r.id=$1 AND r.hidden_at IS NULL AND e.status='published'`, targetID).Scan(&eventID, &author)
+	case "story":
+		// Историю видят автор и друзья, пока она не удалена и не истекла (как в ленте).
+		err = tx.QueryRow(ctx, `SELECT s.author_id FROM stories s WHERE s.id=$1 AND s.deleted_at IS NULL AND s.expires_at>now()
+AND (s.author_id=$2 OR EXISTS(SELECT 1 FROM friendships f WHERE f.user_a=LEAST($2,s.author_id) AND f.user_b=GREATEST($2,s.author_id) AND f.status='accepted'))`,
+			targetID, a.ID).Scan(&author)
+	case "direct_message":
+		// Пожаловаться на личное сообщение может только участник переписки.
+		err = tx.QueryRow(ctx, `SELECT m.author_id FROM direct_messages m JOIN direct_chats c ON c.id=m.chat_id
+WHERE m.id=$1 AND c.id=$2 AND $3 IN(c.user_a,c.user_b) AND m.hidden_at IS NULL`, targetID, parentID, a.ID).Scan(&author)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", ErrNotFound
+	}
+	return eventID, author, err
+}
+
+const myReportSelect = `SELECT r.id,r.target_type,r.target_id,r.event_id::text,COALESCE(e.title,''),r.reason,r.status,r.resolution,r.created_at,r.resolved_at
+FROM reports r LEFT JOIN events e ON e.id=r.event_id`
 
 func scanMyReport(row pgx.Row) (MyReport, error) {
 	var m MyReport
@@ -190,29 +234,35 @@ func (r *Repository) MyReports(ctx context.Context, a Actor) ([]MyReport, error)
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (MyReport, error) { return scanMyReport(row) })
 }
 
-// reportSelect — очередь для админа: цель описана сразу (название события или текст сообщения
-// вместе с автором), даже если сообщение уже скрыто — админ видит оригинал.
-const reportSelect = `SELECT r.id,r.target_type,r.target_id,r.event_id,r.reason,r.details,r.status,r.resolution,
+// reportSelect — очередь для админа: цель описана сразу (заголовок, текст и автор), даже если
+// она уже скрыта или удалена — админ видит оригинал. Из личной переписки виден только текст
+// того сообщения, на которое пожаловались.
+const reportSelect = `SELECT r.id,r.target_type,r.target_id,r.event_id::text,r.reason,r.details,r.status,r.resolution,
 r.reporter_id,COALESCE(rp.display_name,''),COALESCE(rp.level,''),
-e.title,
-CASE WHEN r.target_type='comment' THEN COALESCE(left(c.body,500),'') ELSE left(e.description,500) END,
-CASE WHEN r.target_type='comment' THEN c.author_id ELSE e.organizer_id END,
-COALESCE(CASE WHEN r.target_type='comment' THEN cp.display_name ELSE ep.display_name END,''),
-CASE WHEN r.target_type='comment' THEN COALESCE(c.status,'') ELSE e.status END,
+COALESCE(t.title,''),COALESCE(t.body,''),COALESCE(t.author_id,''),COALESCE(ap.display_name,''),COALESCE(t.status,''),
 (SELECT count(*) FROM reports x WHERE x.target_type=r.target_type AND x.target_id=r.target_id AND x.status='open'),
-r.created_at,r.resolved_at
-FROM reports r JOIN events e ON e.id=r.event_id
-LEFT JOIN comments c ON r.target_type='comment' AND c.id=r.target_id
+r.created_at,r.resolved_at,t.media_url
+FROM reports r LEFT JOIN events e ON e.id=r.event_id
+LEFT JOIN LATERAL (
+  SELECT e.title, left(e.description,500) AS body, e.organizer_id AS author_id, e.status, NULL::text AS media_url WHERE r.target_type='event'
+  UNION ALL SELECT e.title, left(c.body,500), c.author_id, c.status, NULL FROM comments c WHERE r.target_type='comment' AND c.id=r.target_id
+  UNION ALL SELECT 'Отзыв о «'||COALESCE(e.title,'')||'»', left(v.body,500), v.author_id,
+    CASE WHEN v.hidden_at IS NULL THEN 'visible' ELSE 'hidden' END, NULL FROM event_reviews v WHERE r.target_type='review' AND v.id=r.target_id
+  UNION ALL SELECT 'История', left(s.body,500), s.author_id,
+    CASE WHEN s.deleted_at IS NOT NULL THEN 'deleted' WHEN s.expires_at<=now() THEN 'expired' ELSE 'active' END,
+    CASE WHEN s.media_key IS NOT NULL THEN '/api/v1/admin/stories/'||s.id::text||'/media' END FROM stories s WHERE r.target_type='story' AND s.id=r.target_id
+  UNION ALL SELECT 'Личное сообщение', left(m.body,500), m.author_id,
+    CASE WHEN m.hidden_at IS NULL THEN 'visible' ELSE 'hidden' END, NULL FROM direct_messages m WHERE r.target_type='direct_message' AND m.id=r.target_id
+) t ON true
 LEFT JOIN profiles rp ON rp.user_id=r.reporter_id
-LEFT JOIN profiles cp ON cp.user_id=c.author_id
-LEFT JOIN profiles ep ON ep.user_id=e.organizer_id`
+LEFT JOIN profiles ap ON ap.user_id=t.author_id`
 
 func scanReport(row pgx.Row) (Report, error) {
 	var x Report
 	var level, authorID string
 	err := row.Scan(&x.ID, &x.TargetType, &x.TargetID, &x.EventID, &x.Reason, &x.Details, &x.Status, &x.Resolution,
 		&x.Reporter.ID, &x.Reporter.Name, &level, &x.Target.Title, &x.Target.Text, &authorID, &x.Target.Author.Name,
-		&x.Target.Status, &x.OpenOnTarget, &x.CreatedAt, &x.ResolvedAt)
+		&x.Target.Status, &x.OpenOnTarget, &x.CreatedAt, &x.ResolvedAt, &x.Target.MediaURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNotFound
 	}
@@ -263,16 +313,19 @@ func (r *Repository) DismissReport(ctx context.Context, a Actor, id, resolution 
 	return scanReport(r.db.QueryRow(ctx, reportSelect+" WHERE r.id=$1", id))
 }
 
-// closeReports — общий финал: при скрытии сообщения или снятии события (resolved) и при отказе
+// closeReports — общий финал: при скрытии или удалении цели (resolved) и при отказе
 // (dismissed). Вызывается в транзакции, которая меняет саму цель.
 func closeReports(ctx context.Context, tx pgx.Tx, a Actor, targetType, targetID, to, resolution string) error {
 	rows, err := tx.Query(ctx, `UPDATE reports r SET status=$3, resolution=$4, resolved_by=$5, resolved_at=now()
-FROM events e WHERE e.id=r.event_id AND r.target_type=$1 AND r.target_id=$2 AND r.status='open'
-RETURNING r.id, r.reporter_id, e.id, e.title`, targetType, targetID, to, resolution, actorLabel(a))
+WHERE r.target_type=$1 AND r.target_id=$2 AND r.status='open'
+RETURNING r.id, r.reporter_id, r.event_id::text, COALESCE((SELECT title FROM events WHERE id=r.event_id),'')`, targetType, targetID, to, resolution, actorLabel(a))
 	if err != nil {
 		return err
 	}
-	type closed struct{ id, reporter, eventID, title string }
+	type closed struct {
+		id, reporter, title string
+		eventID             *string
+	}
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (closed, error) {
 		var c closed
 		return c, row.Scan(&c.id, &c.reporter, &c.eventID, &c.title)
@@ -285,18 +338,34 @@ RETURNING r.id, r.reporter_id, e.id, e.title`, targetType, targetID, to, resolut
 		title = "Жалоба рассмотрена: нарушений не нашли"
 	}
 	for _, c := range list {
-		if err = platform.RecordTransition(ctx, tx, "report", c.id, platform.Transition{From: "open", To: to, Actor: actorLabel(a), Comment: resolution}); err != nil {
+		if err = record(ctx, tx, "report", c.id, platform.Transition{From: "open", To: to, Actor: actorLabel(a), Comment: resolution}); err != nil {
 			return err
 		}
-		body := "«" + c.title + "»"
+		body, link := reportSubject(targetType, c.title), ""
+		if c.eventID != nil {
+			link = "/events/" + *c.eventID
+		}
 		if resolution != "" {
 			body += ": " + resolution
 		}
-		if err = notify(ctx, tx, c.reporter, title, body, "/events/"+c.eventID); err != nil {
+		if err = notify(ctx, tx, c.reporter, title, body, link); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// reportSubject — о чём была жалоба, словами для уведомления.
+func reportSubject(targetType, eventTitle string) string {
+	switch targetType {
+	case "review":
+		return "Отзыв о «" + eventTitle + "»"
+	case "story":
+		return "История"
+	case "direct_message":
+		return "Личное сообщение"
+	}
+	return "«" + eventTitle + "»"
 }
 
 // DeleteComment — автор убирает своё сообщение. Текст скрывается у всех, кроме админа
@@ -417,4 +486,9 @@ func (r *Repository) RemoveParticipant(ctx context.Context, a Actor, eventID, pi
 		return err
 	})
 	return out, err
+}
+
+// AdminReport — одна жалоба с описанием цели для разбора (копилот модератора).
+func (r *Repository) AdminReport(ctx context.Context, id string) (Report, error) {
+	return scanReport(r.db.QueryRow(ctx, reportSelect+" WHERE r.id=$1", id))
 }

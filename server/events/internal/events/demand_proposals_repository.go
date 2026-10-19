@@ -13,10 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Подбор запускается при открытии списка. Advisory lock исключает разные предложения
-// на одни запросы при одновременном обращении нескольких реплик.
-func (r *Repository) DemandProposals(ctx context.Context, a Actor) ([]DemandProposal, error) {
-	err := r.inTx(ctx, func(tx pgx.Tx) error {
+// BuildDemandProposals собирает новые предложения из активных запросов «Ищу компанию».
+// Запускает его только фоновое задание (раз в минуту): пересчёт тяжёлый и пишет в базу,
+// поэтому чтение списка его не вызывает. Advisory lock — страховка от параллельного пересчёта
+// при ручном вызове, пока работает задание другой реплики.
+func (r *Repository) BuildDemandProposals(ctx context.Context) error {
+	return r.inTx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(733182945)"); err != nil {
 			return err
 		}
@@ -106,9 +108,11 @@ ORDER BY r.created_at,r.id LIMIT 1000`)
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
+}
+
+// DemandProposals — готовые предложения пользователя, только чтение: новые появляются
+// не позже чем через минуту после подходящего запроса (BuildDemandProposals).
+func (r *Repository) DemandProposals(ctx context.Context, a Actor) ([]DemandProposal, error) {
 	rows, err := r.db.Query(ctx, `SELECT p.id,p.sport_id,p.level,p.starts_at,p.area,(p.lat IS NOT NULL),
 CASE WHEN p.status='pending' AND p.expires_at<=now() THEN 'expired' ELSE p.status END,p.event_id,p.expires_at,
 (SELECT count(*) FROM demand_proposal_members n JOIN company_requests r ON r.id=n.request_id WHERE n.proposal_id=p.id AND NOT n.declined AND r.status='active' AND r.expires_at>now()),m.declined

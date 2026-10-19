@@ -229,9 +229,7 @@ const (
 )
 
 func (s *Sessions) allow(ctx context.Context, key string, max int64) (bool, error) {
-	window := "rate:auth:" + key + ":" + time.Now().UTC().Format("200601021504")
-	n, err := s.cache.Eval(ctx, `local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],120) end; return n`, []string{window}).Int64()
-	return n <= max, err
+	return allowRate(ctx, s.cache, key, max)
 }
 
 func emailKey(email string) string {

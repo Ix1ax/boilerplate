@@ -170,7 +170,9 @@ func (r *Repository) DirectMessages(ctx context.Context, a Actor, id string, p S
 	if !access {
 		return SocialResult{}, ErrNotFound
 	}
-	rows, err := r.db.Query(ctx, `SELECT to_jsonb(x) FROM (SELECT m.id,m.chat_id,m.author_id,m.body,m.created_at FROM direct_messages m
+	// Скрытое модератором сообщение остаётся в ленте заглушкой, чтобы переписка не теряла порядок.
+	rows, err := r.db.Query(ctx, `SELECT to_jsonb(x) FROM (SELECT m.id,m.chat_id,m.author_id,
+CASE WHEN m.hidden_at IS NULL THEN m.body ELSE 'Сообщение скрыто модератором' END AS body,m.hidden_at IS NOT NULL AS hidden,m.created_at FROM direct_messages m
 JOIN direct_chats c ON c.id=m.chat_id WHERE c.id=$1 AND $2 IN(c.user_a,c.user_b) AND (m.created_at,m.id)<($3,$4::uuid)
 ORDER BY m.created_at DESC,m.id DESC LIMIT $5) x`, id, a.ID, p.Before, p.ID, p.Limit+1)
 	if err != nil {
@@ -203,7 +205,7 @@ func (r *Repository) SendDirectMessage(ctx context.Context, a Actor, id, body st
 			return err
 		}
 		var err error
-		out, err = socialJSON(tx.QueryRow(ctx, `WITH m AS (INSERT INTO direct_messages(id,chat_id,author_id,body) VALUES($1,$2,$3,$4) RETURNING *) SELECT to_jsonb(m) FROM m`, uuid.NewString(), id, a.ID, body))
+		out, err = socialJSON(tx.QueryRow(ctx, `WITH m AS (INSERT INTO direct_messages(id,chat_id,author_id,body) VALUES($1,$2,$3,$4) RETURNING id,chat_id,author_id,body,false AS hidden,created_at) SELECT to_jsonb(m) FROM m`, uuid.NewString(), id, a.ID, body))
 		if err != nil {
 			return err
 		}
@@ -262,6 +264,9 @@ ORDER BY r.created_at DESC,r.id DESC LIMIT $4) x`, id, p.Before, p.ID, p.Limit+1
 	}
 	return socialRows(rows, p)
 }
+
+// HideReview — автор убирает свой отзыв или админ скрывает его по жалобе. Повтор безопасен.
+// Решение модератора пишется в историю статусов, закрывает жалобы на отзыв и уведомляет автора.
 func (r *Repository) HideReview(ctx context.Context, a Actor, id, reason string) error {
 	if err := socialUUID(id); err != nil {
 		return err
@@ -271,12 +276,29 @@ func (r *Repository) HideReview(ctx context.Context, a Actor, id, reason string)
 		return err
 	}
 	return r.inTx(ctx, func(tx pgx.Tx) error {
-		var organizer string
-		err := tx.QueryRow(ctx, `UPDATE event_reviews SET hidden_at=COALESCE(hidden_at,now()),hidden_by=$2,hidden_reason=$3 WHERE id=$1 AND (author_id=$2 OR $4) RETURNING organizer_id`, id, a.ID, reason, a.Admin).Scan(&organizer)
+		var author, organizer, eventID, title string
+		var hidden bool
+		err := tx.QueryRow(ctx, `SELECT r.author_id,r.organizer_id,r.event_id::text,e.title,r.hidden_at IS NOT NULL
+FROM event_reviews r JOIN events e ON e.id=r.event_id WHERE r.id=$1 AND (r.author_id=$2 OR $3) FOR UPDATE OF r`, id, a.ID, a.Admin).Scan(&author, &organizer, &eventID, &title, &hidden)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
-		if err != nil {
+		if err != nil || hidden {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `UPDATE event_reviews SET hidden_at=now(),hidden_by=$2,hidden_reason=$3 WHERE id=$1`, id, a.ID, reason); err != nil {
+			return err
+		}
+		if err = platform.RecordTransition(ctx, tx, "review", id, platform.Transition{From: "visible", To: "hidden", Actor: actorLabel(a), Comment: reason}); err != nil {
+			return err
+		}
+		resolution := reason
+		if author == a.ID {
+			resolution = "Автор скрыл отзыв"
+		} else if err = notify(ctx, tx, author, "Ваш отзыв скрыт модератором", "Отзыв о «"+title+"»: "+reason, "/events/"+eventID); err != nil {
+			return err
+		}
+		if err = closeReports(ctx, tx, a, "review", id, "resolved", resolution); err != nil {
 			return err
 		}
 		return socialSignal(ctx, tx, organizer, "reviews.changed", id)
@@ -301,6 +323,9 @@ AND (s.created_at,s.id)<($2,$3::uuid) ORDER BY s.created_at DESC,s.id DESC LIMIT
 	}
 	return socialRows(rows, p)
 }
+
+// DeleteStory — автор удаляет свою историю или админ удаляет её по жалобе (в том числе уже
+// истёкшую). Файл медиа потом убирает задание story-media-cleanup.
 func (r *Repository) DeleteStory(ctx context.Context, a Actor, id, reason string) error {
 	if err := socialUUID(id); err != nil {
 		return err
@@ -309,11 +334,30 @@ func (r *Repository) DeleteStory(ctx context.Context, a Actor, id, reason string
 	if err != nil {
 		return err
 	}
-	tag, err := r.db.Exec(ctx, `UPDATE stories SET deleted_at=COALESCE(deleted_at,now()),deleted_by=$2,delete_reason=$3 WHERE id=$1 AND (author_id=$2 OR $4)`, id, a.ID, reason, a.Admin)
-	if err == nil && tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return err
+	return r.inTx(ctx, func(tx pgx.Tx) error {
+		var author string
+		var deleted bool
+		err := tx.QueryRow(ctx, `SELECT author_id,deleted_at IS NOT NULL FROM stories WHERE id=$1 AND (author_id=$2 OR $3) FOR UPDATE`, id, a.ID, a.Admin).Scan(&author, &deleted)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil || deleted {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `UPDATE stories SET deleted_at=now(),deleted_by=$2,delete_reason=$3 WHERE id=$1`, id, a.ID, reason); err != nil {
+			return err
+		}
+		if err = platform.RecordTransition(ctx, tx, "story", id, platform.Transition{From: "active", To: "deleted", Actor: actorLabel(a), Comment: reason}); err != nil {
+			return err
+		}
+		resolution := reason
+		if author == a.ID {
+			resolution = "Автор удалил историю"
+		} else if err = notify(ctx, tx, author, "Вашу историю удалил модератор", reason, ""); err != nil {
+			return err
+		}
+		return closeReports(ctx, tx, a, "story", id, "resolved", resolution)
+	})
 }
 func (r *Repository) ClubMembership(ctx context.Context, a Actor, id string, join bool) error {
 	if err := socialUUID(id); err != nil {

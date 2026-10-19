@@ -18,17 +18,22 @@ info:
 
     **Блокировка.** Администратор блокирует учётную запись с причиной; вход по паролю закрывается сразу,
     открытые сессии — в течение 30 секунд.
+
+
+    **Администраторы.** У админки свой вход (`/auth/admin/*` gateway) и своя cookie `starter_admin_session`.
+    Пользовательская сессия и Bearer-токен Keycloak к `/api/v1/admin/*` не допускаются, даже с ролью admin.
+    Первого суперадминистратора сервис создаёт при старте из `SUPERADMIN_EMAIL` и `SUPERADMIN_PASSWORD`;
+    остальных админов создаёт, блокирует и удаляет он.
 servers:
   - url: /
     description: Через gateway на том же origin (в Docker — Nginx на :3000)
 security:
-  - keycloak:
-      - openid
-  - cookieAuth: []
-  - bearerAuth: []
+  - adminCookie: []
 tags:
   - name: Учётные записи (админ)
     description: 'Пользователи обычной регистрации: поиск, карточка, блокировка. Только для роли admin.'
+  - name: Администраторы (суперадмин)
+    description: 'Учётные записи админки: создание, блокировка, сброс пароля, удаление. Только суперадминистратор.'
 paths:
   /api/v1/admin/accounts:
     get:
@@ -165,8 +170,259 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/admin/admins:
+    get:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: listAdmins
+      summary: Администраторы
+      description: Суперадминистратор первым, затем новые. Удалённые показываются только при `status=deleted`.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: q
+          in: query
+          description: Часть почты или имени (до 100 символов)
+          schema:
+            type: string
+            maxLength: 100
+          example: moder
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - active
+              - blocked
+              - deleted
+      responses:
+        '200':
+          description: Страница администраторов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: createAdmin
+      summary: Создать администратора
+      description:
+        Суперадминистратор задаёт почту, имя и начальный пароль (от 12 символов, буквы и цифры) и передаёт
+        их новому админу. Сменить пароль админ может сам — `POST /auth/admin/password`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminInput'
+            example:
+              email: moderator@example.ru
+              name: Ольга Модератор
+              password: НадёжныйПароль2026
+      responses:
+        '201':
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Admin'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/admins/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: getAdmin
+      summary: Карточка администратора
+      description: Статус, последний вход и история — создание, блокировки, смены и сбросы пароля, удаление.
+      responses:
+        '200':
+          description: Карточка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: deleteAdmin
+      summary: Удалить администратора
+      description:
+        Мягкое удаление — история решений остаётся, почта освобождается. Открытые сессии gateway закрывает при
+        следующей сверке статуса (не дольше 10 секунд). Суперадминистратора удалить нельзя (409
+        `superadmin_protected`).
+      responses:
+        '200':
+          description: Удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Admin'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/admins/{id}/block:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: blockAdmin
+      summary: Заблокировать администратора
+      description: Вход закрывается сразу, открытые сессии — не дольше чем через 10 секунд. Причина обязательна.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Ушёл из команды модерации
+      responses:
+        '200':
+          description: Заблокирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Admin'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/admins/{id}/unblock:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: unblockAdmin
+      summary: Разблокировать администратора
+      responses:
+        '200':
+          description: Разблокирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Admin'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/admins/{id}/password:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Администраторы (суперадмин)
+      operationId: resetAdminPassword
+      summary: Задать администратору новый пароль
+      description:
+        Для забытого или утёкшего пароля. Все открытые сессии этого админа закрываются. Пароль суперадминистратора
+        так не меняется — он меняет его сам.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 128
+            example:
+              password: НовыйПароль2026x
+      responses:
+        '200':
+          description: Пароль изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Admin'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: starter_admin_session
+      description:
+        Сессия админки — отдельная от пользовательской. Ставится после `POST /auth/admin/login`, хранит
+        только случайный идентификатор. Пользовательская cookie и Bearer-токен к `/api/v1/admin/*` не
+        допускаются. Изменяющие запросы требуют заголовок `Origin`, равный адресу приложения.
     cookieAuth:
       type: apiKey
       in: cookie
@@ -293,7 +549,7 @@ components:
           description: Причина блокировки; пусто у активной
         roles:
           type: array
-          description: Регистрация даёт только роль user — модераторы входят через «Столото ID»
+          description: Регистрация даёт только роль user — администраторы входят отдельно (/auth/admin/login)
           items:
             type: string
           example:
@@ -349,6 +605,133 @@ components:
                   actor:
                     type: string
                     description: self или имя администратора
+                  comment:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+    AdminInput:
+      type: object
+      required:
+        - email
+        - name
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: От 12 символов, буквы и цифры, не из списка частых, не совпадает с почтой
+    Admin:
+      type: object
+      description: Учётная запись администратора (без пароля)
+      required:
+        - id
+        - email
+        - name
+        - role
+        - status
+        - block_reason
+        - roles
+        - created_by
+        - last_login_at
+        - created_at
+        - password_changed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Тот же идентификатор, что X-User-ID в сервисах при действиях админа
+        email:
+          type: string
+          format: email
+          example: moderator@example.ru
+        name:
+          type: string
+          example: Ольга Модератор
+        role:
+          type: string
+          enum:
+            - superadmin
+            - admin
+        status:
+          type: string
+          enum:
+            - active
+            - blocked
+            - deleted
+        block_reason:
+          type: string
+        roles:
+          type: array
+          description: admin у всех, superadmin — у суперадминистратора
+          items:
+            type: string
+          example:
+            - admin
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: Кто создал; у суперадминистратора — null
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        password_changed_at:
+          type: string
+          format: date-time
+    AdminPage:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Admin'
+        total:
+          type: integer
+    AdminDetail:
+      allOf:
+        - $ref: '#/components/schemas/Admin'
+        - type: object
+          required:
+            - history
+          properties:
+            history:
+              type: array
+              items:
+                type: object
+                required:
+                  - action
+                  - actor
+                  - comment
+                  - created_at
+                properties:
+                  action:
+                    type: string
+                    enum:
+                      - created
+                      - blocked
+                      - unblocked
+                      - password_changed
+                      - password_reset
+                      - deleted
+                  actor:
+                    type: string
+                    description: self, system или имя суперадминистратора
                   comment:
                     type: string
                   created_at:

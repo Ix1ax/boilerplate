@@ -28,7 +28,8 @@ test('список задач и визард на мобильной ширин
   await expectNoHorizontalOverflow(page);
 });
 
-test('админский дашборд на мобильной ширине', async ({ page }) => {
+// Админка переезжает на отдельный вход (frontend/admin): вернуть тест вместе с экраном входа.
+test.fixme('админский дашборд на мобильной ширине', async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto('/dashboard/admin');
   await appReady(page);

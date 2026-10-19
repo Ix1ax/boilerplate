@@ -48,6 +48,7 @@ func Middleware(verifier Verifier, sessions ...*Sessions) gin.HandlerFunc {
 			if local != nil {
 				identity := *local
 				identity.Provider = ProviderLocal
+				identity.RealmAccess.Roles = userRoles(identity.RealmAccess.Roles)
 				c.Set("identity", identity)
 				c.Next()
 				return
@@ -72,15 +73,32 @@ func Middleware(verifier Verifier, sessions ...*Sessions) gin.HandlerFunc {
 			return
 		}
 		identity.Provider = ProviderSSO
+		identity.RealmAccess.Roles = userRoles(identity.RealmAccess.Roles)
 		c.Set("identity", identity)
 		c.Next()
 	}
 }
 
+// adminOnlyRoles дают доступ к админке только из админской сессии (AdminSessions). Если такая роль
+// пришла в токене «Столото ID» или в пользовательской сессии, её вырезаем: иначе сервисы
+// по X-User-Roles дали бы пользователю права модератора на пользовательских маршрутах.
+var adminOnlyRoles = map[string]bool{"admin": true, "superadmin": true}
+
+func userRoles(roles []string) []string {
+	out := make([]string, 0, len(roles))
+	for _, r := range roles {
+		if !adminOnlyRoles[r] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // Current — пользователь текущего запроса. Работает только на маршрутах за Middleware.
 func Current(c *gin.Context) Identity { return c.MustGet("identity").(Identity) }
 
-// RequireRole пропускает только пользователей с указанной ролью Keycloak (например admin), иначе 403.
+// RequireRole пропускает только пользователей с указанной ролью, иначе 403. Роль admin бывает
+// только у админской сессии (AdminSessions.Middleware).
 func RequireRole(role string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		for _, r := range Current(c).RealmAccess.Roles {

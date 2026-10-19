@@ -306,6 +306,8 @@ paths:
       tags:
         - Отчёты (админ)
       operationId: getTaskStats
+      security:
+        - adminCookie: []
       summary: Сводка для дашборда
       description: Итоги по всем задачам, разбивка по ИИ-проверке и число созданных задач за последние 14 дней (для
         графика). Все цифры из одного снимка данных.
@@ -340,6 +342,8 @@ paths:
       tags:
         - Отчёты (админ)
       operationId: exportTasksCsv
+      security:
+        - adminCookie: []
       summary: Выгрузка всех задач в CSV
       description: "Файл для Excel: UTF-8 с BOM, разделитель «;», ячейки, похожие на формулы, экранируются. Колонки:
         ID, Владелец, Название, Статус, Создана, Проверка ИИ, Источник проверки."
@@ -359,6 +363,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
 components:
   securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: starter_admin_session
+      description:
+        Сессия админки — отдельная от пользовательской. Ставится после `POST /auth/admin/login`, хранит
+        только случайный идентификатор. Пользовательская cookie и Bearer-токен к `/api/v1/admin/*` не
+        допускаются. Изменяющие запросы требуют заголовок `Origin`, равный адресу приложения.
     cookieAuth:
       type: apiKey
       in: cookie

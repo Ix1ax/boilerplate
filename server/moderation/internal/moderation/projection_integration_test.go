@@ -102,8 +102,56 @@ func TestProjections(t *testing.T) {
 		map[string]any{"id": comment, "event_id": event, "event_title": "Футбол во дворе", "author_id": "u3", "author_name": "Спамер",
 			"body": "Продам абонемент", "status": "hidden", "hidden_reason": "Реклама", "created_at": at})
 
+	// Жалобы: на событие (отклонена), на историю без мероприятия (открыта). Повтор отказа не задваивает журнал.
+	reportSnap := func(id, target, eventID, eventTitle, title, reason, status, resolution string) map[string]any {
+		snap := map[string]any{"id": id, "target_type": target, "target_id": uuid.NewString(), "event_id": nil, "event_title": eventTitle,
+			"target_title": title, "reason": reason, "details": "Там стройка", "status": status, "resolution": resolution,
+			"resolved_by": nil, "reporter_id": "u4", "reporter_name": "Анна", "created_at": at, "resolved_at": nil}
+		if eventID != "" {
+			snap["event_id"] = eventID
+		}
+		if status != "open" {
+			snap["resolved_by"], snap["resolved_at"] = "Модератор", at.Add(3*time.Minute)
+		}
+		return snap
+	}
+	onEvent, onStory := uuid.NewString(), uuid.NewString()
+	send("report", onEvent, "report", "none", "open", "Анна", "wrong_info", at, reportSnap(onEvent, "event", event, "Футбол во дворе", "«Футбол во дворе»", "wrong_info", "open", ""))
+	dismissed := reportSnap(onEvent, "event", event, "Футбол во дворе", "«Футбол во дворе»", "wrong_info", "dismissed", "Проверили — поле открыто")
+	dismissMsg := send("report", onEvent, "report", "open", "dismissed", "Модератор", "Проверили — поле открыто", at.Add(3*time.Minute), dismissed)
+	data, _ = json.Marshal(map[string]any{"entity": "report", "id": onEvent, "kind": "report", "from": "open", "to": "dismissed",
+		"actor": "Модератор", "comment": "Проверили — поле открыто", "at": at.Add(3 * time.Minute), "snapshot": dismissed})
+	must(s.HandleEvent(ctx, dismissMsg, "domain.report.changed", data))
+	send("report", onStory, "report", "none", "open", "Анна", "spam", at, reportSnap(onStory, "story", "", "", "История", "spam", "open", ""))
+
+	// Направления: пользовательское скрыто модератором, базовое пришло переотправкой снимка.
+	custom, base := uuid.NewString(), uuid.NewString()
+	sportSnap := func(id, name string, isCustom, hidden bool) map[string]any {
+		return map[string]any{"id": id, "name": name, "is_custom": isCustom, "hidden": hidden, "created_by": "u5", "created_by_name": "Спамер", "created_at": at}
+	}
+	send("sport", custom, "sport", "none", "visible", "Спамер", "", at, sportSnap(custom, "Купи абонемент", true, false))
+	send("sport", custom, "sport", "visible", "hidden", "Модератор", "Реклама", at.Add(4*time.Minute), sportSnap(custom, "Купи абонемент", true, true))
+	send("sport", base, "sport", "", "", "snapshot", "", at, sportSnap(base, "Футбол", false, false))
+
 	d, err := repo.Dashboard(ctx)
 	must(err)
+	if d.Reports.Open != 1 || d.Reports.DismissedWeek != 1 || d.Reports.ResolvedWeek != 0 || d.Reports.TopReason == nil || *d.Reports.TopReason != "spam" {
+		t.Fatalf("жалобы на дашборде: %+v", d.Reports)
+	}
+	if d.Sports.Custom != 1 || d.Sports.Hidden != 1 {
+		t.Fatalf("направления на дашборде: %+v", d.Sports)
+	}
+	reportRows, err := repo.ReportRows(ctx)
+	must(err)
+	if len(reportRows) != 2 || reportRows[0][1] != "story" || reportRows[0][2] != "" || reportRows[1][5] != "dismissed" || reportRows[1][6] != "Проверили — поле открыто" || reportRows[1][7] != "Модератор" {
+		t.Fatalf("отчёт по жалобам: %v", reportRows)
+	}
+	entries, err := repo.Log(ctx, platform.ListQuery{Limit: 10, Where: " AND entity = ANY($1)", Args: []any{[]string{"report", "sport"}}, OrderBy: " ORDER BY at"})
+	must(err)
+	if entries.Total != 2 || entries.Items[0].Title != "«Футбол во дворе»: жалоба «неверные сведения»" || entries.Items[1].Title != "Купи абонемент" || entries.Items[1].Comment != "Реклама" {
+		t.Fatalf("жалобы и направления в журнале: %+v", entries.Items)
+	}
+
 	if d.Organizations.Rejected != 1 || d.Organizations.Pending != 0 {
 		t.Fatalf("старый снимок откатил организацию: %+v", d.Organizations)
 	}
@@ -116,9 +164,11 @@ func TestProjections(t *testing.T) {
 
 	log, err := repo.Log(ctx, platform.ListQuery{Limit: 10, OrderBy: " ORDER BY at DESC"})
 	must(err)
-	if log.Total != 2 {
-		t.Fatalf("в журнале %d записей, ожидалось 2 (отказ и скрытие): %+v", log.Total, log.Items)
+	if log.Total != 4 {
+		t.Fatalf("в журнале %d записей, ожидалось 4 (отказ организации, скрытие сообщения, отказ по жалобе, скрытие направления): %+v", log.Total, log.Items)
 	}
+	log, err = repo.Log(ctx, platform.ListQuery{Limit: 10, Where: " AND entity <> ALL($1)", Args: []any{[]string{"report", "sport"}}, OrderBy: " ORDER BY at DESC"})
+	must(err)
 	if log.Items[0].Entity != "comment" || !strings.Contains(log.Items[0].Title, "Продам абонемент") || log.Items[1].Comment != "Нет расписания" {
 		t.Fatalf("журнал: %+v", log.Items)
 	}

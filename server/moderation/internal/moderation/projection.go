@@ -41,6 +41,8 @@ var projections = map[string]struct {
 	"participation":   {"participations", []string{"event_id", "event_title", "user_id", "user_name", "status", "first_time", "created_at"}},
 	"comment":         {"comments", []string{"event_id", "event_title", "author_id", "author_name", "body", "status", "hidden_reason", "created_at"}},
 	"company_request": {"company_requests", []string{"user_id", "sport", "level", "status", "created_at"}},
+	"report":          {"reports", []string{"target_type", "target_id", "event_id", "event_title", "target_title", "reason", "details", "status", "resolution", "resolved_by", "reporter_id", "reporter_name", "created_at", "resolved_at"}},
+	"sport":           {"sports", []string{"name", "is_custom", "hidden", "created_by", "created_by_name", "created_at"}},
 }
 
 // upsertSQL принимает только следующую версию. Время используется лишь для старых
@@ -57,8 +59,8 @@ WHERE %[1]s.domain_version < EXCLUDED.domain_version
 }
 
 // Logged — попадает ли переход в журнал модерации: решения по организациям, смена статуса событий
-// (снятие, удаление, возврат, отмена, в том числе автоматическая) и скрытие сообщений.
-// Создание сущностей и переотправка снимков — не решения.
+// (снятие, удаление, возврат, отмена, в том числе автоматическая), скрытие сообщений, отказ по
+// жалобе и скрытие или возврат направления. Создание сущностей и переотправка снимков — не решения.
 func Logged(e Envelope) bool {
 	if e.Actor == "snapshot" || e.From == "none" || e.From == "" || e.From == e.To {
 		return false
@@ -71,6 +73,12 @@ func Logged(e Envelope) bool {
 	case "comment":
 		// Скрытие модератором и возврат скрытого; удаление автором — не решение модерации.
 		return e.To == "hidden" || e.From == "hidden"
+	case "report":
+		// Отказ — отдельное решение админа. Принятая жалоба (resolved) уже в журнале как скрытие
+		// цели или удаление её автором, второй строкой она бы задвоилась.
+		return e.To == "dismissed"
+	case "sport":
+		return true
 	}
 	return false
 }
@@ -108,6 +116,8 @@ func insertLog(ctx context.Context, tx pgx.Tx, messageID string, e Envelope) err
 		Name       string `json:"name"`
 		EventTitle string `json:"event_title"`
 		Body       string `json:"body"`
+		Target     string `json:"target_title"`
+		Reason     string `json:"reason"`
 	}
 	_ = json.Unmarshal(e.Snapshot, &snap)
 	title := snap.Title
@@ -116,6 +126,10 @@ func insertLog(ctx context.Context, tx pgx.Tx, messageID string, e Envelope) err
 		title = snap.Name
 	case "comment":
 		title = snap.EventTitle + ": «" + truncate(snap.Body, 80) + "»"
+	case "report":
+		title = snap.Target + ": жалоба «" + ru(snap.Reason) + "»"
+	case "sport":
+		title = snap.Name
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO moderation_log(message_id,entity,entity_id,kind,title,from_status,to_status,actor,comment,at)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (message_id) DO NOTHING`,

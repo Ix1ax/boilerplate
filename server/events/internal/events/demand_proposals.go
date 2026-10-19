@@ -103,14 +103,13 @@ func demandSlot(now time.Time, group []demandCandidate) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// RefreshDemandProposals позволяет фоновому заданию собрать предложения, даже когда никто не открыл список.
+// RefreshDemandProposals — фоновое задание: единственное место, где собираются новые предложения.
 func (s *Service) RefreshDemandProposals(ctx context.Context) error {
 	store, ok := s.Store.(interface {
-		DemandProposals(context.Context, Actor) ([]DemandProposal, error)
+		BuildDemandProposals(context.Context) error
 	})
 	if !ok {
 		return nil
 	}
-	_, err := store.DemandProposals(ctx, Actor{})
-	return err
+	return store.BuildDemandProposals(ctx)
 }

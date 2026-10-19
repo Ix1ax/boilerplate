@@ -300,10 +300,15 @@ func resolveSport(ctx context.Context, tx pgx.Tx, a Actor, sportID, sportName st
 		}
 		return id, err
 	}
+	// xmax=0 — строка вставлена сейчас, а не найдена по имени: только новое направление публикуем в moderation.
+	var created bool
 	err := tx.QueryRow(ctx, `INSERT INTO sports(id,name,is_custom,created_by) VALUES($1,$2,true,$3)
-ON CONFLICT (lower(btrim(name))) DO UPDATE SET name=sports.name RETURNING id,hidden`, uuid.NewString(), sportName, a.ID).Scan(&id, &hidden)
+ON CONFLICT (lower(btrim(name))) DO UPDATE SET name=sports.name RETURNING id,hidden,xmax=0`, uuid.NewString(), sportName, a.ID).Scan(&id, &hidden, &created)
 	if err == nil && hidden {
 		return "", ErrSportHidden
+	}
+	if err == nil && created {
+		err = record(ctx, tx, "sport", id, platform.Transition{From: "none", To: "visible", Actor: actorLabel(a)})
 	}
 	return id, err
 }
@@ -377,9 +382,11 @@ func (r *Repository) Join(ctx context.Context, a Actor, eventID, message string,
 				}
 			}
 		}
+		// Повторная запись после отмены — новая очередь: created_at сбрасывается, иначе вернувшийся
+		// встал бы в листе ожидания впереди тех, кто записался, пока его не было (promoteWaitlist).
 		if err = tx.QueryRow(ctx, `INSERT INTO participations(id,event_id,user_id,status,message,first_time) VALUES($1,$2,$3,$4,$5,$6)
 ON CONFLICT (event_id,user_id) DO UPDATE SET status=EXCLUDED.status, message=EXCLUDED.message, first_time=EXCLUDED.first_time,
-  buddy=false, buddy_id=NULL, decision_reason='', decided_by=NULL, decided_at=NULL, updated_at=now()
+  buddy=false, buddy_id=NULL, decision_reason='', decided_by=NULL, decided_at=NULL, created_at=now(), updated_at=now()
 RETURNING id`, uuid.NewString(), eventID, a.ID, to, message, firstTime).Scan(&out.ID); err != nil {
 			return err
 		}

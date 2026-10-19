@@ -120,10 +120,27 @@ func TestAdminAndDomainEvents(t *testing.T) {
 	_, err = s.SetSportHidden(ctx, admin, spam.ID, false, "")
 	must(err)
 
+	// Направление публикуется в moderation при создании, скрытии и возврате: журнал и дашборд.
+	rows, err := db.Query(ctx, `SELECT payload->>'from', payload->>'to', payload->>'comment', payload->'snapshot'->>'created_by_name'
+FROM outbox WHERE type='domain.sport.changed' AND payload->>'id'=$1 ORDER BY (payload->>'version')::bigint`, spam.ID)
+	must(err)
+	var steps []string
+	for rows.Next() {
+		var from, to, comment, by string
+		must(rows.Scan(&from, &to, &comment, &by))
+		steps = append(steps, from+">"+to+":"+comment+":"+by)
+	}
+	must(rows.Err())
+	if len(steps) != 3 || steps[0] != "none>visible::Анна" || steps[1] != "visible>hidden:Реклама:Анна" || steps[2] != "hidden>visible::Анна" {
+		t.Fatalf("доменные события направления: %v", steps)
+	}
+
 	// Переотправка снимков догоняет подписчика: по снимку на каждую сущность.
+	var sportsTotal int
+	must(db.QueryRow(ctx, "SELECT count(*) FROM sports").Scan(&sportsTotal))
 	n, err := s.RepublishDomain(ctx)
 	must(err)
-	if n != 3 { // организация и два события; сообщений, записей и запросов нет
+	if n != 3+sportsTotal { // организация, два события и справочник; сообщений, записей, запросов и жалоб нет
 		t.Fatalf("переотправлено %d снимков", n)
 	}
 }

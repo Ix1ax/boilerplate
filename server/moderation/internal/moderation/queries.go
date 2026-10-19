@@ -35,6 +35,19 @@ type Dashboard struct {
 	CompanyRequests struct {
 		Active int `json:"active"`
 	} `json:"company_requests"`
+	// Reports — жалобы пользователей: сколько ждут решения и как разобраны за неделю.
+	Reports struct {
+		Open          int `json:"open"`
+		ResolvedWeek  int `json:"resolved_week"`
+		DismissedWeek int `json:"dismissed_week"`
+		// TopReason — самая частая причина среди открытых жалоб; null, если открытых нет.
+		TopReason *string `json:"top_reason"`
+	} `json:"reports"`
+	// Sports — пользовательские направления («своё направление» при создании события).
+	Sports struct {
+		Custom int `json:"custom"`
+		Hidden int `json:"hidden"`
+	} `json:"sports"`
 	Quorum struct {
 		Gathering int `json:"gathering"`
 		Reached   int `json:"reached"`
@@ -96,13 +109,22 @@ func (r *Repository) Dashboard(ctx context.Context) (Dashboard, error) {
 (SELECT count(*) FROM events WHERE status='published' AND quorum_status='gathering' AND starts_at > now()),
 (SELECT count(*) FROM events WHERE quorum_status='reached'),
 (SELECT count(*) FROM events WHERE quorum_status='failed'),
+(SELECT count(*) FROM reports WHERE status='open'),
+(SELECT count(*) FROM reports WHERE status='resolved' AND resolved_at > now() - interval '7 days'),
+(SELECT count(*) FROM reports WHERE status='dismissed' AND resolved_at > now() - interval '7 days'),
+(SELECT reason FROM reports WHERE status='open' GROUP BY reason ORDER BY count(*) DESC, reason LIMIT 1),
+(SELECT count(*) FROM sports WHERE is_custom),
+(SELECT count(*) FROM sports WHERE is_custom AND hidden),
 (SELECT max(m) FROM (SELECT max(changed_at) m FROM events UNION ALL SELECT max(changed_at) FROM organizations
-  UNION ALL SELECT max(changed_at) FROM participations UNION ALL SELECT max(changed_at) FROM comments) x)`).Scan(
+  UNION ALL SELECT max(changed_at) FROM participations UNION ALL SELECT max(changed_at) FROM comments
+  UNION ALL SELECT max(changed_at) FROM reports UNION ALL SELECT max(changed_at) FROM sports) x)`).Scan(
 		&d.Organizations.Pending, &d.Organizations.Approved, &d.Organizations.Rejected,
 		&d.Events.Upcoming, &d.Events.Unpublished, &d.Events.Deleted, &d.Events.Cancelled, &d.Events.CreatedWeek,
 		&d.Participations.Confirmed, &d.Participations.Pending, &d.Participations.FirstTime,
 		&d.Comments.Total, &d.Comments.Hidden, &d.CompanyRequests.Active,
-		&d.Quorum.Gathering, &d.Quorum.Reached, &d.Quorum.Failed, &d.UpdatedAt)
+		&d.Quorum.Gathering, &d.Quorum.Reached, &d.Quorum.Failed,
+		&d.Reports.Open, &d.Reports.ResolvedWeek, &d.Reports.DismissedWeek, &d.Reports.TopReason,
+		&d.Sports.Custom, &d.Sports.Hidden, &d.UpdatedAt)
 	if err != nil {
 		return d, err
 	}
@@ -257,6 +279,13 @@ FROM organizations o ORDER BY o.created_at, o.id`)
 func (r *Repository) LogRows(ctx context.Context) ([][]string, error) {
 	return r.rows(ctx, `SELECT to_char(at AT TIME ZONE '`+localTZ+`', 'DD.MM.YYYY HH24:MI'), entity, title, from_status, to_status, actor, comment
 FROM moderation_log ORDER BY at DESC LIMIT 10000`)
+}
+
+// ReportRows — жалобы: открытые сначала, затем свежие. «Событие» пусто у истории и личного сообщения.
+func (r *Repository) ReportRows(ctx context.Context) ([][]string, error) {
+	return r.rows(ctx, `SELECT COALESCE(to_char(created_at AT TIME ZONE '`+localTZ+`', 'DD.MM.YYYY HH24:MI'),''), COALESCE(target_type,''),
+COALESCE(event_title,''), COALESCE(reason,''), COALESCE(details,''), COALESCE(status,''), COALESCE(resolution,''), COALESCE(resolved_by,'')
+FROM reports ORDER BY (status<>'open'), created_at DESC NULLS LAST, id LIMIT 10000`)
 }
 
 func (r *Repository) rows(ctx context.Context, sql string) ([][]string, error) {

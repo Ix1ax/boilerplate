@@ -163,8 +163,12 @@ func handle(c *gin.Context, err error) bool {
 		c.AbortWithStatusJSON(422, gin.H{"error": gin.H{"code": "validation_error", "message": err.Error(), "field": "current_password", "request_id": c.GetString("request_id")}})
 	case errors.Is(err, ErrSamePassword):
 		c.AbortWithStatusJSON(422, gin.H{"error": gin.H{"code": "validation_error", "message": err.Error(), "field": "new_password", "request_id": c.GetString("request_id")}})
-	case errors.Is(err, ErrEmailTaken):
+	case errors.Is(err, ErrEmailTaken), errors.Is(err, ErrAdminEmailTaken):
 		fail(c, 409, "email_taken", err.Error())
+	case errors.Is(err, ErrSuperadminProtected):
+		fail(c, 409, "superadmin_protected", err.Error())
+	case errors.Is(err, ErrAdminDeleted):
+		fail(c, 409, "admin_deleted", err.Error())
 	case errors.Is(err, ErrNotFound):
 		fail(c, 404, "not_found", err.Error())
 	case errors.Is(err, ErrTransition):

@@ -1,4 +1,5 @@
-// Сервис identity — учётные записи обычной регистрации (почта и пароль) рядом со «Столото ID».
+// Сервис identity — учётные записи обычной регистрации (почта и пароль) рядом со «Столото ID»
+// и администраторы админки (отдельный вход, первый суперадминистратор — из окружения).
 // Хранит хеши паролей и статус учётной записи; сессии и cookie выдаёт gateway.
 // Запросы принимает только от gateway (общий INTERNAL_TOKEN).
 // Запуск: `identity` — HTTP-сервер; `identity migrate [up|down|status]` — миграции его базы.
@@ -80,9 +81,22 @@ func run(logger *slog.Logger) error {
 	r := platform.NewEngine(logger, 64<<10, check)
 	r.GET("/openapi.yaml", func(c *gin.Context) { c.Data(http.StatusOK, "application/yaml; charset=utf-8", api.Spec) })
 	// Четыре одновременных хеша — около 80 МиБ памяти: остальные запросы входа ждут очереди.
-	service := accounts.New(accounts.NewRepository(db), accounts.NewHasher(4))
-	accounts.RegisterInternal(r.Group("/internal/v1", platform.TrustGatewayCall(c.InternalToken)), service)
-	accounts.RegisterAdmin(r.Group("/api/v1", platform.TrustGateway(c.InternalToken)), service)
+	repo, hasher := accounts.NewRepository(db), accounts.NewHasher(4)
+	service := accounts.New(repo, hasher)
+	admins := accounts.NewAdmins(repo, hasher)
+	created, err := admins.Bootstrap(startup, c.SuperadminEmail, c.SuperadminPassword, c.SuperadminName)
+	if err != nil {
+		return err
+	}
+	if created {
+		logger.Info("Создан суперадминистратор админки", "email", c.SuperadminEmail)
+	}
+	internal := r.Group("/internal/v1", platform.TrustGatewayCall(c.InternalToken))
+	accounts.RegisterInternal(internal, service)
+	accounts.RegisterAdminInternal(internal, admins)
+	api := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
+	accounts.RegisterAdmin(api, service)
+	accounts.RegisterAdmins(api, admins)
 	server := &http.Server{Addr: c.Addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {

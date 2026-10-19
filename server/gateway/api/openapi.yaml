@@ -15,6 +15,11 @@ info:
     приложении (http://localhost:3000), запросы работают и без Authorize — по cookie сессии.
     Для внешних клиентов и скриптов — Bearer-токен (как получить — в описании схемы bearerAuth).
 
+    **Админка — отдельный вход.** `/api/v1/admin/*` открывается только админской сессией (`POST /auth/admin/login`,
+    cookie `starter_admin_session`). Пользовательская сессия и Bearer-токен «Столото ID» туда не допускаются, даже
+    с ролью admin в токене: такая роль у пользователей вырезается. Через Authorize в Swagger админские
+    маршруты не вызвать — войдите в админку в этом же браузере, и Swagger отправит её cookie.
+
     **Общие правила для всех сервисов:**
     - Ошибки приходят в едином формате `{"error": {"code", "message", "request_id"}}`.
     - Заголовок ответа `X-Request-ID` — идентификатор запроса для поиска в логах.
@@ -36,6 +41,9 @@ tags:
       токены и пароли остаются на сервере.
   - name: Пользователь
     description: Текущий пользователь и проверка ролей.
+  - name: Вход в админку
+    description: Отдельный вход администраторов по почте и паролю. Учётные записи хранит identity (таблица admins),
+      первого суперадминистратора создаёт сервис при старте из SUPERADMIN_EMAIL и SUPERADMIN_PASSWORD.
   - name: Служебное
     description: Проверки работоспособности для мониторинга и оркестратора.
 paths:
@@ -352,13 +360,147 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /auth/admin/login:
+    post:
+      tags:
+        - Вход в админку
+      operationId: adminLogin
+      summary: Войти в админку
+      description: |
+        Проверяет почту и пароль администратора и ставит cookie `starter_admin_session` (HttpOnly, SameSite=Strict).
+        Пользовательская сессия при этом не меняется: вход в админку и в приложение независимы. Неизвестная почта
+        и неверный пароль неотличимы — оба 401.
+
+        Защита от подбора: 10 попыток в минуту на одну почту и 300 в минуту всего (429); после 10 неверных паролей
+        подряд учётная запись закрыта на 15 минут (429 с `Retry-After`). Нужен заголовок `Origin` приложения.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+            example: { email: admin@example.test, password: ПарольСуперадмина2026 }
+      responses:
+        "200":
+          description: Вход выполнен, cookie админки установлена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Неверная почта или пароль
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: invalid_credentials, message: Неверная почта или пароль }
+        "403":
+          description: Администратор заблокирован (`reason` — причина) или чужой Origin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: account_blocked, message: 'Учётная запись заблокирована: Ушёл из команды', reason: Ушёл из команды }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /auth/admin/logout:
+    post:
+      tags:
+        - Вход в админку
+      operationId: adminLogout
+      summary: Выйти из админки
+      description: Удаляет админскую сессию на сервере и cookie. Пользовательская сессия не затрагивается.
+      security:
+        - adminCookie: []
+      responses:
+        "204":
+          description: Сессия закрыта
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /auth/admin/password:
+    post:
+      tags:
+        - Вход в админку
+      operationId: adminChangePassword
+      summary: Сменить свой пароль администратора
+      description: Требует текущий пароль. Новый — от 12 символов, буквы и цифры. Все остальные сессии этого
+        администратора закрываются, текущая остаётся.
+      security:
+        - adminCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, format: password }
+                new_password: { type: string, format: password, minLength: 12, maxLength: 128 }
+      responses:
+        "204":
+          description: Пароль изменён
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: Неверный текущий пароль (`field=current_password`) или слабый новый (`field=new_password`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/admin/me:
+    get:
+      tags:
+        - Вход в админку
+      operationId: adminMe
+      security:
+        - adminCookie: []
+      summary: Кто вошёл в админку
+      description: Администратор текущей админской сессии. 401 — нужно войти через `POST /auth/admin/login`.
+        `superadmin` в `roles` — может управлять администраторами (`/api/v1/admin/admins`).
+      responses:
+        "200":
+          description: Администратор
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
   /api/v1/admin/ping:
     get:
       tags:
         - Пользователь
       operationId: adminPing
-      summary: Проверка роли admin
-      description: Отвечает 200 только администратору — образец закрытого по роли маршрута.
+      security:
+        - adminCookie: []
+      summary: Проверка админской сессии
+      description: Отвечает 200 только по админской сессии — образец закрытого маршрута админки.
       responses:
         "200":
           description: Пользователь — администратор
@@ -416,6 +558,14 @@ paths:
                 status: unavailable
 components:
   securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: starter_admin_session
+      description:
+        Сессия админки — отдельная от пользовательской. Ставится после `POST /auth/admin/login`, хранит
+        только случайный идентификатор. Пользовательская cookie и Bearer-токен к `/api/v1/admin/*` не
+        допускаются. Изменяющие запросы требуют заголовок `Origin`, равный адресу приложения.
     cookieAuth:
       type: apiKey
       in: cookie
@@ -533,12 +683,10 @@ components:
           type: string
         roles:
           type: array
-          description: Роли Keycloak; доступ проверяется на сервере, на клиенте роли только для интерфейса
+          description: Роли пользователя (user). Роли admin и superadmin здесь не бывает — у админки свой вход
+            (`GET /api/v1/admin/me`); доступ проверяется на сервере
           items:
             type: string
-            enum:
-              - user
-              - admin
     Session:
       type: object
       description: Результат входа или регистрации; cookie сессии уже установлена
@@ -546,6 +694,32 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/User"
+    AdminUser:
+      type: object
+      description: Администратор админки
+      required: [id, email, name, roles]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          description: admin у всех администраторов, superadmin — у суперадминистратора
+          items:
+            type: string
+            enum: [admin, superadmin]
+    AdminSession:
+      type: object
+      description: Результат входа в админку; cookie `starter_admin_session` уже установлена
+      required: [admin]
+      properties:
+        admin:
+          $ref: "#/components/schemas/AdminUser"
     Health:
       type: object
       required:

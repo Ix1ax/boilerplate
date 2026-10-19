@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type SportEvent,
+  adminChangePasswordSchema,
+  adminCreateSchema,
   changePasswordSchema,
   companyRequestSchema,
   eventInputSchema,
@@ -13,6 +15,7 @@ import {
   profilePatchSchema,
   registerSchema,
   reportSchema,
+  socialModerationReasonSchema,
 } from './sport';
 
 const future = new Date(Date.now() + 48 * 3600_000).toISOString();
@@ -191,5 +194,48 @@ describe('reportSchema', () => {
     expect(
       reportSchema.safeParse({ reason: 'other', details: 'Фейк' }).success,
     ).toBe(true);
+  });
+});
+
+describe('вход в админку', () => {
+  it('пароль администратора — от 12 символов, буквы и цифры', () => {
+    const ok = adminCreateSchema.safeParse({
+      email: ' Mod@Example.RU ',
+      name: 'Ольга',
+      password: 'Модерация2026',
+    });
+    expect(ok.success && ok.data.email).toBe('mod@example.ru');
+    for (const password of ['Короткий1', 'длинныйбезцифр', '123456789012']) {
+      expect(
+        adminCreateSchema.safeParse({
+          email: 'a@b.ru',
+          name: 'Ольга',
+          password,
+        }).success,
+      ).toBe(false);
+    }
+  });
+  it('новый пароль отличается от текущего', () => {
+    expect(
+      adminChangePasswordSchema.safeParse({
+        current_password: 'Модерация2026',
+        new_password: 'Модерация2026',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('socialModerationReasonSchema', () => {
+  it('требует причину не длиннее 500 символов, как сервер', () => {
+    expect(
+      socialModerationReasonSchema.safeParse({ reason: 'Реклама' }).success,
+    ).toBe(true);
+    expect(
+      socialModerationReasonSchema.safeParse({ reason: ' ' }).success,
+    ).toBe(false);
+    expect(
+      socialModerationReasonSchema.safeParse({ reason: 'я'.repeat(501) })
+        .success,
+    ).toBe(false);
   });
 });
