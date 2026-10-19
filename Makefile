@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 K6_IMAGE := grafana/k6:0.54.0
 .DEFAULT_GOAL := help
-.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit events llm-svc llm help setup install infra up down logs api web migrate migrate-status test check fmt smoke integration backup seed e2e docs-sync openapi
+.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit events llm-svc llm help setup install infra up down logs api web migrate migrate-status test check fmt smoke case integration backup seed e2e docs-sync openapi
 help:
 	@echo "setup: настройки | install: зависимости | infra: инфраструктура | up: весь стек в Docker"
 	@echo "gateway/tasks/files/web: разработка | check: проверки и сборка | smoke: проверка API | backup: дамп базы"
@@ -108,6 +108,9 @@ seed:
 	node scripts/seed.mjs
 smoke:
 	npm run smoke
+# Шесть базовых сценариев кейса через API на живом стеке; созданные события удаляет за собой.
+case:
+	npm run smoke:case
 integration: migrate
 	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go test -race -tags=integration ./internal/notifications) && (cd server/realtime && go test -race -tags=integration ./internal/realtime) && (cd server/events && DATABASE_URL=$$EVENTS_DATABASE_URL go test -race -tags=integration ./internal/events) && (cd server/gateway && go test -race -tags=integration ./internal/auth)
 backup:

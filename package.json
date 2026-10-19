@@ -18,7 +18,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "setup": "node scripts/setup.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:case": "node scripts/case-smoke.mjs"
   },
   "devDependencies": {
     "@marp-team/marp-cli": "^4.0.3",

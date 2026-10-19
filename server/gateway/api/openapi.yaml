@@ -136,6 +136,103 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /auth/demo:
+    get:
+      tags:
+        - Вход
+      operationId: listDemoAccounts
+      summary: Демо-аккаунты для быстрого входа
+      description: Карточки «Войти как…» на экране входа. Маршрут есть, только если включён `DEMO_LOGIN=true`;
+        иначе 404 и фронтенд показывает обычную форму. Почты и пароли не возвращаются.
+      security: []
+      responses:
+        "200":
+          description: Аккаунты в порядке показа
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [key, name, role, hint]
+                      properties:
+                        key:
+                          type: string
+                          description: Идентификатор для `POST /auth/demo/{key}`
+                        name:
+                          type: string
+                        role:
+                          type: string
+                          description: Роль простыми словами
+                        hint:
+                          type: string
+                          description: Что проверить под этим аккаунтом
+              example:
+                items:
+                  - key: anna
+                    name: Анна Смирнова
+                    role: Пользователь
+                    hint: Найти событие, записаться, создать своё, задать вопрос
+                  - key: admin
+                    name: Модератор Платформы
+                    role: Администратор
+                    hint: Допуск организаций, снятие событий, скрытие сообщений
+  /auth/demo/{key}:
+    post:
+      tags:
+        - Вход
+      operationId: demoLogin
+      summary: Войти как демо-аккаунт
+      description: Gateway входит в Keycloak по паролю аккаунта из окружения и ставит обычную cookie сессии —
+        дальше всё работает как после входа через форму (роли, обновление токена, выход). Прежняя сессия
+        заменяется, поэтому так же переключаются роли. Нужен заголовок `Origin` приложения.
+      security: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+          example: anna
+      responses:
+        "200":
+          description: Сессия создана, cookie `starter_session` установлена
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, name]
+                properties:
+                  key:
+                    type: string
+                  name:
+                    type: string
+              example:
+                key: anna
+                name: Анна Смирнова
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Keycloak отклонил вход демо-аккаунтом — realm не обновлён после `make setup`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Keycloak недоступен или ответил ошибкой
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/Unavailable"
   /api/v1/me:
     get:
       tags:

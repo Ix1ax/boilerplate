@@ -64,6 +64,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/demo': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Демо-аккаунты для быстрого входа
+     * @description Карточки «Войти как…» на экране входа. Маршрут есть, только если включён `DEMO_LOGIN=true`; иначе 404 и фронтенд показывает обычную форму. Почты и пароли не возвращаются.
+     */
+    get: operations['listDemoAccounts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/demo/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Войти как демо-аккаунт
+     * @description Gateway входит в Keycloak по паролю аккаунта из окружения и ставит обычную cookie сессии — дальше всё работает как после входа через форму (роли, обновление токена, выход). Прежняя сессия заменяется, поэтому так же переключаются роли. Нужен заголовок `Origin` приложения.
+     */
+    post: operations['demoLogin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/me': {
     parameters: {
       query?: never;
@@ -1903,6 +1943,107 @@ export interface operations {
         };
       };
       403: components['responses']['Forbidden'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  listDemoAccounts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Аккаунты в порядке показа */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "key": "anna",
+           *           "name": "Анна Смирнова",
+           *           "role": "Пользователь",
+           *           "hint": "Найти событие, записаться, создать своё, задать вопрос"
+           *         },
+           *         {
+           *           "key": "admin",
+           *           "name": "Модератор Платформы",
+           *           "role": "Администратор",
+           *           "hint": "Допуск организаций, снятие событий, скрытие сообщений"
+           *         }
+           *       ]
+           *     }
+           */
+          'application/json': {
+            items: {
+              /** @description Идентификатор для `POST /auth/demo/{key}` */
+              key: string;
+              name: string;
+              /** @description Роль простыми словами */
+              role: string;
+              /** @description Что проверить под этим аккаунтом */
+              hint: string;
+            }[];
+          };
+        };
+      };
+    };
+  };
+  demoLogin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example anna */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сессия создана, cookie `starter_session` установлена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "key": "anna",
+           *       "name": "Анна Смирнова"
+           *     }
+           */
+          'application/json': {
+            key: string;
+            name: string;
+          };
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Keycloak отклонил вход демо-аккаунтом — realm не обновлён после `make setup` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Keycloak недоступен или ответил ошибкой */
+      502: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       503: components['responses']['Unavailable'];
     };
   };

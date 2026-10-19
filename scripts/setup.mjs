@@ -102,6 +102,9 @@ if (production) {
 const origin = new URL(values.APP_ORIGIN).origin;
 for (const client of realm.clients) {
   if (client.clientId === 'hackathon-web') {
+    // Быстрый вход демо-аккаунтами: gateway получает токен по паролю (password grant) этим же
+    // клиентом, чтобы обновление и выход работали как при обычном входе.
+    client.directAccessGrantsEnabled = values.DEMO_LOGIN === 'true';
     client.redirectUris = [`${origin}/auth/callback`];
     client.webOrigins = [origin];
     client.attributes['post.logout.redirect.uris'] = `${origin}/`;
