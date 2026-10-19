@@ -1,4 +1,4 @@
-# Пример маршрутизации. Нужны серверная сеть Compose и реальные домены приложения и Keycloak.
+# Используется серверным Compose; Caddy сам получает и продлевает сертификаты.
 {$APP_DOMAIN} {
   encode zstd gzip
   # Тестовая почта для жюри: пароль проверяет сам Mailpit (MAILPIT_USER / MAILPIT_PASSWORD).

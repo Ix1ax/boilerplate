@@ -4,6 +4,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const production = process.argv.includes('--production');
 const addMissing = (existing, template) => {
   let merged = existing;
   for (const line of template.split('\n')) {
@@ -27,6 +28,31 @@ const values = Object.fromEntries(
       return [line.slice(0, i), line.slice(i + 1)];
     }),
 );
+const setValue = (name, value) => {
+  values[name] = value;
+  text = new RegExp(`^${name}=`, 'm').test(text)
+    ? text.replace(new RegExp(`^${name}=.*$`, 'm'), `${name}=${value}`)
+    : `${text}\n${name}=${value}\n`;
+};
+if (production) {
+  for (const name of ['APP_DOMAIN', 'AUTH_DOMAIN']) {
+    const domain = values[name] || '';
+    if (
+      domain.length > 253 ||
+      !domain.includes('.') ||
+      !domain
+        .split('.')
+        .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))
+    )
+      throw new Error(`Задайте ${name}: доменное имя без протокола и пути`);
+  }
+  if (values.APP_DOMAIN === values.AUTH_DOMAIN)
+    throw new Error('APP_DOMAIN и AUTH_DOMAIN должны различаться');
+  setValue('APP_ENV', 'production');
+  setValue('APP_ORIGIN', `https://${values.APP_DOMAIN}`);
+  setValue('OIDC_ISSUER', `https://${values.AUTH_DOMAIN}/realms/hackathon`);
+  setValue('SESSION_COOKIE_SECURE', 'true');
+}
 for (const name of [
   'TASKS_DB_PASSWORD',
   'FILES_DB_PASSWORD',
@@ -42,6 +68,7 @@ for (const name of [
   'ADMIN_DEMO_PASSWORD',
   'SECOND_DEMO_PASSWORD',
   'MAILPIT_PASSWORD',
+  ...(production ? ['METRICS_TOKEN'] : []),
 ]) {
   if (!values[name]) {
     values[name] = randomBytes(24).toString('hex');
@@ -57,9 +84,17 @@ for (const [name, value] of Object.entries(values))
 await writeFile(path.join(root, '.env'), text, { mode: 0o600 });
 await chmod(path.join(root, '.env'), 0o600);
 await mkdir(path.join(root, '.local/keycloak'), { recursive: true });
+// Keycloak работает другим UID; каталог импорта содержит только шаблон, секреты — в окружении.
+await chmod(path.join(root, '.local/keycloak'), 0o755);
 const realm = JSON.parse(
   await readFile(path.join(root, 'infra/keycloak/realm.template.json'), 'utf8'),
 );
+if (production) {
+  realm.sslRequired = 'external';
+  realm.clients = realm.clients.filter(
+    (client) => client.clientId !== 'hackathon-cli',
+  );
+}
 const origin = new URL(values.APP_ORIGIN).origin;
 for (const client of realm.clients) {
   if (client.clientId === 'hackathon-web') {
@@ -112,5 +147,5 @@ const web = existsSync(webPath)
 await writeFile(webPath, web, { mode: 0o600 });
 await chmod(webPath, 0o600);
 console.log(
-  'Локальные настройки готовы. Пароли находятся в .env; существующие пароли и настройки фронтенда сохранены.',
+  `${production ? 'Серверные' : 'Локальные'} настройки готовы. Пароли находятся в .env; существующие пароли и настройки фронтенда сохранены.`,
 );

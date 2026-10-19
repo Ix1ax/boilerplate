@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: deploy-production
@@ -12,21 +13,27 @@ concurrency:
 
 jobs:
   deploy:
-    name: Деплой на сервер
+    name: Весь стек на сервер
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-      DEPLOY_SCRIPT: ${{ secrets.DEPLOY_SCRIPT }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/srv/boilerplate' }}
+      REMOTE_DIR: /tmp/boilerplate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Подготовить SSH
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Подготовить SSH и исходники коммита
         shell: bash
         run: |
           set -euo pipefail
-          for variable in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_SCRIPT; do
+          for variable in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             if [[ -z "${!variable}" ]]; then
               echo "::error::Не задан секрет $variable"
               exit 1
@@ -34,20 +41,39 @@ jobs:
           done
           [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
           [[ "$DEPLOY_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
-          [[ "$DEPLOY_SCRIPT" =~ ^/[a-zA-Z0-9_./-]+$ ]]
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
-      - name: Запустить деплой
+          [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] && (( 10#$DEPLOY_PORT > 0 && 10#$DEPLOY_PORT < 65536 ))
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_/-]+$ && "$DEPLOY_PATH" != / ]]
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/deploy_known_hosts"
+          chmod 600 "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/deploy_known_hosts"
+          cat > "$RUNNER_TEMP/deploy_ssh_config" <<EOF
+          Host deploy-target
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            Port $DEPLOY_PORT
+            IdentityFile $RUNNER_TEMP/deploy_key
+            UserKnownHostsFile $RUNNER_TEMP/deploy_known_hosts
+            StrictHostKeyChecking yes
+            BatchMode yes
+            IdentitiesOnly yes
+            ConnectTimeout 15
+            ServerAliveInterval 30
+            ServerAliveCountMax 6
+          EOF
+          git archive --format=tar.gz "$GITHUB_SHA" > "$RUNNER_TEMP/source.tar.gz"
+      - name: Доставить и развернуть весь стек
         shell: bash
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=15 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "$DEPLOY_SCRIPT '$GITHUB_SHA'"
-      - name: Удалить SSH-ключ
+          ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target "mkdir -m 700 '$REMOTE_DIR'"
+          scp -F "$RUNNER_TEMP/deploy_ssh_config" "$RUNNER_TEMP/source.tar.gz" deploy/deploy.sh "deploy-target:$REMOTE_DIR/"
+          ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target \
+            "bash '$REMOTE_DIR/deploy.sh' '$DEPLOY_PATH' '$GITHUB_SHA' '$REMOTE_DIR/source.tar.gz'"
+      - name: Удалить временные файлы
         if: always()
-        run: rm -f ~/.ssh/deploy_key
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/deploy_ssh_config" ]]; then
+            ssh -F "$RUNNER_TEMP/deploy_ssh_config" deploy-target "rm -rf -- '$REMOTE_DIR'" || true
+          fi
+          rm -f "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/deploy_known_hosts" "$RUNNER_TEMP/deploy_ssh_config" "$RUNNER_TEMP/source.tar.gz"

@@ -12,9 +12,11 @@ install: setup
 	for s in gateway tasks files llm notifications audit realtime; do (cd server/$$s && go mod download) || exit 1; done
 infra: setup
 	docker compose up -d --wait --wait-timeout 360 tasks-postgres files-postgres notifications-postgres audit-postgres keycloak-postgres gateway-redis files-s3 rabbitmq mailpit keycloak
-# Образы собираются по одному: параллельная сборка 8 Go-сервисов не помещается в 8 ГБ памяти Docker.
+# Собираем только сервисы с Dockerfile и по одному: параллельная сборка не помещается в 8 ГБ памяти Docker.
 build: setup
-	for s in $$(docker compose --profile app config --services); do docker compose --profile app build $$s || exit 1; done
+	@set -e; services=$$(docker compose --profile app config --format json | \
+		node -e 'const c = JSON.parse(require("node:fs").readFileSync(0, "utf8")); console.log(Object.entries(c.services).filter(([, s]) => s.build).map(([name]) => name).join(" "))'); \
+	for s in $$services; do docker compose --profile app build $$s; done
 up: build
 	docker compose --profile app up -d --wait --wait-timeout 360
 # Qwen в Ollama поднимается отдельно: образ и модель весят несколько гигабайт.

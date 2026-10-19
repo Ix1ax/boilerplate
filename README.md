@@ -1,6 +1,6 @@
 # Стартовая монорепа для хакатонов
 
-Самостоятельный шаблон: Vite + React + TypeScript, Go-микросервисы (gateway, tasks, files), отдельный PostgreSQL на каждый сервис, RabbitMQ, Redis, приватные файлы S3, локальная LLM (Qwen) и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
+Самостоятельный шаблон: Vite + React + TypeScript, Go-микросервисы (gateway, tasks, files, notifications, audit, realtime, llm), отдельный PostgreSQL на каждый сервис, RabbitMQ, Redis, приватные файлы S3, локальная LLM (Qwen) и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
 
 ## Быстрый старт
 
@@ -49,7 +49,8 @@ make demo
 - Загрузка PNG, JPEG, WebP, PDF и текста до 10 МиБ. Тип проверяется по содержимому, скачивание доступно только владельцу.
 - Redis ограничивает изменяющие запросы: 60 в минуту на пользователя. При недоступности Redis запись закрывается.
 - React Query, React Hook Form, общая Zod-схема, светлая/тёмная тема, UI на Base UI, ошибки и повтор загрузки.
-- Go-миграции Goose, Docker-сборки, Nginx для SPA и проксирования API, CI, unit- и интеграционные проверки.
+- Go-миграции Goose, Docker-сборки, Nginx для SPA и проксирования API, локальные unit- и интеграционные проверки.
+- Автодеплой полного стека с Qwen на VPS только при push в `main`: SSH, Caddy/HTTPS, дампы БД перед миграциями и проверка готовности.
 
 ## Структура
 
@@ -70,7 +71,7 @@ client/src/
 packages/contracts/           # OpenAPI, TypeScript-типы и Zod-схемы
 packages/ui/                  # Независимый дополнительный набор UI-компонентов
 infra/                        # PostgreSQL и шаблон realm Keycloak
-deploy/                       # Пример Caddy
+deploy/                       # Серверный deploy.sh и конфигурация Caddy
 scripts/                      # Настройка, экспорт и smoke-проверка
 ```
 
@@ -111,9 +112,13 @@ Vite слушает порт 3000 и проксирует `/api`, `/auth` и `/h
 | `make integration`                     | Настоящие PostgreSQL и Redis: владельцы, пагинация, сессии  |
 | `make smoke`                           | Работающий стек: JWT, права, задачи, файлы и CSRF           |
 | `make fmt`                             | Форматирование                                              |
-| `make backup`                          | Дамп базы приложения в `.local/backups/`                    |
+| `make backup`                          | Дампы четырёх доменных БД в `.local/backups/`               |
 
-`make check` требует установленных зависимостей. Для `make integration` нужны `.env`, PostgreSQL и Redis; для `make smoke` — весь стек. GitHub Actions запускает только деплой на сервер при push в `main`, включая слияние PR. Проверки запускаются локально. Настройка SSH и серверного скрипта описана в [инструкции деплоя](docs/deployment.md#автоматический-деплой).
+`make check` требует установленных зависимостей. Для `make integration` нужны `.env`, PostgreSQL и Redis; для `make smoke` — весь стек. GitHub Actions запускает только деплой на сервер при push в `main`, включая слияние PR. Проверки запускаются локально. Подготовка VPS, доменов и четырёх SSH-секретов описана в [инструкции деплоя](docs/deployment.md#автоматический-деплой).
+
+## Серверный стенд
+
+Нужен Linux VPS с Docker Compose ≥2.24.4, `curl`, `flock`, `tar`, двумя доменами и ориентировочно от 8 ГБ памяти. В `/srv/boilerplate/.env` задайте `APP_DOMAIN` и `AUTH_DOMAIN`; остальные серверные настройки и секреты подготовит контейнерный setup. Устанавливать Git или Node.js на VPS не нужно. Первый деплой скачивает Qwen, поэтому требует времени и места на диске. Подробные шаги, восстановление и ограничения — [docs/deployment.md](docs/deployment.md). Реальный запуск на VPS нужно проверить после настройки сервера и GitHub Actions.
 
 ## API и браузерные сессии
 

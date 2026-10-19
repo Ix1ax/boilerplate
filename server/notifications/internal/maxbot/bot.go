@@ -41,8 +41,9 @@ type Bot struct {
 // которого нет в стандартных хранилищах (Alpine, macOS) — без него запросы падают с
 // «certificate signed by unknown authority». Доверяем ему только в клиенте бота, а не во всём
 // контейнере. Файл — с Госуслуг; SHA-256 D2:6D:2D:02:31:B7:C3:9F:…:CA:8E:CF:31, действует до 2032 года.
+// Источник: https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt (отпечаток закреплён в тесте).
 //
-//go:embed certs/russian_trusted_root_ca.pem
+//go:embed certs/russian_trusted_root_ca.crt
 var russianRootCA []byte
 
 // httpClient — системные корневые сертификаты плюс корневой сертификат Минцифры.

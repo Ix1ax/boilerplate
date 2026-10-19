@@ -1,25 +1,87 @@
-# Production-наложение: docker compose -f compose.yaml -f compose.prod.yaml --profile app up -d
-# Закрывает порты хранилищ и служебных сервисов на хосте: к ним ходят только контейнеры по внутренней сети.
-# Снаружи остаются web-service (за reverse proxy, см. deploy/Caddyfile.example) и keycloak,
-# Mailpit — только через reverse proxy по пути /mail и с паролем.
+# Полный серверный стек запускает deploy/deploy.sh. Публичные порты есть только у Caddy.
+# Теги коммита сохраняют образы предыдущих версий для восстановления вручную.
 services:
-  tasks-postgres: { ports: !reset [] }
-  files-postgres: { ports: !reset [] }
-  notifications-postgres: { ports: !reset [] }
-  audit-postgres: { ports: !reset [] }
-  gateway-redis: { ports: !reset [] }
-  files-s3: { ports: !reset [] }
-  rabbitmq: { ports: !reset [] }
+  tasks-postgres: { ports: !reset [], restart: unless-stopped }
+  files-postgres: { ports: !reset [], restart: unless-stopped }
+  notifications-postgres: { ports: !reset [], restart: unless-stopped }
+  audit-postgres: { ports: !reset [], restart: unless-stopped }
+  keycloak-postgres: { restart: unless-stopped }
+  gateway-redis: { ports: !reset [], restart: unless-stopped }
+  files-s3: { ports: !reset [], restart: unless-stopped }
+  rabbitmq: { ports: !reset [], restart: unless-stopped }
   mailpit:
     ports: !reset []
+    restart: unless-stopped
     environment:
       # Интерфейс живёт под /mail (так его проксирует Caddy) и требует basic-auth.
       MP_WEBROOT: mail
       MP_UI_AUTH: ${MAILPIT_USER:?задайте MAILPIT_USER}:${MAILPIT_PASSWORD:?запустите make setup}
-  llm-ollama: { ports: !reset [] }
-  gateway-service:
+  keycloak:
     ports: !reset []
+    restart: unless-stopped
+    command: [start, --import-realm]
+    environment:
+      KC_HOSTNAME: https://${AUTH_DOMAIN:?задайте AUTH_DOMAIN}
+      KC_HTTP_ENABLED: 'true'
+      KC_PROXY_HEADERS: xforwarded
+    volumes: !override
+      - ${DEPLOY_SHARED_DIR:?запустите deploy/deploy.sh}/keycloak:/opt/keycloak/data/import:ro
+  llm-ollama: { ports: !reset [], restart: unless-stopped }
+  tasks-migrate:
+    image: ${COMPOSE_PROJECT_NAME:?required}/tasks:${DEPLOY_REVISION:?required}
+  files-migrate:
+    image: ${COMPOSE_PROJECT_NAME:?required}/files:${DEPLOY_REVISION:?required}
+  notifications-migrate:
+    image: ${COMPOSE_PROJECT_NAME:?required}/notifications:${DEPLOY_REVISION:?required}
+  audit-migrate:
+    image: ${COMPOSE_PROJECT_NAME:?required}/audit:${DEPLOY_REVISION:?required}
+  tasks-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/tasks:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+  files-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/files:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+  notifications-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/notifications:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+  audit-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/audit:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+  realtime-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/realtime:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+  llm-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/llm:${DEPLOY_REVISION:?required}
+    restart: unless-stopped
+    depends_on:
+      llm-ollama-pull: { condition: service_completed_successfully }
+  gateway-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/gateway:${DEPLOY_REVISION:?required}
+    ports: !reset []
+    restart: unless-stopped
     environment:
       APP_ENV: production
       SESSION_COOKIE_SECURE: 'true'
       METRICS_TOKEN: ${METRICS_TOKEN:?задайте METRICS_TOKEN для /metrics}
+  web-service:
+    image: ${COMPOSE_PROJECT_NAME:?required}/web:${DEPLOY_REVISION:?required}
+    ports: !reset []
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?задайте APP_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN:?задайте AUTH_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web-service: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+
+volumes:
+  caddy-data:
+  caddy-config:

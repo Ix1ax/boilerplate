@@ -31,7 +31,7 @@
 ## 5. Безопасность и качество
 
 - Keycloak OIDC + PKCE, HttpOnly-сессии, CSRF по Origin, rate limit (60 изменений/мин; 10 запросов/мин к LLM).
-- Тесты: `make check`, `make integration`, `make smoke`; CI на каждый pull request.
+- Тесты локально: `make check`, `make integration`, `make smoke`; автодеплой полного стека только при push в `main`.
 - Ограничения LLM: валидация входа и выхода, лимит параллелизма, человек в контуре.
 
 ## 6. Метрики результата

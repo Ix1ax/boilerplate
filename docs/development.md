@@ -21,7 +21,7 @@ make integration
 make smoke
 ```
 
-`make integration` требует `.env`, PostgreSQL и Redis: проверяет миграции, владельцев, пагинацию и полный цикл браузерной сессии с тестовым OIDC-сервером. Smoke требует работающий стек и двух демопользователей. Клиент `hackathon-cli` с password grant предназначен только для локальной проверки API, на сервере его отключают.
+`make integration` требует `.env`, PostgreSQL и Redis: проверяет миграции, владельцев, пагинацию и полный цикл браузерной сессии с тестовым OIDC-сервером. Smoke требует работающий стек и двух демопользователей. Клиент `hackathon-cli` с password grant предназначен только для локальной проверки API, production setup исключает его из нового realm; в существующем realm удалите его вручную.
 
 Для Go: у каждого сервиса свой модуль, команды запускаются в его каталоге.
 
@@ -34,6 +34,12 @@ go mod tidy
 Инфраструктура (`make infra`): `tasks-postgres` на :5433, `files-postgres` на :5434, `rabbitmq` на :5672 (консоль http://localhost:15672, логин и пароль в `.env`). Запуск сервисов вне Docker (после `make infra`): `make gateway`, `make tasks`, `make files`; tasks слушает :8081, files — :8082 (в `.env` для этого заданы `TASKS_URL` и `FILES_URL`).
 
 Миграции есть у каждого сервиса и применяются к его базе: `make migrate`, состояние: `make migrate-status`. Добавляйте новую миграцию вместо редактирования применённой. Откат (`go run ./cmd/tasks migrate down` после загрузки `.env` с `DATABASE_URL=$TASKS_DATABASE_URL`) может удалить данные.
+
+## Ошибки хранилища Docker Desktop
+
+Если сборка останавливается с `input/output error` в `/var/lib/docker/buildkit/*.db` до выполнения Dockerfile, проверьте `df -h /` и состояние Docker Desktop. После заполнения диска сначала освободите место на Mac, затем перезапустите Docker Desktop (`docker desktop restart`) и повторите `make up`. Для чистой сборки всего стека оставляйте запас свободного места под зависимости и слои образов.
+
+`docker system df` показывает объём образов, томов и кеша, если хранилище доступно. При необходимости `docker builder prune` удаляет неиспользуемый кеш сборки: следующие сборки займут больше времени. Не используйте удаление `Docker.raw`, factory reset или очистку volumes для устранения этой ошибки — это может удалить базы и модель. Если ошибка записи сохраняется после освобождения места и перезапуска, сначала сохраните данные и соберите диагностику Docker Desktop.
 
 ## Фронтенд
 
@@ -64,6 +70,8 @@ Vite, React Router, React Query, React Hook Form, Zod и Tailwind v4. `@/` ук�
 | `.local/keycloak/hackathon-realm.json` | Первый импорт Keycloak       |
 
 `make setup` создаёт отсутствующие настройки и сохраняет существующие значения. Пароли генерируются hex-строками, подходящими для DATABASE_URL; `.env` имеет права 0600. При ручной смене пароля учитывайте URL-кодирование и shell-синтаксис: Makefile загружает `.env` как shell-файл.
+
+Серверный `scripts/setup.mjs --production` запускается контейнером в `deploy/deploy.sh`: проверяет `APP_DOMAIN`/`AUTH_DOMAIN`, включает HTTPS-настройки и генерирует недостающие секреты. Полный порядок — [deployment.md](deployment.md). Локальные проверки сохраняются; Actions выполняет только деплой при push в `main`.
 
 `VITE_*` попадает в браузерную сборку: секреты там запрещены. API_URL по умолчанию `/api/v1`, WS_URL пустой: сервер WebSocket пока отсутствует. OIDC-переменные и APP_ORIGIN читает Go, в Docker они задаются окружением API.
 
