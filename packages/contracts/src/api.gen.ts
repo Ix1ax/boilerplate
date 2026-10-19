@@ -64,6 +64,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/demo': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Демо-аккаунты для быстрого входа
+     * @description Карточки «Войти как…» на экране входа. Маршрут есть, только если включён `DEMO_LOGIN=true`; иначе 404 и фронтенд показывает обычную форму. Почты и пароли не возвращаются.
+     */
+    get: operations['listDemoAccounts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/demo/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Войти как демо-аккаунт
+     * @description Gateway входит в Keycloak по паролю аккаунта из окружения и ставит обычную cookie сессии — дальше всё работает как после входа через форму (роли, обновление токена, выход). Прежняя сессия заменяется, поэтому так же переключаются роли. Нужен заголовок `Origin` приложения.
+     */
+    post: operations['demoLogin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/me': {
     parameters: {
       query?: never;
@@ -176,6 +216,26 @@ export interface paths {
      * @description Базовые направления и добавленные пользователями (`is_custom`). Своё направление появляется здесь сразу после создания события с `sport_name` — правка кода не нужна.
      */
     get: operations['listSports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/sports/demand': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Спрос на направление
+     * @description Для формы создания события — «12 человек ищут компанию на бег, чаще утром в выходные». Только числа, без имён. Считаются чужие активные запросы с совместимым уровнем; человек без предпочтений по времени учитывается в каждой части дня и каждом дне. Направление, которого ещё нет в справочнике, — нулевой спрос и пустой `sport_id`.
+     */
+    get: operations['getDemand'];
     put?: never;
     post?: never;
     delete?: never;
@@ -464,6 +524,83 @@ export interface paths {
      * @description Создаёт профиль со статусом `pending`. До одобрения администратором публиковать события от имени организации нельзя. Одна организация на представителя (повтор — 409).
      */
     post: operations['submitOrganization'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/company-requests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Мои запросы «Ищу компанию»
+     * @description Активные первыми. Истёкший запрос (старше 30 дней) возвращается со статусом `expired` и уведомлений больше не присылает.
+     */
+    get: operations['listMyCompanyRequests'];
+    put?: never;
+    /**
+     * Ищу компанию
+     * @description Человек описывает, чем и когда хочет заниматься. Уже опубликованные подходящие события сразу попадают в подборку (`matches_count`, `GET …/matches`). Когда кто-то опубликует новое подходящее событие, придёт уведомление «Нашлась компания». Подходит, если совпадает направление, уровень совместим («не важно» с любой стороны или точное совпадение), время суток и день недели — по местному времени события, а при заданной точке — событие в радиусе. Один активный запрос на направление (повтор — 409). Своё направление заводится в справочнике.
+     */
+    post: operations['createCompanyRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/company-requests/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /** Мой запрос «Ищу компанию» */
+    get: operations['getMyCompanyRequest'];
+    put?: never;
+    post?: never;
+    /**
+     * Закрыть запрос
+     * @description «Нашёл компанию» или «больше не ищу» — уведомления прекращаются. Уже закрытый или чужой запрос — 404.
+     */
+    delete: operations['closeCompanyRequest'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/company-requests/{id}/matches': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Подобранные события
+     * @description Предстоящие опубликованные события, подобранные под запрос, — ближайшие первыми. Снятые и прошедшие сюда не попадают.
+     */
+    get: operations['listCompanyMatches'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1258,6 +1395,8 @@ export interface components {
       confirmed_count: number;
       pending_count: number;
       waitlist_count: number;
+      /** @description Сколько людей из «Ищу компанию» получили это событие в подборке */
+      company_matches: number;
       /** @enum {string} */
       status: 'published' | 'unpublished' | 'deleted' | 'cancelled';
       /** @description Причина снятия, удаления или отмены */
@@ -1411,6 +1550,65 @@ export interface components {
       city: string;
       level: string;
       events: components['schemas']['Event'][];
+    };
+    /** @description Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней — «когда угодно». */
+    CompanyRequestInput: {
+      /** Format: uuid */
+      sport_id?: string;
+      sport_name?: string;
+      /**
+       * @description Мой уровень; any — не важно
+       * @default any
+       * @enum {string}
+       */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      /** @description Утро — до 12:00, день — до 17:00, вечер — позже (по Красноярску) */
+      day_parts?: ('morning' | 'day' | 'evening')[];
+      /** @description 1 — понедельник … 7 — воскресенье */
+      weekdays?: number[];
+      /** @description Район словами — для человека */
+      area?: string;
+      lat?: number | null;
+      lng?: number | null;
+      /** @description Только вместе с точкой */
+      radius_km?: number | null;
+      note?: string;
+    };
+    CompanyRequest: {
+      /** Format: uuid */
+      id: string;
+      sport: components['schemas']['Sport'];
+      /** @enum {string} */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      day_parts: ('morning' | 'day' | 'evening')[];
+      weekdays: number[];
+      area: string;
+      lat: number | null;
+      lng: number | null;
+      radius_km: number | null;
+      note: string;
+      /** @enum {string} */
+      status: 'active' | 'closed' | 'expired';
+      /** Format: date-time */
+      expires_at: string;
+      /** Format: date-time */
+      created_at: string;
+      /** @description Подходящие предстоящие события */
+      matches_count: number;
+      /** @description Сколько ещё людей ищут компанию на это направление (без имён) */
+      others_count: number;
+    };
+    Demand: {
+      /** Format: uuid */
+      sport_id: string | null;
+      count: number;
+      by_day_part: {
+        morning: number;
+        day: number;
+        evening: number;
+      };
+      /** @description С понедельника по воскресенье */
+      by_weekday: number[];
     };
     Reason: {
       /** @description Причина решения — её увидит другая сторона */
@@ -1906,6 +2104,107 @@ export interface operations {
       503: components['responses']['Unavailable'];
     };
   };
+  listDemoAccounts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Аккаунты в порядке показа */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "key": "anna",
+           *           "name": "Анна Смирнова",
+           *           "role": "Пользователь",
+           *           "hint": "Найти событие, записаться, создать своё, задать вопрос"
+           *         },
+           *         {
+           *           "key": "admin",
+           *           "name": "Модератор Платформы",
+           *           "role": "Администратор",
+           *           "hint": "Допуск организаций, снятие событий, скрытие сообщений"
+           *         }
+           *       ]
+           *     }
+           */
+          'application/json': {
+            items: {
+              /** @description Идентификатор для `POST /auth/demo/{key}` */
+              key: string;
+              name: string;
+              /** @description Роль простыми словами */
+              role: string;
+              /** @description Что проверить под этим аккаунтом */
+              hint: string;
+            }[];
+          };
+        };
+      };
+    };
+  };
+  demoLogin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example anna */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сессия создана, cookie `starter_session` установлена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "key": "anna",
+           *       "name": "Анна Смирнова"
+           *     }
+           */
+          'application/json': {
+            key: string;
+            name: string;
+          };
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Keycloak отклонил вход демо-аккаунтом — realm не обновлён после `make setup` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Keycloak недоступен или ответил ошибкой */
+      502: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      503: components['responses']['Unavailable'];
+    };
+  };
   getMe: {
     parameters: {
       query?: never;
@@ -2151,6 +2450,57 @@ export interface operations {
         };
       };
       401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getDemand: {
+    parameters: {
+      query?: {
+        sport_id?: string;
+        /**
+         * @description Своё направление, если его выбирают не из справочника
+         * @example Бег
+         */
+        sport_name?: string;
+        level?: 'any' | 'beginner' | 'amateur' | 'pro';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Спрос */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "sport_id": "3f1c7c2e-6d5a-4c3e-9a51-0b2d9e1f4a10",
+           *       "count": 4,
+           *       "by_day_part": {
+           *         "morning": 3,
+           *         "day": 1,
+           *         "evening": 2
+           *       },
+           *       "by_weekday": [
+           *         1,
+           *         1,
+           *         1,
+           *         1,
+           *         1,
+           *         4,
+           *         3
+           *       ]
+           *     }
+           */
+          'application/json': components['schemas']['Demand'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      422: components['responses']['ValidationError'];
       500: components['responses']['InternalError'];
     };
   };
@@ -2748,6 +3098,168 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       409: components['responses']['Conflict'];
       422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listMyCompanyRequests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Запросы */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['CompanyRequest'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  createCompanyRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "sport_name": "Бег",
+         *       "level": "beginner",
+         *       "day_parts": [
+         *         "morning"
+         *       ],
+         *       "weekdays": [
+         *         6,
+         *         7
+         *       ],
+         *       "area": "Рядом с Октябрьским районом",
+         *       "lat": 56.0153,
+         *       "lng": 92.8932,
+         *       "radius_km": 5,
+         *       "note": "Бегаю 3–5 км, хочу компанию, чтобы не бросить"
+         *     }
+         */
+        'application/json': components['schemas']['CompanyRequestInput'];
+      };
+    };
+    responses: {
+      /** @description Запрос создан */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getMyCompanyRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Запрос */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyRequest'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  closeCompanyRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Запрос закрыт */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listCompanyMatches: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+      };
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description События */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
       500: components['responses']['InternalError'];
     };
   };

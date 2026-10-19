@@ -34,6 +34,11 @@ type Store interface {
 	ModerateEvent(ctx context.Context, a Actor, id, to, reason string) (Event, error)
 	HideComment(ctx context.Context, a Actor, id, reason string) (Comment, error)
 	GetProfile(ctx context.Context, a Actor, id string) (Profile, error)
+	CreateCompanyRequest(ctx context.Context, a Actor, in CompanyRequestInput) (CompanyRequest, error)
+	MyCompanyRequest(ctx context.Context, a Actor, id string) (CompanyRequest, error)
+	MyCompanyRequests(ctx context.Context, a Actor) ([]CompanyRequest, error)
+	CloseCompanyRequest(ctx context.Context, a Actor, id string) error
+	Demand(ctx context.Context, a Actor, sportID, sportName, level string) (Demand, error)
 }
 
 // Service — валидация ввода поверх Store.

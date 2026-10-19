@@ -192,17 +192,36 @@
       "user": "org_rejected",
       "message": "Хочу попробовать, турниров раньше не играл."
     },
-    { "event": "chess-blitz", "user": "second" },
-    { "event": "morning-exercise", "user": "org" },
-    { "event": "run", "user": "org" },
-    { "event": "run", "user": "org_rejected" },
-    { "event": "workout", "user": "org_rejected" },
+    {
+      "event": "chess-blitz",
+      "user": "second"
+    },
+    {
+      "event": "morning-exercise",
+      "user": "org"
+    },
+    {
+      "event": "run",
+      "user": "org"
+    },
+    {
+      "event": "run",
+      "user": "org_rejected"
+    },
+    {
+      "event": "workout",
+      "user": "org_rejected"
+    },
     {
       "event": "yoga",
       "user": "org_pending",
       "message": "Занимаюсь полгода, есть свой коврик."
     },
-    { "event": "football", "user": "second", "message": "Играю в защите." },
+    {
+      "event": "football",
+      "user": "second",
+      "message": "Играю в защите."
+    },
     {
       "event": "football",
       "user": "org",
@@ -228,6 +247,56 @@
       "user": "org_rejected",
       "body": "Скидки на кроссовки до 70% по ссылке в профиле!",
       "hide": "Реклама, не относится к мероприятию."
+    }
+  ],
+  "company_requests": [
+    {
+      "user": "demo",
+      "sport": "Бег",
+      "level": "beginner",
+      "day_parts": ["morning"],
+      "area": "Рядом с набережной Енисея",
+      "note": "Бегаю 3 км, хочу компанию, чтобы не бросить через неделю"
+    },
+    {
+      "user": "demo",
+      "sport": "Скалолазание",
+      "level": "beginner",
+      "day_parts": [],
+      "area": "Любой скалодром",
+      "note": "Никогда не пробовала, ищу, с кем сходить в первый раз"
+    },
+    {
+      "user": "second",
+      "sport": "Шахматы",
+      "level": "beginner",
+      "day_parts": ["evening"],
+      "area": "Центр",
+      "note": "Играю онлайн, хочу за доску с живыми людьми"
+    },
+    {
+      "user": "org",
+      "sport": "Скалолазание",
+      "level": "any",
+      "day_parts": ["evening"],
+      "area": "",
+      "note": "Ищу напарника на страховку"
+    },
+    {
+      "user": "org_pending",
+      "sport": "Бег",
+      "level": "any",
+      "day_parts": ["morning", "day"],
+      "area": "Академгородок",
+      "note": ""
+    },
+    {
+      "user": "org_rejected",
+      "sport": "Бег",
+      "level": "amateur",
+      "day_parts": ["evening"],
+      "area": "Октябрьский район",
+      "note": "Готовлюсь к полумарафону, нужен темп 5:30"
     }
   ]
 }

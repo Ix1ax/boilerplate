@@ -20,12 +20,14 @@ type Config struct {
 	MetricsToken                              string
 	MetricsEnabled                            bool
 	SessionCookieSecure                       bool
+	// DemoLogin включает быстрый вход демо-аккаунтами: постановка кейса разрешает имитацию входа.
+	DemoLogin bool
 }
 
 func Load() (Config, error) {
 	c := Config{
 		TasksURL: os.Getenv("TASKS_URL"), FilesURL: os.Getenv("FILES_URL"), LLMURL: os.Getenv("LLM_SERVICE_URL"), NotificationsURL: os.Getenv("NOTIFICATIONS_URL"), AuditURL: os.Getenv("AUDIT_URL"), RealtimeURL: os.Getenv("REALTIME_URL"), EventsURL: os.Getenv("EVENTS_URL"), AMQPURL: os.Getenv("AMQP_URL"), InternalToken: os.Getenv("INTERNAL_TOKEN"), MetricsToken: os.Getenv("METRICS_TOKEN"), MetricsEnabled: os.Getenv("METRICS_ENABLED") != "false",
-		AppOrigin: Value("APP_ORIGIN", "http://localhost:3000"), OIDCWebClientID: Value("OIDC_WEB_CLIENT_ID", "hackathon-web"), SessionCookieSecure: os.Getenv("SESSION_COOKIE_SECURE") == "true",
+		AppOrigin: Value("APP_ORIGIN", "http://localhost:3000"), OIDCWebClientID: Value("OIDC_WEB_CLIENT_ID", "hackathon-web"), SessionCookieSecure: os.Getenv("SESSION_COOKIE_SECURE") == "true", DemoLogin: os.Getenv("DEMO_LOGIN") == "true",
 		Env: Value("APP_ENV", "development"), Addr: Value("HTTP_ADDR", ":8080"),
 		RedisAddr: Value("REDIS_ADDR", "localhost:6379"), RedisPassword: os.Getenv("REDIS_PASSWORD"),
 		OIDCIssuer: os.Getenv("OIDC_ISSUER"), OIDCClientID: Value("OIDC_CLIENT_ID", "hackathon-api"), OIDCInternalURL: os.Getenv("OIDC_INTERNAL_URL"),

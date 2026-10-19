@@ -39,6 +39,8 @@ type Options struct {
 	AppOrigin string
 	// OIDCIssuer — публичный адрес realm Keycloak; подставляется в Swagger для входа.
 	OIDCIssuer string
+	// DemoAccounts включает быстрый вход «Войти как…» (DEMO_LOGIN=true); пусто — вход только через форму.
+	DemoAccounts []auth.DemoAccount
 }
 
 // NewGateway собирает роутер. Порядок обработки запроса:
@@ -87,6 +89,9 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	if len(sessions) > 0 && sessions[0] != nil {
 		r.Use(sessions[0].CSRF())
 		sessions[0].Register(r)
+		if len(opts.DemoAccounts) > 0 {
+			sessions[0].RegisterDemo(r, opts.DemoAccounts)
+		}
 	}
 	api := r.Group("/api/v1", auth.Middleware(verifier, sessions...))
 	api.GET("/me", func(c *gin.Context) {

@@ -116,20 +116,9 @@ func (s *Sessions) Register(r *gin.Engine) {
 			sessionError(c, 502, "login_failed", "Не удалось завершить вход")
 			return
 		}
-		if _, err = s.verifier.Verify(ctx, token.AccessToken); err != nil {
-			sessionError(c, 401, "invalid_token", "Сервер входа выдал недопустимый токен")
+		if !s.start(c, ctx, token) {
 			return
 		}
-		id := randomID()
-		data, _ := json.Marshal(session{Token: token, Deadline: time.Now().Add(sessionLifetime)})
-		if err = s.cache.Set(ctx, "session:"+id, data, sessionLifetime).Err(); err != nil {
-			sessionError(c, 503, "session_unavailable", "Не удалось сохранить сессию")
-			return
-		}
-		if old, _ := c.Cookie(sessionCookie); old != "" {
-			_ = s.cache.Del(ctx, "session:"+old).Err()
-		}
-		s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
 		c.Redirect(http.StatusFound, state.Next)
 	})
 	r.POST("/auth/logout", func(c *gin.Context) {
@@ -148,6 +137,26 @@ func (s *Sessions) Register(r *gin.Engine) {
 		params := url.Values{"client_id": {s.oauth.ClientID}, "post_logout_redirect_uri": {s.origin + "/"}}
 		c.JSON(200, gin.H{"url": s.issuer + "/protocol/openid-connect/logout?" + params.Encode()})
 	})
+}
+
+// start проверяет полученный от Keycloak токен и создаёт браузерную сессию вместо прежней.
+// При ошибке ответ уже отправлен и возвращается false.
+func (s *Sessions) start(c *gin.Context, ctx context.Context, token *oauth2.Token) bool {
+	if _, err := s.verifier.Verify(ctx, token.AccessToken); err != nil {
+		sessionError(c, 401, "invalid_token", "Сервер входа выдал недопустимый токен")
+		return false
+	}
+	id := randomID()
+	data, _ := json.Marshal(session{Token: token, Deadline: time.Now().Add(sessionLifetime)})
+	if err := s.cache.Set(ctx, "session:"+id, data, sessionLifetime).Err(); err != nil {
+		sessionError(c, 503, "session_unavailable", "Не удалось сохранить сессию")
+		return false
+	}
+	if old, _ := c.Cookie(sessionCookie); old != "" {
+		_ = s.cache.Del(ctx, "session:"+old).Err()
+	}
+	s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
+	return true
 }
 
 // Bearer-клиенты не используют браузерную сессию. Для cookie-запросов,
