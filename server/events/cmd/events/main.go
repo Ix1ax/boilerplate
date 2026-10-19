@@ -21,6 +21,7 @@ import (
 	"example.com/hackathon/server/events/internal/database"
 	"example.com/hackathon/server/events/internal/events"
 	"example.com/hackathon/server/events/internal/platform"
+	"example.com/hackathon/server/events/internal/weather"
 	"github.com/gin-gonic/gin"
 )
 
@@ -86,9 +87,19 @@ func run(logger *slog.Logger) error {
 	group := r.Group("/api/v1", platform.TrustGateway(c.InternalToken))
 	repo := events.NewRepository(db)
 	service := events.New(repo)
+	switch c.WeatherURL {
+	case "off":
+	case "":
+		service.Weather = weather.New(weather.DefaultURL)
+	default:
+		service.Weather = weather.New(c.WeatherURL)
+	}
 	events.Register(group, service)
 	events.RegisterAdmin(group, service)
 	go platform.Every(ctx, db, logger, "outbox-cleanup", time.Hour, repo.CleanupOutbox)
+	// Срок сбора состава проверяем раз в минуту: отмена должна прийти вовремя, а не через час.
+	go platform.Every(ctx, db, logger, "quorum-deadlines", time.Minute, repo.FailQuorums)
+	go platform.Every(ctx, db, logger, "event-reminders", 5*time.Minute, service.SendReminders)
 	// Брокер только публикует уведомления и realtime-сигналы из outbox; без него данные
 	// сохраняются, а события уйдут, когда он станет доступен.
 	brokerDone := make(chan struct{})

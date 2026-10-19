@@ -98,20 +98,20 @@ func TestCaseScenarios(t *testing.T) {
 	}
 
 	// Сценарий 3: свободная запись — сразу участник; лимит мест — лист ожидания и автоподтверждение.
-	joined, err := s.Join(ctx, igor, run.ID, "")
+	joined, err := s.Join(ctx, igor, run.ID, "", false)
 	must(err)
 	if joined.Status != "confirmed" {
 		t.Fatalf("сценарий 3: %s", joined.Status)
 	}
-	if again, err := s.Join(ctx, igor, run.ID, ""); err != nil || again.ID != joined.ID {
+	if again, err := s.Join(ctx, igor, run.ID, "", false); err != nil || again.ID != joined.ID {
 		t.Fatal("сценарий 3: повторная запись создала дубль")
 	}
-	waiting, err := s.Join(ctx, oleg, run.ID, "")
+	waiting, err := s.Join(ctx, oleg, run.ID, "", false)
 	must(err)
 	if waiting.Status != "waitlist" {
 		t.Fatalf("сценарий 3: при полном лимите ожидался лист ожидания, получено %s", waiting.Status)
 	}
-	_, err = s.Join(ctx, anna, run.ID, "")
+	_, err = s.Join(ctx, anna, run.ID, "", false)
 	expect(err, ErrOwnEvent)
 	people, err := s.Participants(ctx, anna, run.ID)
 	must(err)
@@ -126,7 +126,7 @@ func TestCaseScenarios(t *testing.T) {
 	}
 
 	// Сценарий 4: заявка ждёт решения; решает только организатор; принятие и отказ.
-	application, err := s.Join(ctx, anna, tournament.ID, "Играю два года")
+	application, err := s.Join(ctx, anna, tournament.ID, "Играю два года", false)
 	must(err)
 	viewed, err := s.GetEvent(ctx, anna, tournament.ID)
 	must(err)
@@ -142,7 +142,7 @@ func TestCaseScenarios(t *testing.T) {
 	if viewed.MyParticipation.Status != "confirmed" || viewed.PrivateInfo == "" {
 		t.Fatal("сценарий 4: после принятия статус или закрытая информация не обновились")
 	}
-	second, err := s.Join(ctx, igor, tournament.ID, "")
+	second, err := s.Join(ctx, igor, tournament.ID, "", false)
 	must(err)
 	_, err = s.Decide(ctx, oleg, tournament.ID, second.ID, true, "")
 	expect(err, ErrFull)
@@ -184,7 +184,7 @@ func TestCaseScenarios(t *testing.T) {
 	if orgEvents.Total != 0 {
 		t.Fatal("сценарий 6: снятое событие осталось в выдаче")
 	}
-	_, err = s.Join(ctx, person("Новичок"), tournament.ID, "")
+	_, err = s.Join(ctx, person("Новичок"), tournament.ID, "", false)
 	expect(err, ErrEventClosed)
 	stranger := person("Посторонний")
 	_, err = s.GetEvent(ctx, stranger, tournament.ID)

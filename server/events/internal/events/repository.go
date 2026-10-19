@@ -85,12 +85,18 @@ e.level,e.requirements,e.price_note,e.private_info,e.join_mode,e.capacity,
 (SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='waitlist'),
 (SELECT count(*) FROM company_matches cm WHERE cm.event_id=e.id),
 e.status,e.moderation_reason,e.organizer_id,COALESCE(pr.display_name,''),o.id,COALESCE(o.name,''),
-mp.id,mp.status,mp.decision_reason,e.created_at
+mp.id,mp.status,mp.decision_reason,e.created_at,
+e.min_participants,e.quorum_deadline,e.quorum_status,e.outdoor,
+(SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='confirmed' AND p.first_time),
+(SELECT count(*) FROM participations p WHERE p.event_id=e.id AND p.status='confirmed' AND p.buddy),
+COALESCE(mp.first_time,false),COALESCE(mp.buddy,false),bp.user_id,COALESCE(bpr.display_name,'')
 FROM events e
 JOIN sports s ON s.id=e.sport_id
 LEFT JOIN organizations o ON o.id=e.organization_id
 LEFT JOIN profiles pr ON pr.user_id=e.organizer_id
-LEFT JOIN participations mp ON mp.event_id=e.id AND mp.user_id=$1`
+LEFT JOIN participations mp ON mp.event_id=e.id AND mp.user_id=$1
+LEFT JOIN participations bp ON bp.id=mp.buddy_id
+LEFT JOIN profiles bpr ON bpr.user_id=bp.user_id`
 
 // visibleEvent: опубликованное видят все; снятое, удалённое и отменённое — организатор,
 // записавшиеся (с причиной) и админ ($2). Остальным оно «не существует» (404).
@@ -99,12 +105,16 @@ const visibleEvent = ` AND (e.status='published' OR e.organizer_id=$1 OR mp.id I
 func scanEvent(row pgx.Row, a Actor) (Event, error) {
 	var e Event
 	var organizerID, organizerName, orgName string
-	var orgID, mpID, mpStatus, mpReason *string
+	var orgID, mpID, mpStatus, mpReason, buddyID *string
+	var mpFirstTime, mpBuddy bool
+	var buddyName string
 	err := row.Scan(&e.ID, &e.Title, &e.Description, &e.Sport.ID, &e.Sport.Name, &e.Sport.IsCustom, &e.StartsAt, &e.EndsAt, &e.Location, &e.Lat, &e.Lng,
 		&e.Level, &e.Requirements, &e.PriceNote, &e.PrivateInfo, &e.JoinMode, &e.Capacity,
 		&e.ConfirmedCount, &e.PendingCount, &e.WaitlistCount, &e.CompanyMatches,
 		&e.Status, &e.ModerationReason, &organizerID, &organizerName, &orgID, &orgName,
-		&mpID, &mpStatus, &mpReason, &e.CreatedAt)
+		&mpID, &mpStatus, &mpReason, &e.CreatedAt,
+		&e.MinParticipants, &e.QuorumDeadline, &e.QuorumStatus, &e.Outdoor, &e.FirstTimersCount, &e.BuddiesCount,
+		&mpFirstTime, &mpBuddy, &buddyID, &buddyName)
 	if err != nil {
 		return Event{}, err
 	}
@@ -115,7 +125,14 @@ func scanEvent(row pgx.Row, a Actor) (Event, error) {
 		e.Organizer = Organizer{Type: "user", ID: organizerID, Name: organizerName}
 	}
 	if mpID != nil {
-		e.MyParticipation = &MyParticipation{ID: *mpID, Status: *mpStatus, DecisionReason: *mpReason}
+		e.MyParticipation = &MyParticipation{ID: *mpID, Status: *mpStatus, DecisionReason: *mpReason, FirstTime: mpFirstTime, IsBuddy: mpBuddy}
+		if buddyID != nil {
+			e.MyParticipation.Buddy = &Person{ID: *buddyID, Name: buddyName}
+		}
+	}
+	if e.Capacity != nil {
+		left := max(*e.Capacity-e.ConfirmedCount, 0)
+		e.SpotsLeft = &left
 	}
 	// Точку сбора и контакты видят только те, кто точно придёт: организатор и подтверждённые.
 	e.HasPrivateInfo = e.PrivateInfo != ""
@@ -131,12 +148,16 @@ func (r *Repository) GetEvent(ctx context.Context, a Actor, id string) (Event, e
 
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 func getEvent(ctx context.Context, q querier, a Actor, id string) (Event, error) {
 	e, err := scanEvent(q.QueryRow(ctx, eventSelect+" WHERE e.id=$3"+visibleEvent, a.ID, a.Admin, id), a)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Event{}, ErrNotFound
+	}
+	if err == nil && e.MyParticipation != nil && e.MyParticipation.IsBuddy {
+		e.MyParticipation.Newcomers, err = newcomersOf(ctx, q, e.MyParticipation.ID)
 	}
 	return e, err
 }
@@ -231,9 +252,11 @@ func (r *Repository) CreateEvent(ctx context.Context, a Actor, in EventInput) (E
 			orgID = &oid
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO events(id,organizer_id,organization_id,sport_id,title,description,starts_at,ends_at,location,lat,lng,
-level,requirements,price_note,private_info,join_mode,capacity) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+level,requirements,price_note,private_info,join_mode,capacity,min_participants,quorum_deadline,quorum_status,outdoor)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
 			id, a.ID, orgID, sportID, in.Title, in.Description, in.StartsAt, in.EndsAt, in.Location, in.Lat, in.Lng,
-			in.Level, in.Requirements, in.PriceNote, in.PrivateInfo, in.JoinMode, in.Capacity)
+			in.Level, in.Requirements, in.PriceNote, in.PrivateInfo, in.JoinMode, in.Capacity,
+			in.MinParticipants, in.QuorumDeadline, quorumStatusFor(in.MinParticipants), in.Outdoor)
 		if err != nil {
 			return err
 		}
@@ -273,16 +296,16 @@ ON CONFLICT (lower(btrim(name))) DO UPDATE SET name=sports.name RETURNING id,hid
 
 // lockedEvent — поля события, по которым решаются запись и модерация.
 type lockedEvent struct {
-	OrganizerID, Status, JoinMode, Title string
-	StartsAt                             time.Time
-	EndsAt                               *time.Time
-	Capacity                             *int
+	OrganizerID, Status, JoinMode, Title, QuorumStatus string
+	StartsAt                                           time.Time
+	EndsAt                                             *time.Time
+	Capacity, MinParticipants                          *int
 }
 
 func lockEvent(ctx context.Context, tx pgx.Tx, id string) (lockedEvent, error) {
 	var e lockedEvent
-	err := tx.QueryRow(ctx, "SELECT organizer_id,status,join_mode,title,starts_at,ends_at,capacity FROM events WHERE id=$1 FOR UPDATE", id).
-		Scan(&e.OrganizerID, &e.Status, &e.JoinMode, &e.Title, &e.StartsAt, &e.EndsAt, &e.Capacity)
+	err := tx.QueryRow(ctx, "SELECT organizer_id,status,join_mode,title,starts_at,ends_at,capacity,min_participants,quorum_status FROM events WHERE id=$1 FOR UPDATE", id).
+		Scan(&e.OrganizerID, &e.Status, &e.JoinMode, &e.Title, &e.StartsAt, &e.EndsAt, &e.Capacity, &e.MinParticipants, &e.QuorumStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return e, ErrNotFound
 	}
@@ -298,7 +321,7 @@ func confirmedCount(ctx context.Context, tx pgx.Tx, eventID string) (int, error)
 // Join записывает пользователя. Свободная запись — сразу «участвую» (или лист ожидания, если мест
 // нет), по заявке — «ожидает решения». Снятое, отменённое или прошедшее событие отвечает 409
 // даже при переходе по прямой ссылке. Повторный вызов возвращает текущую запись.
-func (r *Repository) Join(ctx context.Context, a Actor, eventID, message string) (MyParticipation, error) {
+func (r *Repository) Join(ctx context.Context, a Actor, eventID, message string, firstTime bool) (MyParticipation, error) {
 	var out MyParticipation
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
 		e, err := lockEvent(ctx, tx, eventID)
@@ -321,7 +344,7 @@ func (r *Repository) Join(ctx context.Context, a Actor, eventID, message string)
 		}
 		if from == "confirmed" || from == "pending" || from == "waitlist" {
 			out = MyParticipation{ID: existingID, Status: from}
-			return nil
+			return tx.QueryRow(ctx, "SELECT first_time,buddy FROM participations WHERE id=$1", existingID).Scan(&out.FirstTime, &out.IsBuddy)
 		}
 		to := "pending"
 		if e.JoinMode == "open" {
@@ -336,18 +359,28 @@ func (r *Repository) Join(ctx context.Context, a Actor, eventID, message string)
 				}
 			}
 		}
-		if err = tx.QueryRow(ctx, `INSERT INTO participations(id,event_id,user_id,status,message) VALUES($1,$2,$3,$4,$5)
-ON CONFLICT (event_id,user_id) DO UPDATE SET status=EXCLUDED.status, message=EXCLUDED.message,
-  decision_reason='', decided_by=NULL, decided_at=NULL, updated_at=now()
-RETURNING id`, uuid.NewString(), eventID, a.ID, to, message).Scan(&out.ID); err != nil {
+		if err = tx.QueryRow(ctx, `INSERT INTO participations(id,event_id,user_id,status,message,first_time) VALUES($1,$2,$3,$4,$5,$6)
+ON CONFLICT (event_id,user_id) DO UPDATE SET status=EXCLUDED.status, message=EXCLUDED.message, first_time=EXCLUDED.first_time,
+  buddy=false, buddy_id=NULL, decision_reason='', decided_by=NULL, decided_at=NULL, updated_at=now()
+RETURNING id`, uuid.NewString(), eventID, a.ID, to, message, firstTime).Scan(&out.ID); err != nil {
 			return err
 		}
-		out.Status = to
+		out.Status, out.FirstTime = to, firstTime
 		if err = platform.RecordTransition(ctx, tx, "participation", out.ID, platform.Transition{From: from, To: to, Actor: actorLabel(a), Comment: message}); err != nil {
 			return err
 		}
 		title := map[string]string{"confirmed": "Новый участник", "pending": "Новая заявка на участие", "waitlist": "Новый участник в листе ожидания"}[to]
-		return notify(ctx, tx, e.OrganizerID, title, displayName(a)+" — «"+e.Title+"»", "/events/"+eventID)
+		who := displayName(a)
+		if firstTime {
+			who += " (идёт впервые)"
+		}
+		if err = notify(ctx, tx, e.OrganizerID, title, who+" — «"+e.Title+"»", "/events/"+eventID); err != nil {
+			return err
+		}
+		if to != "confirmed" {
+			return nil
+		}
+		return afterConfirmed(ctx, tx, eventID, out.ID, e)
 	})
 	return out, err
 }
@@ -375,7 +408,11 @@ func (r *Repository) Leave(ctx context.Context, a Actor, eventID string) error {
 		if err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, "UPDATE participations SET status='cancelled', updated_at=now() WHERE id=$1", pid); err != nil {
+		if _, err = tx.Exec(ctx, "UPDATE participations SET status='cancelled', buddy=false, buddy_id=NULL, updated_at=now() WHERE id=$1", pid); err != nil {
+			return err
+		}
+		// Ушёл проводник — его новичков передаём другим, а если некому, предупреждаем организатора.
+		if err = releaseNewcomers(ctx, tx, eventID, pid, e); err != nil {
 			return err
 		}
 		if err = platform.RecordTransition(ctx, tx, "participation", pid, platform.Transition{From: from, To: "cancelled", Actor: actorLabel(a)}); err != nil {
@@ -401,16 +438,27 @@ func (r *Repository) Leave(ctx context.Context, a Actor, eventID string) error {
 		if err = platform.RecordTransition(ctx, tx, "participation", nextID, platform.Transition{From: "waitlist", To: "confirmed", Actor: "system", Comment: "Освободилось место"}); err != nil {
 			return err
 		}
-		return notify(ctx, tx, nextUser, "Освободилось место — вы участвуете", "«"+e.Title+"»: запись подтверждена из листа ожидания", "/events/"+eventID)
+		if err = notify(ctx, tx, nextUser, "Освободилось место — вы участвуете", "«"+e.Title+"»: запись подтверждена из листа ожидания", "/events/"+eventID); err != nil {
+			return err
+		}
+		return afterConfirmed(ctx, tx, eventID, nextID, e)
 	})
 }
 
-const participantSelect = `SELECT p.id,p.user_id,COALESCE(pr.display_name,''),COALESCE(pr.level,''),p.status,p.message,p.decision_reason,p.created_at
-FROM participations p LEFT JOIN profiles pr ON pr.user_id=p.user_id`
+const participantSelect = `SELECT p.id,p.user_id,COALESCE(pr.display_name,''),COALESCE(pr.level,''),p.status,p.message,p.decision_reason,p.created_at,
+p.first_time,p.buddy,bp.user_id,COALESCE(bpr.display_name,'')
+FROM participations p LEFT JOIN profiles pr ON pr.user_id=p.user_id
+LEFT JOIN participations bp ON bp.id=p.buddy_id LEFT JOIN profiles bpr ON bpr.user_id=bp.user_id`
 
 func scanParticipant(row pgx.Row) (Participant, error) {
 	var p Participant
-	err := row.Scan(&p.ID, &p.User.ID, &p.User.Name, &p.User.Level, &p.Status, &p.Message, &p.DecisionReason, &p.CreatedAt)
+	var buddyID *string
+	var buddyName string
+	err := row.Scan(&p.ID, &p.User.ID, &p.User.Name, &p.User.Level, &p.Status, &p.Message, &p.DecisionReason, &p.CreatedAt,
+		&p.FirstTime, &p.IsBuddy, &buddyID, &buddyName)
+	if buddyID != nil {
+		p.Buddy = &Person{ID: *buddyID, Name: buddyName}
+	}
 	return p, err
 }
 
@@ -436,8 +484,9 @@ CASE p.status WHEN 'pending' THEN 0 WHEN 'confirmed' THEN 1 WHEN 'waitlist' THEN
 		return nil, err
 	}
 	if !full {
+		// Пары «новичок — проводник» видит только организатор; остальным достаточно отметок.
 		for i := range out {
-			out[i].Message = ""
+			out[i].Message, out[i].Buddy = "", nil
 		}
 	}
 	return out, nil
@@ -497,6 +546,11 @@ func (r *Repository) Decide(ctx context.Context, a Actor, eventID, pid string, a
 		}
 		if err = notify(ctx, tx, userID, title, body, "/events/"+eventID); err != nil {
 			return err
+		}
+		if approve {
+			if err = afterConfirmed(ctx, tx, eventID, pid, e); err != nil {
+				return err
+			}
 		}
 		out, err = scanParticipant(tx.QueryRow(ctx, participantSelect+" WHERE p.id=$1", pid))
 		return err
@@ -584,15 +638,23 @@ func changeEventStatus(ctx context.Context, tx pgx.Tx, a Actor, id string, e loc
 }
 
 func (r *Repository) MyParticipations(ctx context.Context, a Actor) ([]MyEntry, error) {
-	rows, err := r.db.Query(ctx, `SELECT p.id,p.status,p.decision_reason,e.id,e.title,s.name,e.starts_at,e.location,e.join_mode,e.status,e.moderation_reason
+	rows, err := r.db.Query(ctx, `SELECT p.id,p.status,p.decision_reason,e.id,e.title,s.name,e.starts_at,e.location,e.join_mode,e.status,e.moderation_reason,
+p.first_time,p.buddy,bp.user_id,COALESCE(bpr.display_name,'')
 FROM participations p JOIN events e ON e.id=p.event_id JOIN sports s ON s.id=e.sport_id
+LEFT JOIN participations bp ON bp.id=p.buddy_id LEFT JOIN profiles bpr ON bpr.user_id=bp.user_id
 WHERE p.user_id=$1 ORDER BY (e.starts_at < now()), e.starts_at LIMIT 200`, a.ID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (MyEntry, error) {
 		var m MyEntry
-		err := row.Scan(&m.ID, &m.Status, &m.DecisionReason, &m.Event.ID, &m.Event.Title, &m.Event.Sport, &m.Event.StartsAt, &m.Event.Location, &m.Event.JoinMode, &m.Event.Status, &m.Event.ModerationReason)
+		var buddyID *string
+		var buddyName string
+		err := row.Scan(&m.ID, &m.Status, &m.DecisionReason, &m.Event.ID, &m.Event.Title, &m.Event.Sport, &m.Event.StartsAt, &m.Event.Location, &m.Event.JoinMode, &m.Event.Status, &m.Event.ModerationReason,
+			&m.FirstTime, &m.IsBuddy, &buddyID, &buddyName)
+		if buddyID != nil {
+			m.Buddy = &Person{ID: *buddyID, Name: buddyName}
+		}
 		return m, err
 	})
 }

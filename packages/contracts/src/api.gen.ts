@@ -350,6 +350,88 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{id}/buddy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Готов встретить новичка
+     * @description «Встречу новичка». Подтверждённый участник (не новичок) отмечается проводником. Платформа сразу назначает ему подтверждённых новичков без пары — до трёх на человека, тем, у кого меньше подопечных. Оба получают уведомление с именем друг друга. Новичок, неподтверждённый или снятое событие — 409.
+     */
+    post: operations['becomeBuddy'];
+    /**
+     * Больше не встречаю
+     * @description Подопечные передаются другим проводникам. Кому пары не нашлось — получает уведомление, а организатор — просьбу встретить самому. То же происходит, если проводник отменяет запись.
+     */
+    delete: operations['stopBeingBuddy'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/remind': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Напомнить участникам сейчас
+     * @description Только организатор, не чаще раза в час, до начала события. Каждый подтверждённый участник получает время, адрес, точку сбора, что взять, погоду (для уличной встречи с точкой на карте) и имя проводника. Такие же напоминания платформа отправляет сама — за сутки и за два часа до начала.
+     */
+    post: operations['remindParticipants'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/weather': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Погода на время встречи
+     * @description Прогноз Open-Meteo на час начала уличной (`outdoor`) встречи с точкой на карте и совет, что надеть и взять. Если прогноза нет (встреча в помещении, нет точки, больше двух недель до начала, сервис недоступен), `available` — false, а `reason` объясняет почему. Ошибкой это не считается.
+     */
+    get: operations['getEventWeather'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events/{id}/participants': {
     parameters: {
       query?: never;
@@ -1356,6 +1438,14 @@ export interface components {
       status: 'confirmed' | 'pending' | 'rejected' | 'cancelled' | 'waitlist';
       /** @description Комментарий организатора при отказе */
       decision_reason: string;
+      /** @description Иду впервые */
+      first_time?: boolean;
+      /** @description Готов встретить новичка */
+      is_buddy?: boolean;
+      /** @description Кто встретит меня (если я новичок и пара назначена) */
+      buddy?: components['schemas']['Person'] | null;
+      /** @description Кого встречаю я — только в карточке события */
+      newcomers?: components['schemas']['Person'][];
     };
     Event: {
       /** Format: uuid */
@@ -1397,6 +1487,21 @@ export interface components {
       waitlist_count: number;
       /** @description Сколько людей из «Ищу компанию» получили это событие в подборке */
       company_matches: number;
+      /** @description Свободные места при лимите; null — без ограничения */
+      spots_left: number | null;
+      /** @description Подтверждённые новички */
+      first_timers_count: number;
+      /** @description Готовы встретить новичков */
+      buddies_count: number;
+      min_participants: number | null;
+      /** Format: date-time */
+      quorum_deadline: string | null;
+      /**
+       * @description none — без минимума; gathering — набираем состав; reached — собран, встреча состоится; failed — не набрали к сроку, событие отменено автоматически
+       * @enum {string}
+       */
+      quorum_status: 'none' | 'gathering' | 'reached' | 'failed';
+      outdoor: boolean;
       /** @enum {string} */
       status: 'published' | 'unpublished' | 'deleted' | 'cancelled';
       /** @description Причина снятия, удаления или отмены */
@@ -1450,6 +1555,18 @@ export interface components {
        * @default false
        */
       as_organization: boolean;
+      /** @description «Соберём состав» — минимум подтверждённых участников (без организатора), не больше capacity */
+      min_participants?: number | null;
+      /**
+       * Format: date-time
+       * @description Срок сбора состава; по умолчанию за 3 часа до начала (но не раньше чем через 30 минут)
+       */
+      quorum_deadline?: string | null;
+      /**
+       * @description Занятие на улице — для него показываем погоду
+       * @default false
+       */
+      outdoor: boolean;
     };
     Person: {
       id: string;
@@ -1469,6 +1586,10 @@ export interface components {
       decision_reason: string;
       /** Format: date-time */
       created_at: string;
+      first_time?: boolean;
+      is_buddy?: boolean;
+      /** @description Кто встречает этого новичка (видит только организатор) */
+      buddy?: components['schemas']['Person'] | null;
     };
     MyEntry: components['schemas']['MyParticipation'] & {
       event: {
@@ -1609,6 +1730,27 @@ export interface components {
       };
       /** @description С понедельника по воскресенье */
       by_weekday: number[];
+    };
+    EventWeather: {
+      available: boolean;
+      /** @description Почему прогноза нет — для человека */
+      reason: string;
+      forecast: {
+        /** Format: date-time */
+        time: string;
+        temperature_c: number;
+        /** @description Вероятность осадков, % */
+        precipitation_probability: number;
+        /** @description Код погоды WMO */
+        code: number;
+        /** @example дождь */
+        description: string;
+        /**
+         * @description Главный совет; пусто — особых советов нет
+         * @example возьмите дождевик и сменную обувь
+         */
+        advice: string;
+      } | null;
     };
     Reason: {
       /** @description Причина решения — её увидит другая сторона */
@@ -2707,12 +2849,18 @@ export interface operations {
       content: {
         /**
          * @example {
-         *       "message": "Играю два года, есть своя доска"
+         *       "message": "Играю два года, есть своя доска",
+         *       "first_time": false
          *     }
          */
         'application/json': {
           /** @description Сообщение организатору к заявке */
           message?: string;
+          /**
+           * @description Иду впервые — платформа подберёт проводника, если он есть
+           * @default false
+           */
+          first_time?: boolean;
         };
       };
     };
@@ -2768,6 +2916,147 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  becomeBuddy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Моя запись; в `newcomers` — кого я встречаю */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MyParticipation'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  stopBeingBuddy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Моя запись */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MyParticipation'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  remindParticipants: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сколько участников получили напоминание */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "sent": 7
+           *     }
+           */
+          'application/json': {
+            sent: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getEventWeather: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Прогноз или причина его отсутствия */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "available": true,
+           *       "reason": "",
+           *       "forecast": {
+           *         "time": "2026-10-24T03:00:00Z",
+           *         "temperature_c": 4.2,
+           *         "precipitation_probability": 70,
+           *         "code": 61,
+           *         "description": "дождь",
+           *         "advice": "возьмите дождевик и сменную обувь"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['EventWeather'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
       500: components['responses']['InternalError'];
     };
   };

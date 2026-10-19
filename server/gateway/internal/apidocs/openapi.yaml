@@ -770,8 +770,13 @@ paths:
                   type: string
                   maxLength: 500
                   description: Сообщение организатору к заявке
+                first_time:
+                  type: boolean
+                  default: false
+                  description: Иду впервые — платформа подберёт проводника, если он есть
             example:
               message: Играю два года, есть своя доска
+              first_time: false
       responses:
         '200':
           description: Текущая запись пользователя
@@ -814,6 +819,127 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/buddy:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Запись
+      operationId: becomeBuddy
+      summary: Готов встретить новичка
+      description:
+        «Встречу новичка». Подтверждённый участник (не новичок) отмечается проводником. Платформа сразу
+        назначает ему подтверждённых новичков без пары — до трёх на человека, тем, у кого меньше подопечных.
+        Оба получают уведомление с именем друг друга. Новичок, неподтверждённый или снятое событие — 409.
+      responses:
+        '200':
+          description: Моя запись; в `newcomers` — кого я встречаю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyParticipation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Запись
+      operationId: stopBeingBuddy
+      summary: Больше не встречаю
+      description:
+        Подопечные передаются другим проводникам. Кому пары не нашлось — получает уведомление, а
+        организатор — просьбу встретить самому. То же происходит, если проводник отменяет запись.
+      responses:
+        '200':
+          description: Моя запись
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyParticipation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/remind:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - Запись
+      operationId: remindParticipants
+      summary: Напомнить участникам сейчас
+      description:
+        Только организатор, не чаще раза в час, до начала события. Каждый подтверждённый участник
+        получает время, адрес, точку сбора, что взять, погоду (для уличной встречи с точкой на карте) и имя
+        проводника. Такие же напоминания платформа отправляет сама — за сутки и за два часа до начала.
+      responses:
+        '200':
+          description: Сколько участников получили напоминание
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - sent
+                properties:
+                  sent:
+                    type: integer
+              example:
+                sent: 7
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/weather:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - Мероприятия
+      operationId: getEventWeather
+      summary: Погода на время встречи
+      description:
+        Прогноз Open-Meteo на час начала уличной (`outdoor`) встречи с точкой на карте и совет, что
+        надеть и взять. Если прогноза нет (встреча в помещении, нет точки, больше двух недель до начала,
+        сервис недоступен), `available` — false, а `reason` объясняет почему. Ошибкой это не считается.
+      responses:
+        '200':
+          description: Прогноз или причина его отсутствия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventWeather'
+              example:
+                available: true
+                reason: ''
+                forecast:
+                  time: 2026-10-24T03:00:00Z
+                  temperature_c: 4.2
+                  precipitation_probability: 70
+                  code: 61
+                  description: дождь
+                  advice: возьмите дождевик и сменную обувь
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/events/{id}/participants:
@@ -2719,6 +2845,22 @@ components:
         decision_reason:
           type: string
           description: Комментарий организатора при отказе
+        first_time:
+          type: boolean
+          description: Иду впервые
+        is_buddy:
+          type: boolean
+          description: Готов встретить новичка
+        buddy:
+          description: Кто встретит меня (если я новичок и пара назначена)
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Person'
+        newcomers:
+          type: array
+          description: Кого встречаю я — только в карточке события
+          items:
+            $ref: '#/components/schemas/Person'
     Event:
       type: object
       required:
@@ -2738,6 +2880,13 @@ components:
         - pending_count
         - waitlist_count
         - company_matches
+        - spots_left
+        - first_timers_count
+        - buddies_count
+        - min_participants
+        - quorum_deadline
+        - quorum_status
+        - outdoor
         - status
         - moderation_reason
         - organizer
@@ -2809,6 +2958,35 @@ components:
         company_matches:
           type: integer
           description: Сколько людей из «Ищу компанию» получили это событие в подборке
+        spots_left:
+          type: integer
+          nullable: true
+          description: Свободные места при лимите; null — без ограничения
+        first_timers_count:
+          type: integer
+          description: Подтверждённые новички
+        buddies_count:
+          type: integer
+          description: Готовы встретить новичков
+        min_participants:
+          type: integer
+          nullable: true
+        quorum_deadline:
+          type: string
+          format: date-time
+          nullable: true
+        quorum_status:
+          type: string
+          enum:
+            - none
+            - gathering
+            - reached
+            - failed
+          description:
+            none — без минимума; gathering — набираем состав; reached — собран, встреча состоится; failed —
+            не набрали к сроку, событие отменено автоматически
+        outdoor:
+          type: boolean
         status:
           type: string
           enum:
@@ -2922,6 +3100,21 @@ components:
           type: boolean
           default: false
           description: От имени своей допущенной организации
+        min_participants:
+          type: integer
+          nullable: true
+          minimum: 2
+          maximum: 1000
+          description: «Соберём состав» — минимум подтверждённых участников (без организатора), не больше capacity
+        quorum_deadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: Срок сбора состава; по умолчанию за 3 часа до начала (но не раньше чем через 30 минут)
+        outdoor:
+          type: boolean
+          default: false
+          description: Занятие на улице — для него показываем погоду
     Person:
       type: object
       required:
@@ -2968,6 +3161,15 @@ components:
         created_at:
           type: string
           format: date-time
+        first_time:
+          type: boolean
+        is_buddy:
+          type: boolean
+        buddy:
+          description: Кто встречает этого новичка (видит только организатор)
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Person'
     MyEntry:
       allOf:
         - $ref: '#/components/schemas/MyParticipation'
@@ -3343,6 +3545,47 @@ components:
           items:
             type: integer
           description: С понедельника по воскресенье
+    EventWeather:
+      type: object
+      required:
+        - available
+        - reason
+        - forecast
+      properties:
+        available:
+          type: boolean
+        reason:
+          type: string
+          description: Почему прогноза нет — для человека
+        forecast:
+          type: object
+          nullable: true
+          required:
+            - time
+            - temperature_c
+            - precipitation_probability
+            - code
+            - description
+            - advice
+          properties:
+            time:
+              type: string
+              format: date-time
+            temperature_c:
+              type: number
+            precipitation_probability:
+              type: integer
+              description: Вероятность осадков, %
+            code:
+              type: integer
+              description: Код погоды WMO
+            description:
+              type: string
+              example: дождь
+            advice:
+              type: string
+              description: Главный совет; пусто — особых советов нет
+              example: возьмите дождевик и сменную обувь
     Reason:
       type: object
       properties:
