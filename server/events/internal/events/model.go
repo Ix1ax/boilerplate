@@ -104,6 +104,8 @@ type Event struct {
 	WaitlistCount  int    `json:"waitlist_count"`
 	// CompanyMatches — сколько людей из «Ищу компанию» получили это событие в подборке.
 	CompanyMatches int `json:"company_matches"`
+	// DistanceKm — расстояние до точки поиска near (только в такой выдаче).
+	DistanceKm *float64 `json:"distance_km,omitempty"`
 	// SpotsLeft — свободные места при лимите (nil — без ограничения).
 	SpotsLeft *int `json:"spots_left"`
 	// FirstTimersCount и BuddiesCount — подтверждённые новички и готовые их встретить.
@@ -204,6 +206,8 @@ type Profile struct {
 	City   string  `json:"city"`
 	Level  string  `json:"level"`
 	Events []Event `json:"events"`
+	// Stats — встречи, проведённые от своего имени: помогает решиться пойти к незнакомому организатору.
+	Stats *OrganizerStats `json:"stats"`
 }
 
 // EventInput — поля формы создания. Направление — SportID из справочника или SportName
@@ -244,8 +248,10 @@ type EventFilter struct {
 	Query, Level, Mode, OrganizationID, OrganizerID string
 	// MatchedFor — id моего запроса «Ищу компанию»: только подобранные под него события.
 	MatchedFor string
-	SportIDs   []string
-	From, To   *time.Time
+	// Geo — по месту: точка с радиусом (сортировка по расстоянию) или область карты.
+	Geo      *Geo
+	SportIDs []string
+	From, To *time.Time
 	// Statuses пусто — только опубликованные будущие (пользовательская выдача).
 	Statuses      []string
 	Limit, Offset int

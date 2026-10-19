@@ -28,6 +28,7 @@ import (
 //	GET    /profiles/:id                                 профиль организатора
 //	… /my/company-requests, /sports/demand               «Ищу компанию» (company_routes.go)
 //	… /events/:id/buddy, /remind, /weather              проводники, напоминания, погода (gathering_routes.go)
+//	… /my/profile, PATCH /events/:id, /alternatives, /calendar.ics  extra_routes.go
 func Register(parent *gin.RouterGroup, s *Service) {
 	g := parent.Group("", profileSync(s))
 	g.GET("/sports", func(c *gin.Context) {
@@ -231,7 +232,11 @@ func Register(parent *gin.RouterGroup, s *Service) {
 		if handle(c, err) {
 			return
 		}
-		c.JSON(200, gin.H{"organization": o, "events": page.Items})
+		stats, err := s.OrganizationStats(c.Request.Context(), id)
+		if handle(c, err) {
+			return
+		}
+		c.JSON(200, gin.H{"organization": o, "events": page.Items, "stats": stats})
 	}))
 	g.GET("/profiles/:id", func(c *gin.Context) {
 		id := c.Param("id")
@@ -247,6 +252,7 @@ func Register(parent *gin.RouterGroup, s *Service) {
 	})
 	registerCompany(g, s)
 	registerGatherings(g, s)
+	registerExtras(g, s)
 }
 
 // RegisterAdmin — модерация. Роль admin проверяется и в gateway, и здесь.
@@ -390,6 +396,11 @@ func parseFilter(c *gin.Context) (EventFilter, error) {
 		return EventFilter{}, errors.New("limit должен быть от 1 до 100, offset — от 0 до 100000")
 	}
 	f := EventFilter{Limit: limit, Offset: offset, Query: c.Query("q"), Level: c.Query("level"), Mode: c.Query("mode"), OrganizationID: c.Query("organization")}
+	geo, err := parseGeo(c.Query("near"), c.Query("radius_km"), c.Query("bbox"))
+	if err != nil {
+		return f, err
+	}
+	f.Geo = geo
 	if len([]rune(f.Query)) > 100 {
 		return f, errors.New("Поисковый запрос длиннее 100 символов")
 	}
@@ -440,7 +451,7 @@ func handle(c *gin.Context, err error) bool {
 		c.AbortWithStatusJSON(422, gin.H{"error": gin.H{"code": "validation_error", "message": fe.Message, "field": fe.Field, "request_id": c.GetString("request_id")}})
 	case errors.Is(err, ErrNotFound):
 		fail(c, 404, "not_found", "Не найдено или недоступно")
-	case errors.Is(err, ErrOrgNotApproved), errors.Is(err, ErrNotOrganizer):
+	case errors.Is(err, ErrOrgNotApproved), errors.Is(err, ErrNotOrganizer), errors.Is(err, ErrNotEventOwner):
 		fail(c, 403, "forbidden", err.Error())
 	case errors.Is(err, ErrEventClosed), errors.Is(err, ErrEventPast), errors.Is(err, ErrOwnEvent),
 		errors.Is(err, ErrFull), errors.Is(err, ErrOrgExists), errors.Is(err, ErrRequestExists),

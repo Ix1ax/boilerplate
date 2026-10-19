@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -191,6 +192,15 @@ func (r *Repository) ListEvents(ctx context.Context, a Actor, f EventFilter) (Pa
 		// Только события, подобранные под мой запрос «Ищу компанию»: чужой запрос даёт пустой список.
 		where = append(where, "e.id IN (SELECT m.event_id FROM company_matches m JOIN company_requests cr ON cr.id=m.request_id WHERE m.request_id="+arg(f.MatchedFor)+"::uuid AND cr.user_id=$1)")
 	}
+	if g := f.Geo; g != nil {
+		if g.BBox != nil {
+			where = append(where, "e.lng BETWEEN "+arg(g.BBox[0])+" AND "+arg(g.BBox[2])+" AND e.lat BETWEEN "+arg(g.BBox[1])+" AND "+arg(g.BBox[3]))
+		} else {
+			dist := distanceSQL(arg(g.Lat), arg(g.Lng))
+			where = append(where, "e.lat IS NOT NULL AND "+dist+" <= "+arg(g.RadiusKm))
+			order = " ORDER BY " + dist + ", e.starts_at, e.id"
+		}
+	}
 	if f.Mode != "" {
 		where = append(where, "e.join_mode = "+arg(f.Mode))
 	}
@@ -224,6 +234,10 @@ func (r *Repository) ListEvents(ctx context.Context, a Actor, f EventFilter) (Pa
 		e, err := scanEvent(rows, a)
 		if err != nil {
 			return page, err
+		}
+		if g := f.Geo; g != nil && g.BBox == nil && e.Lat != nil {
+			d := math.Round(DistanceKm(g.Lat, g.Lng, *e.Lat, *e.Lng)*10) / 10
+			e.DistanceKm = &d
 		}
 		page.Items = append(page.Items, e)
 	}
@@ -967,7 +981,11 @@ func (r *Repository) GetProfile(ctx context.Context, a Actor, id string) (Profil
 		return p, err
 	}
 	page, err := r.ListEvents(ctx, a, EventFilter{OrganizerID: id, Limit: 20})
+	if err != nil {
+		return p, err
+	}
 	p.Events = page.Items
+	p.Stats, err = r.profileStats(ctx, id)
 	return p, err
 }
 

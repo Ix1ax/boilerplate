@@ -56,3 +56,6 @@ export const taskAnalysisSchema = z.object({
   decision_required: z.boolean(),
 });
 export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;
+
+// Кейс «Платформа совместных спортивных активностей»: типы, схемы форм и подписи статусов.
+export * from './sport';

@@ -1,0 +1,124 @@
+# Бэкенд для фронтенда: что вызывать на каком экране
+
+Шпаргалка для разработки клиента (`client/`) и админки (`admin/`). Полное описание каждой ручки, все поля и коды ответов — в Swagger: **http://localhost:3000/api/docs** (спецификации `events`, `moderation`, `notifications`, `gateway`). Модель и правила — [data-model.md](data-model.md).
+
+Проверить, что бэкенд жив и все сценарии проходят: `make case`.
+
+## Как подключаться
+
+- Все запросы — на свой origin: `/api/v1/...` и `/auth/...`. Nginx (Docker) или Vite proxy (dev) отправляют их в gateway.
+- Сессия — HttpOnly cookie `starter_session`. Токенов в браузере нет, `Authorization` не нужен.
+- Изменяющие запросы (POST/PUT/PATCH/DELETE) должны идти с заголовком `Origin` приложения. Браузер ставит его сам; `fetch` с `credentials: 'include'` — достаточно.
+- Повторная отправка формы: заголовок `Idempotency-Key` (любой uuid) — gateway вернёт тот же ответ, а не создаст дубль.
+
+### Вход
+
+| Что                        | Как                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Карточки «Войти как…»      | `GET /auth/demo` → `{items: [{key, name, role, hint}]}`. 404 — быстрый вход выключен, показать только обычный      |
+| Войти как демо-аккаунт     | `POST /auth/demo/{key}` → затем перечитать `GET /api/v1/me`. Прежняя сессия заменяется — так же переключаются роли |
+| Обычный вход и регистрация | Перейти на `/auth/login?next=/куда-вернуть` (Keycloak). Подтверждение почты выключено                              |
+| Кто я                      | `GET /api/v1/me` → `{id, name, email, roles}`. Админ — если в `roles` есть `admin`                                 |
+| Выйти                      | `POST /auth/logout` → `{url}`, перейти по нему                                                                     |
+
+Демо-аккаунты: Анна и Игорь — пользователи; Олег — «Ладья», допущена; Мария — «Сосны», на проверке; Пётр — «Пульс», отклонена; Модератор — админ.
+
+## Контракты
+
+```ts
+import {
+  type SportEvent,
+  type Organization,
+  type CompanyRequest, // типы ответов
+  eventInputSchema,
+  eventPatchSchema,
+  joinSchema,
+  commentSchema, // Zod-схемы форм
+  organizationInputSchema,
+  companyRequestSchema,
+  profilePatchSchema,
+  reasonSchema,
+  joinAction,
+  participationLabels,
+  levelLabels, // логика кнопки и подписи статусов
+} from '@starter/contracts';
+```
+
+- Типы генерируются из OpenAPI (`make openapi`) — руками не правим.
+- Схемы форм повторяют проверки сервера. Сервер всё равно проверяет сам и отвечает `422 {error: {code: 'validation_error', message, field}}` — подсветите поле `field`.
+- Подписи статусов (`participationLabels`, `eventStatusLabels`, `organizationStatusLabels`, `quorumLabels`, `levelLabels`, `dayPartLabels`) — используйте их, чтобы одно состояние везде называлось одинаково.
+
+## Соглашения
+
+- **Даты** — RFC 3339 в UTC (`2026-10-24T03:00:00Z`). Показывать по Красноярску (`Asia/Krasnoyarsk`), отправлять с часовым поясом.
+- **Списки** — `?limit=1..100&offset=` → `{items, total, limit, offset}`.
+- **Ошибки** — `{error: {code, message, field?, request_id}}`. `message` — по-русски, можно показывать человеку как есть.
+
+| Код | Когда                                                                | Что показать                                   |
+| --- | -------------------------------------------------------------------- | ---------------------------------------------- |
+| 400 | Сломанный JSON или параметры                                         | «Что-то не так с формой», это ошибка клиента   |
+| 401 | Нет сессии                                                           | Отправить на вход                              |
+| 403 | Нет прав: организация не допущена, чужое событие, не админ           | `message`                                      |
+| 404 | Нет такого или скрыто от вас (снятое событие для постороннего)       | «Не найдено или недоступно»                    |
+| 409 | Состояние не позволяет: снято, прошло, мест нет, повтор, уже решено  | `message` и перечитать данные — они изменились |
+| 422 | Неверное поле или нет обязательной причины (`code: reason_required`) | Подсветить `field` / поле причины              |
+| 429 | Слишком часто (60 изменений в минуту)                                | «Подождите минуту»                             |
+
+## Пользователь
+
+| Экран                | Ручки                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Афиша**            | `GET /events?q=&sport=id1,id2&level=&mode=open\|request&from=&to=&organization=` · направления для чипов — `GET /sports`. «Можно впервые» — `level=beginner` (включает «для всех»)                                                                                                                                                                                                                 |
+| **Карта**            | `GET /events?bbox=minLng,minLat,maxLng,maxLat` — в видимой области; `?near=lat,lng&radius_km=` — рядом, ближайшие первыми, в ответе `distance_km`. У события `lat/lng` может не быть — его нет на карте, но есть в списке                                                                                                                                                                          |
+| **Карточка события** | `GET /events/{id}` — всё для решения: уровень, `requirements` (что взять), `price_note`, `spots_left`, `first_timers_count`, `quorum_status`, `my_participation`, `is_organizer`. `private_info` (точка сбора) приходит только организатору и подтверждённым, `has_private_info` — есть ли она вообще                                                                                              |
+| Кто идёт             | `GET /events/{id}/participants` — посторонним только подтверждённые по имени; отметки `first_time`, `is_buddy`                                                                                                                                                                                                                                                                                     |
+| Главная кнопка       | `joinAction(event)` → `join` · `apply` · `waitlist` · `leave` · `rejoin` · `manage` · `closed`. Записаться / заявка — `POST /events/{id}/join {message?, first_time?}` → `MyParticipation`. Отменить — `DELETE /events/{id}/join`                                                                                                                                                                  |
+| «Иду впервые»        | Флажок в форме записи (`first_time: true`). Если есть проводник — в `my_participation.buddy` его имя. Стать проводником (подтверждённый, не новичок) — `POST /events/{id}/buddy`, передумать — `DELETE`                                                                                                                                                                                            |
+| Погода               | `GET /events/{id}/weather` → `{available, reason, forecast: {temperature_c, description, advice}}`. Нет прогноза — показать `reason` или ничего                                                                                                                                                                                                                                                    |
+| Добавить в календарь | Ссылка на `GET /events/{id}/calendar.ics`                                                                                                                                                                                                                                                                                                                                                          |
+| Найти другую встречу | `GET /events/{id}/alternatives` — после отказа, отмены, снятия или «мест нет»                                                                                                                                                                                                                                                                                                                      |
+| **Обсуждение**       | `GET /events/{id}/comments` · `POST {body, parent_id?}` — ответ только на сообщение верхнего уровня. `is_organizer` — бейдж «Организатор». Обновление без перезагрузки — подписка `useChannel('room:event:<id>')`, на сигнал `comments.changed` перечитать                                                                                                                                         |
+| **Создать событие**  | `POST /events` (`eventInputSchema`). Направление — `sport_id` или `sport_name` (своё). «От организации» — `as_organization: true`, доступно при `GET /my/organization` → `status: approved`. Спрос — `GET /sports/demand?sport_id=\|sport_name=&level=` («12 человек ищут»)                                                                                                                        |
+| **Мои записи**       | `GET /my/participations` — все статусы, снятые события с причиной                                                                                                                                                                                                                                                                                                                                  |
+| **Мои события**      | `GET /my/events` — во всех статусах. Управление: участники и заявки — `GET /events/{id}/participants` (организатор видит всех и сообщения), решения — `POST /events/{id}/participants/{pid}/approve` · `/reject {reason?}`. Изменить или перенести — `PATCH /events/{id}` (`eventPatchSchema`). Напомнить — `POST /events/{id}/remind` (раз в час). Отменить — `POST /events/{id}/cancel {reason}` |
+| **Ищу компанию**     | `POST /my/company-requests` (`companyRequestSchema`) · `GET /my/company-requests` (`matches_count`, `others_count` — «ещё 3 ищут») · подборка — `GET /my/company-requests/{id}/matches` · закрыть — `DELETE /my/company-requests/{id}`                                                                                                                                                             |
+| **Профиль**          | Свой — `GET /my/profile`, `PATCH /my/profile` (`profilePatchSchema`). Чужой — `GET /profiles/{id}`, в `stats` — сколько встреч провёл и сколько людей записалось                                                                                                                                                                                                                                   |
+| **Уведомления**      | `GET /notifications` → `{items, unread}`, поток — `GET /notifications/stream` (SSE, уже подключён в шапке шаблона), прочитать — `POST /notifications/{id}/read`, `/read-all`. `link` — путь в приложении (`/events/<id>`)                                                                                                                                                                          |
+
+## Организация
+
+| Экран                  | Ручки                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Моя организация        | `GET /my/organization` — 404, если заявки нет. `status`: `pending` (ждём) · `approved` · `rejected` + `review_reason`                          |
+| Подать / исправить     | `POST /my/organization` · `PUT /my/organization` (`organizationInputSchema`). Правка после отказа — повторная подача (снова `pending`)         |
+| Публичная страница     | `GET /organizations/{id}` → `{organization, events, stats}`. Каталог — `GET /organizations?q=`. Недопущенная видна только своему представителю |
+| Создать от организации | Как обычное событие с `as_organization: true`; публикуется сразу. Недопущенная — 403                                                           |
+
+## Админка (`admin/`)
+
+Все ручки — с ролью `admin` (иначе 403). Решения принимает `events`, аналитику отдаёт `moderation`.
+
+| Раздел      | Ручки                                                                                                                                                                                                                                                                |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Главная     | `GET /admin/moderation/dashboard` — заявки организаций (давние первыми), счётчики, ряд за 14 дней, топ направлений. `updated_at` — свежесть: данные отстают на секунды                                                                                               |
+| Организации | Очередь и поиск — `GET /admin/organizations?status=pending&q=` · карточка с историей и событиями — `GET /admin/organizations/{id}` · решение — `POST /admin/organizations/{id}/approve`, `/reject {reason}`                                                          |
+| Мероприятия | Поиск во всех статусах — `GET /admin/events?status=&q=&organization=&sport=&from=&to=` · карточка — `GET /events/{id}` (админ видит любой статус) · история — `GET /admin/events/{id}/history` · `POST /admin/events/{id}/unpublish`, `/delete {reason}`, `/restore` |
+| Сообщения   | Лента — `GET /admin/moderation/comments?status=&q=&event_id=` · обсуждение события — `GET /events/{id}/comments` (админ видит скрытые с причиной) · скрыть — `POST /admin/comments/{id}/hide {reason}`                                                               |
+| Направления | `GET /admin/sports` — пользовательские первыми, где используются · `POST /admin/sports/{id}/hide {reason}`, `/show`                                                                                                                                                  |
+| Журнал      | `GET /admin/moderation/log?entity=&to=&q=` — кто, когда и почему решил; действия всех пользователей — `GET /admin/audit`                                                                                                                                             |
+| Отчёты      | Ссылки на `GET /admin/moderation/reports/events.csv`, `organizations.csv`, `log.csv` — открываются в Excel                                                                                                                                                           |
+
+## Что нужно знать про состояния
+
+- **После любого действия перечитывайте затронутое:** карточку, «Мои записи», список участников. Ответ мутации уже содержит новое состояние, но рядом лежащие списки изменились тоже.
+- **Снятое и отменённое событие** — для записавшихся и организатора: `status` и `moderation_reason` (плашка с причиной, кнопки записи нет). Для остальных — 404.
+- **«Соберём состав»** — `min_participants`, `quorum_deadline`, `quorum_status`: `gathering` («нужно ещё N»), `reached` («встреча состоится»), `failed` (событие отменено автоматически с причиной).
+- **Лист ожидания** — при отмене чужой записи первый из листа подтверждается сам и получает уведомление.
+- **Уведомления**, которые приходят сами: решение по заявке, допуск организации, снятие или отмена события, ответ в обсуждении, «Нашлась компания», «Состав собран», «Вас встретит…», перенос, напоминания за сутки и за 2 часа.
+
+## Ограничения прототипа
+
+- Посещение не проверяется: «записались», а не «пришли».
+- Погода — Open-Meteo, нужен интернет у сервиса events. Без него `available: false`.
+- Данные админки-аналитики отстают от действий на секунды. После очистки базы `make seed` их догоняет.
+- `make case` оставляет служебные следы в демо-базе — перед показом `make reset && make demo`.

@@ -291,7 +291,11 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /**
+     * Изменить мероприятие
+     * @description Только организатор, только опубликованное и ещё не начавшееся. Передаются только меняемые поля; режим записи, направление и «от чьего имени» не меняются. Перенос времени или места — уведомление всем записавшимся «было → стало», напоминания придут заново от нового времени; правка условий (что взять, точка сбора, стоимость, уровень) — уведомление «проверьте, что изменилось». Мест не может стать меньше, чем уже записано (422).
+     */
+    patch: operations['updateEvent'];
     trace?: never;
   };
   '/api/v1/events/{id}/cancel': {
@@ -424,6 +428,58 @@ export interface paths {
      * @description Прогноз Open-Meteo на час начала уличной (`outdoor`) встречи с точкой на карте и совет, что надеть и взять. Если прогноза нет (встреча в помещении, нет точки, больше двух недель до начала, сервис недоступен), `available` — false, а `reason` объясняет почему. Ошибкой это не считается.
      */
     get: operations['getEventWeather'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/alternatives': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Найти другую встречу
+     * @description Если событие отменили или сняли, места кончились или заявку отклонили, путь не обрывается. То же направление, опубликованные предстоящие события со свободными местами, кроме своих; сначала в пределах 15 км (если у события есть точка), затем ближайшие по времени к исходному.
+     */
+    get: operations['eventAlternatives'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/calendar.ics': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Добавить в календарь
+     * @description Файл iCalendar (RFC 5545) для телефона и почты — время, место, что взять и напоминание за 2 часа. Точка сбора попадает в описание только тем, кому она видна (организатор и подтверждённые участники).
+     */
+    get: operations['eventCalendar'];
     put?: never;
     post?: never;
     delete?: never;
@@ -733,6 +789,30 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/profile': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Мой профиль
+     * @description Имя приходит из входа (Keycloak) и здесь не меняется. В `stats` — встречи, проведённые от своего имени.
+     */
+    get: operations['getMyProfile'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Изменить профиль
+     * @description Только переданные поля. Пустой `level` — «не указывать».
+     */
+    patch: operations['updateMyProfile'];
     trace?: never;
   };
   '/api/v1/profiles/{id}': {
@@ -1748,6 +1828,8 @@ export interface components {
       waitlist_count: number;
       /** @description Сколько людей из «Ищу компанию» получили это событие в подборке */
       company_matches: number;
+      /** @description Расстояние до точки near, км (только в выдаче с near) */
+      distance_km?: number;
       /** @description Свободные места при лимите; null — без ограничения */
       spots_left: number | null;
       /** @description Подтверждённые новички */
@@ -1931,6 +2013,7 @@ export interface components {
       about: string;
       city: string;
       level: string;
+      stats: components['schemas']['OrganizerStats'];
       events: components['schemas']['Event'][];
     };
     /** @description Направление — `sport_id` из справочника или `sport_name` (своё). Пустые списки времени и дней — «когда угодно». */
@@ -2040,6 +2123,44 @@ export interface components {
       requests_count: number;
       /** Format: date-time */
       created_at: string;
+    };
+    /** @description Факты из данных платформы, без оценок. Посещение не проверяется, поэтому people_came — подтверждённые записи на прошедшие встречи. */
+    OrganizerStats: {
+      /** @description Прошедшие опубликованные встречи */
+      events_held: number;
+      /** @description Подтверждённые записи на них */
+      people_came: number;
+      upcoming_events: number;
+      /**
+       * Format: date-time
+       * @description На платформе с (для организации — с допуска)
+       */
+      since: string;
+    };
+    ProfilePatch: {
+      about?: string;
+      city?: string;
+      /** @enum {string} */
+      level?: '' | 'beginner' | 'amateur' | 'pro';
+    };
+    /** @description Только меняемые поля. Режим записи, направление и организатор не меняются. */
+    EventPatch: {
+      title?: string;
+      description?: string;
+      /** Format: date-time */
+      starts_at?: string;
+      /** Format: date-time */
+      ends_at?: string | null;
+      location?: string;
+      lat?: number | null;
+      lng?: number | null;
+      /** @enum {string} */
+      level?: 'any' | 'beginner' | 'amateur' | 'pro';
+      requirements?: string;
+      price_note?: string;
+      private_info?: string;
+      capacity?: number | null;
+      outdoor?: boolean;
     };
     Reason: {
       /** @description Причина решения — её увидит другая сторона */
@@ -3057,6 +3178,18 @@ export interface operations {
         to?: string;
         /** @description Только события организации (UUID) */
         organization?: string;
+        /**
+         * @description Рядом с точкой «широта,долгота» — только события с координатами, ближайшие первыми, в ответе distance_km
+         * @example 56.0106,92.8710
+         */
+        near?: string;
+        /** @description Радиус для near, км */
+        radius_km?: number;
+        /**
+         * @description Видимая область карты «minLng,minLat,maxLng,maxLat»; вместе с near не задаётся
+         * @example 92.70,55.95,93.10,56.10
+         */
+        bbox?: string;
       };
       header?: never;
       path?: never;
@@ -3175,6 +3308,49 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  updateEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "starts_at": "2026-10-25T04:00:00Z",
+         *       "location": "Красноярск, Центральная набережная, у Коммунального моста"
+         *     }
+         */
+        'application/json': components['schemas']['EventPatch'];
+      };
+    };
+    responses: {
+      /** @description Мероприятие после изменения */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
       500: components['responses']['InternalError'];
     };
   };
@@ -3440,6 +3616,69 @@ export interface operations {
            *     }
            */
           'application/json': components['schemas']['EventWeather'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  eventAlternatives: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Похожие встречи */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Event'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  eventCalendar: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Файл .ics */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/calendar': string;
         };
       };
       401: components['responses']['Unauthorized'];
@@ -3991,6 +4230,7 @@ export interface operations {
         };
         content: {
           'application/json': {
+            stats: components['schemas']['OrganizerStats'];
             organization: components['schemas']['Organization'];
             events: components['schemas']['Event'][];
           };
@@ -3999,6 +4239,63 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getMyProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Профиль */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Profile'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  updateMyProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "about": "Бегаю по выходным, хочу компанию",
+         *       "city": "Красноярск",
+         *       "level": "beginner"
+         *     }
+         */
+        'application/json': components['schemas']['ProfilePatch'];
+      };
+    };
+    responses: {
+      /** @description Профиль после изменения */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Profile'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      422: components['responses']['ValidationError'];
       500: components['responses']['InternalError'];
     };
   };
