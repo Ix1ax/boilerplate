@@ -4,21 +4,26 @@
   "private": true,
   "workspaces": [
     "client",
+    "admin",
     "packages/*"
   ],
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
-    "dev": "npm run dev -w @starter/client",
-    "build": "npm run build -w @starter/client",
-    "lint": "npm run lint -w @starter/client && eslint packages --max-warnings 0",
+    "dev": "node scripts/dev-web.mjs",
+    "build": "npm run build:client && npm run build:admin",
+    "lint": "npm run lint -w @starter/client && npm run lint -w @starter/admin && eslint packages --max-warnings 0",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "setup": "node scripts/setup.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "dev:client": "npm run dev -w @starter/client",
+    "dev:admin": "npm run dev -w @starter/admin",
+    "build:client": "npm run build -w @starter/client",
+    "build:admin": "npm run build -w @starter/admin"
   },
   "devDependencies": {
     "@marp-team/marp-cli": "^4.0.3",
@@ -35,7 +40,7 @@
     "vitest": "5.0.0-rc.2",
     "yaml": "^2.6.1"
   },
-  "description": "Стартовая монорепа для хакатонов: Vite, React, Go и общая инфраструктура",
+  "description": "\u0421\u0442\u0430\u0440\u0442\u043e\u0432\u0430\u044f \u043c\u043e\u043d\u043e\u0440\u0435\u043f\u0430 \u0434\u043b\u044f \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u043e\u0432: Vite, React, Go \u0438 \u043e\u0431\u0449\u0430\u044f \u0438\u043d\u0444\u0440\u0430\u0441\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430",
   "overrides": {
     "postcss": "8.5.29"
   }

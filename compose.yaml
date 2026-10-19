@@ -380,6 +380,17 @@ services:
       realtime-service: { condition: service_healthy }
       events-service: { condition: service_healthy }
     healthcheck: *svc-health
+  admin-service:
+    container_name: admin-service
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 30
   web-service:
     container_name: web-service
     profiles: [app]
@@ -389,6 +400,7 @@ services:
     ports: ['127.0.0.1:3000:8080']
     depends_on:
       gateway-service: { condition: service_healthy }
+      admin-service: { condition: service_healthy }
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/healthz']
       interval: 5s
