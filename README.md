@@ -61,13 +61,14 @@ server/tasks/                   # Сервис задач (свой go.mod, св
   cmd/tasks/  internal/tasks/  internal/database/  internal/platform/  internal/config/
 server/files/                   # Сервис файлов (свой go.mod, своя база files, S3)
   cmd/files/  internal/files/  internal/database/  internal/platform/  internal/config/
-client/src/
+frontend/client/src/
   app/                        # Провайдеры, маршруты, layouts
   pages/                      # Страницы
   widgets/                    # Композиция UI, шапка
   features/                   # Формы и действия пользователя
   entities/                   # Модели и чтение данных
   shared/                     # HTTP, UI, хуки и утилиты
+frontend/admin/src/           # Независимая SPA администратора (/admin/)
 packages/contracts/           # OpenAPI, TypeScript-типы и Zod-схемы
 packages/ui/                  # Независимый дополнительный набор UI-компонентов
 infra/                        # PostgreSQL и шаблон realm Keycloak

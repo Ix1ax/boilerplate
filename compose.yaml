@@ -435,7 +435,7 @@ services:
     profiles: [app]
     build:
       context: .
-      dockerfile: admin/Dockerfile
+      dockerfile: frontend/admin/Dockerfile
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/healthz']
       interval: 5s
@@ -446,7 +446,7 @@ services:
     profiles: [app]
     build:
       context: .
-      dockerfile: client/Dockerfile
+      dockerfile: frontend/client/Dockerfile
     ports: ['127.0.0.1:3000:8080']
     depends_on:
       gateway-service: { condition: service_healthy }

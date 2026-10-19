@@ -2,13 +2,13 @@ import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
-    alias: { '@': path.resolve(import.meta.dirname, 'client/src') },
+    alias: { '@': path.resolve(import.meta.dirname, 'frontend/client/src') },
   },
   test: {
     environment: 'node',
     include: [
-      'client/src/**/*.test.ts',
-      'admin/src/**/*.test.ts',
+      'frontend/client/src/**/*.test.ts',
+      'frontend/admin/src/**/*.test.ts',
       'packages/**/*.test.ts',
     ],
   },

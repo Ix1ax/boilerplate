@@ -1,6 +1,6 @@
 # AGENTS.md — рабочие правила для AI-агентов
 
-Шаблон хакатонного проекта: микросервисный Go-бэкенд + React SPA + Keycloak + локальная LLM (Qwen в Ollama). Цель — за часы собрать **работающий, красиво показанный** продукт. Фронтенд: `client/CLAUDE.md`.
+Шаблон хакатонного проекта: микросервисный Go-бэкенд + React SPA + Keycloak + локальная LLM (Qwen в Ollama). Цель — за часы собрать **работающий, красиво показанный** продукт. Фронтенд: `frontend/client/CLAUDE.md`.
 
 **Текущий кейс — [`docs/case.md`](docs/case.md)** (платформа совместных спортивных активностей): требования, 6 сценариев проверки и чек-лист баллов. Модель данных — [`docs/data-model.md`](docs/data-model.md). Любую задачу сначала привязывайте к строке чек-листа.
 
@@ -16,7 +16,7 @@
 | `server/audit`                 | Журнал действий: gateway публикует `audit.recorded` о каждом изменяющем запросе, admin читает `GET /api/v1/admin/audit`                                             |
 | `server/realtime`              | WebSocket `GET /api/v1/ws`: каналы `user:<id>`, `room:<имя>`, `broadcast`; реплики связаны через RabbitMQ                                                           |
 | `server/llm`                   | Шлюз к Ollama: генерация, SSE-стрим, JSON-режим, лимиты                                                                                                             |
-| `client`                       | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                                                                     |
+| `frontend/client`, `frontend/admin` | Vite + React, слои `app→pages→widgets→features→entities→shared`                                                                                               |
 | `packages/contracts`           | Общий OpenAPI (собирается `make openapi` из `server/*/api/openapi.yaml`), TS-типы, Zod-схемы                                                                        |
 | `compose.yaml`, `Makefile`     | Весь стек: `make up`; Qwen отдельно: `make llm`                                                                                                                     |
 | `docs/`                        | architecture, development, git-flow, `hackathon-playbook.md` (критерии жюри → план на 48 ч), `jury.md` (защита)                                                     |

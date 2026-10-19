@@ -53,9 +53,9 @@ for (const file of ['package.json', 'package-lock.json']) {
 }
 for (const file of [
   '.env.example',
-  'client/src/pages/home/ui/HomePage.tsx',
-  'client/index.html',
-  'client/public/manifest.webmanifest',
+  'frontend/client/src/pages/home/ui/HomePage.tsx',
+  'frontend/client/index.html',
+  'frontend/client/public/manifest.webmanifest',
   'infra/keycloak/realm.template.json',
 ]) {
   const target = path.join(destination, file);
