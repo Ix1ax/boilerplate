@@ -55,6 +55,7 @@ for (const file of [
   '.env.example',
   'client/src/pages/home/ui/HomePage.tsx',
   'client/index.html',
+  'client/public/manifest.webmanifest',
   'infra/keycloak/realm.template.json',
 ]) {
   const target = path.join(destination, file);
