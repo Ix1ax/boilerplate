@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 K6_IMAGE := grafana/k6:0.54.0
 .DEFAULT_GOAL := help
-.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit events llm-svc llm help setup install infra up down logs api web web-client web-admin migrate migrate-status test check fmt smoke case integration backup seed e2e docs-sync openapi
+.PHONY: build prefetch prefetch-llm reset slides loadtest demo gateway tasks files notifications audit events moderation llm-svc llm help setup install infra up down logs api web web-client web-admin migrate migrate-status test check fmt smoke case integration backup seed e2e docs-sync openapi
 help:
 	@echo "setup: настройки | install: зависимости | infra: инфраструктура | up: весь стек в Docker"
 	@echo "gateway/tasks/files/web: разработка | check: проверки и сборка | smoke: проверка API | backup: дамп базы"
@@ -9,9 +9,9 @@ setup:
 	node scripts/setup.mjs
 install: setup
 	npm ci
-	for s in gateway tasks files llm notifications audit realtime events; do (cd server/$$s && go mod download) || exit 1; done
+	for s in gateway tasks files llm notifications audit realtime events moderation; do (cd server/$$s && go mod download) || exit 1; done
 infra: setup
-	docker compose up -d --wait --wait-timeout 360 tasks-postgres files-postgres notifications-postgres audit-postgres events-postgres keycloak-postgres gateway-redis files-s3 rabbitmq mailpit keycloak
+	docker compose up -d --wait --wait-timeout 360 tasks-postgres files-postgres notifications-postgres audit-postgres events-postgres moderation-postgres keycloak-postgres gateway-redis files-s3 rabbitmq mailpit keycloak
 # Собираем только сервисы с Dockerfile и по одному: параллельная сборка не помещается в 8 ГБ памяти Docker.
 build: setup
 	@set -e; services=$$(docker compose --profile app config --format json | \
@@ -28,7 +28,7 @@ prefetch: setup
 	docker compose --profile app pull --ignore-buildable
 	$(MAKE) build
 	docker pull $(K6_IMAGE)
-	for s in gateway tasks files llm notifications audit realtime events; do (cd server/$$s && go mod download) || exit 1; done
+	for s in gateway tasks files llm notifications audit realtime events moderation; do (cd server/$$s && go mod download) || exit 1; done
 	npm ci
 	cd e2e && npm ci && npx playwright install chromium
 	@if [ "$(SKIP_LLM)" != "1" ]; then $(MAKE) prefetch-llm; else echo "Модель Qwen пропущена (SKIP_LLM=1)"; fi
@@ -40,7 +40,7 @@ prefetch-llm: llm
 reset:
 	@if [ "$(YES)" != "1" ]; then printf "Стереть все данные сервисов и поднять чистое демо? [y/N] "; read answer; [ "$$answer" = "y" ] || { echo "Отменено"; exit 1; }; fi
 	docker compose --profile app --profile llm down --remove-orphans
-	for v in tasks-postgres-data files-postgres-data notifications-postgres-data audit-postgres-data events-postgres-data keycloak-postgres-data files-s3-data rabbitmq-data; do docker volume rm -f "$${COMPOSE_PROJECT_NAME:-hackathon-starter}_$$v" >/dev/null; done
+	for v in tasks-postgres-data files-postgres-data notifications-postgres-data audit-postgres-data events-postgres-data moderation-postgres-data keycloak-postgres-data files-s3-data rabbitmq-data; do docker volume rm -f "$${COMPOSE_PROJECT_NAME:-hackathon-starter}_$$v" >/dev/null; done
 	$(MAKE) demo
 # Презентация из docs/presentation.md (Marp) → docs/presentation.pdf. Использует Chromium из Playwright (make prefetch),
 # иначе системный Chrome или CHROME_PATH.
@@ -74,6 +74,8 @@ realtime:
 	set -a; . ./.env; set +a; export HTTP_ADDR=:8086; cd server/realtime && go run ./cmd/realtime
 events:
 	set -a; . ./.env; set +a; export DATABASE_URL=$$EVENTS_DATABASE_URL HTTP_ADDR=:8087; cd server/events && go run ./cmd/events
+moderation:
+	set -a; . ./.env; set +a; export DATABASE_URL=$$MODERATION_DATABASE_URL HTTP_ADDR=:8088; cd server/moderation && go run ./cmd/moderation
 llm-svc:
 	set -a; . ./.env; set +a; export HTTP_ADDR=:8083; cd server/llm && go run ./cmd/llm
 web:
@@ -83,20 +85,20 @@ web-client:
 web-admin:
 	npm run dev:admin
 migrate:
-	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate up) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate up) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go run ./cmd/notifications migrate up) && (cd server/audit && DATABASE_URL=$$AUDIT_DATABASE_URL go run ./cmd/audit migrate up) && (cd server/events && DATABASE_URL=$$EVENTS_DATABASE_URL go run ./cmd/events migrate up)
+	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate up) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate up) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go run ./cmd/notifications migrate up) && (cd server/audit && DATABASE_URL=$$AUDIT_DATABASE_URL go run ./cmd/audit migrate up) && (cd server/events && DATABASE_URL=$$EVENTS_DATABASE_URL go run ./cmd/events migrate up) && (cd server/moderation && DATABASE_URL=$$MODERATION_DATABASE_URL go run ./cmd/moderation migrate up)
 migrate-status:
 	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go run ./cmd/tasks migrate status) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go run ./cmd/files migrate status)
 test:
-	for s in gateway tasks files llm notifications audit realtime events; do (cd server/$$s && go test -race ./...) || exit 1; done
+	for s in gateway tasks files llm notifications audit realtime events moderation; do (cd server/$$s && go test -race ./...) || exit 1; done
 	npm test
 check: test
-	for s in gateway tasks files llm notifications audit realtime events; do (cd server/$$s && test -z "$$(gofmt -l .)" && go vet ./... && go build ./...) || exit 1; done
+	for s in gateway tasks files llm notifications audit realtime events moderation; do (cd server/$$s && test -z "$$(gofmt -l .)" && go vet ./... && go build ./...) || exit 1; done
 	npm run typecheck
 	npm run lint
 	npm run format:check
 	npm run build
 fmt:
-	for s in gateway tasks files llm notifications audit realtime events; do (cd server/$$s && gofmt -w .) || exit 1; done
+	for s in gateway tasks files llm notifications audit realtime events moderation; do (cd server/$$s && gofmt -w .) || exit 1; done
 	npm run format
 e2e:
 	cd e2e && npm ci && npx playwright install chromium && npx playwright test
@@ -116,7 +118,7 @@ smoke:
 case:
 	npm run smoke:case
 integration: migrate
-	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go test -race -tags=integration ./internal/notifications) && (cd server/realtime && go test -race -tags=integration ./internal/realtime) && (cd server/events && DATABASE_URL=$$EVENTS_DATABASE_URL go test -race -tags=integration ./internal/events) && (cd server/gateway && go test -race -tags=integration ./internal/auth)
+	set -a; . ./.env; set +a; (cd server/tasks && DATABASE_URL=$$TASKS_DATABASE_URL go test -race -tags=integration ./internal/tasks ./internal/broker ./internal/platform) && (cd server/files && DATABASE_URL=$$FILES_DATABASE_URL go test -race -tags=integration ./internal/files) && (cd server/notifications && DATABASE_URL=$$NOTIFICATIONS_DATABASE_URL go test -race -tags=integration ./internal/notifications) && (cd server/realtime && go test -race -tags=integration ./internal/realtime) && (cd server/events && DATABASE_URL=$$EVENTS_DATABASE_URL go test -race -tags=integration ./internal/events) && (cd server/moderation && DATABASE_URL=$$MODERATION_DATABASE_URL go test -race -tags=integration ./internal/moderation) && (cd server/gateway && go test -race -tags=integration ./internal/auth)
 backup:
 	@mkdir -p .local/backups
-	for s in tasks files notifications audit events; do docker compose exec -T $$s-postgres sh -c 'exec pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > .local/backups/$$s-$$(date +%Y%m%d-%H%M%S).dump || exit 1; done
+	for s in tasks files notifications audit events moderation; do docker compose exec -T $$s-postgres sh -c 'exec pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > .local/backups/$$s-$$(date +%Y%m%d-%H%M%S).dump || exit 1; done

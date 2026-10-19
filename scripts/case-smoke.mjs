@@ -43,8 +43,10 @@ const accounts = {
   admin: ['ADMIN_DEMO_EMAIL', 'ADMIN_DEMO_PASSWORD'],
 };
 const as = {};
+let adminToken = '';
 for (const [name, [email, password]] of Object.entries(accounts)) {
   const token = await login(env[email], env[password]);
+  if (name === 'admin') adminToken = token;
   as[name] = async (path, method = 'GET', body) => {
     const response = await fetch(`${base}/api/v1${path}`, {
       method,
@@ -497,8 +499,98 @@ try {
     `★ Соберём состав и встречу новичка: состав собран, проводник назначен, напоминание ушло; погода — ${forecast.available ? forecast.forecast.description : forecast.reason}`,
   );
 
+  // Админка: карточки и история в events, аналитика и журнал — в отдельном сервисе moderation.
+  const orgCard = ok(
+    await as.admin(`/admin/organizations/${ladya.id}`),
+    'карточка организации',
+  );
+  assert.ok(
+    orgCard.history.some((h) => h.to === 'approved'),
+    'в карточке нет истории допуска',
+  );
+  assert.ok(
+    orgCard.events.some((e) => e.id === orgEvent.id),
+    'в карточке нет событий организации',
+  );
+  const takedownHistory = ok(
+    await as.admin(`/admin/events/${custom.id}/history`),
+    'история события',
+  );
+  assert.ok(
+    takedownHistory.items.some(
+      (h) => h.to === 'unpublished' && h.comment === takedown,
+    ),
+  );
+  const sportsAdmin = ok(
+    await as.admin('/admin/sports'),
+    'справочник для модерации',
+  );
+  const frisbee = sportsAdmin.items.find((x) => x.name === 'Ультимат-фрисби');
+  assert.ok(frisbee?.is_custom, 'нет пользовательского направления');
+  ok(
+    await as.admin(`/admin/sports/${frisbee.id}/hide`, 'POST', {
+      reason: 'Проверка модерации',
+    }),
+    'скрытие направления',
+  );
+  const visibleSports = ok(
+    await as.anna('/sports'),
+    'справочник после скрытия',
+  );
+  assert.ok(
+    !visibleSports.items.some((x) => x.id === frisbee.id),
+    'скрытое направление в справочнике',
+  );
+  ok(
+    await as.admin(`/admin/sports/${frisbee.id}/show`, 'POST'),
+    'возврат направления',
+  );
+  assert.equal(
+    (await as.anna('/admin/moderation/dashboard')).status,
+    403,
+    'дашборд доступен не админу',
+  );
+  let logged = false;
+  for (let i = 0; i < 20 && !logged; i++) {
+    const journal = ok(
+      await as.admin(`/admin/moderation/log?entity_id=${custom.id}`),
+      'журнал модерации',
+    );
+    logged = journal.items.some(
+      (e) => e.to === 'unpublished' && e.comment === takedown,
+    );
+    if (!logged) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(logged, 'снятие не попало в журнал модерации за 20 секунд');
+  const board = ok(await as.admin('/admin/moderation/dashboard'), 'дашборд');
+  assert.ok(
+    board.events.unpublished >= 1 && board.series.length === 14,
+    'дашборд пустой',
+  );
+  const csv = await fetch(
+    `${base}/api/v1/admin/moderation/reports/events.csv`,
+    {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    },
+  );
+  assert.equal(csv.status, 200);
+  // text() снимает BOM при декодировании, поэтому проверяем байты: Excel нужен UTF-8 с BOM.
+  const bytes = new Uint8Array(await csv.arrayBuffer());
+  assert.deepEqual(
+    [...bytes.slice(0, 3)],
+    [0xef, 0xbb, 0xbf],
+    'CSV без BOM — Excel покажет кракозябры',
+  );
+  assert.ok(
+    new TextDecoder().decode(bytes).startsWith('Название;'),
+    'CSV не для Excel',
+  );
+  step(
+    '★ Админка: карточки с историей, модерация направлений, журнал и дашборд из moderation, CSV',
+  );
+
   console.log(
-    'Все шесть сценариев кейса и дополнительные возможности пройдены.',
+    'Все шесть сценариев кейса, дополнительные возможности и админка пройдены.',
   );
 } finally {
   for (const id of companyRequests) {

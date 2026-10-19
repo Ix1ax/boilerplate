@@ -74,7 +74,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	}
 	apidocs.Register(r, map[string]*url.URL{
 		"tasks": up.Tasks, "files": up.Files, "notifications": up.Notifications,
-		"audit": up.Audit, "realtime": up.Realtime, "llm": up.LLM, "events": up.Events,
+		"audit": up.Audit, "realtime": up.Realtime, "llm": up.LLM, "events": up.Events, "moderation": up.Moderation,
 	}, opts.OIDCIssuer)
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/readyz", func(c *gin.Context) {
@@ -155,10 +155,16 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 				api.Any(prefix+"/*path", h)
 			}
 			// Модерация: роль проверяется и здесь, и в самом сервисе.
-			for _, prefix := range []string{"/admin/events", "/admin/organizations", "/admin/comments", "/admin/sports"} {
+			for _, prefix := range []string{"/admin/events", "/admin/organizations", "/admin/comments", "/admin/sports", "/admin/domain"} {
 				api.Any(prefix, auth.RequireRole("admin"), h)
 				api.Any(prefix+"/*path", auth.RequireRole("admin"), h)
 			}
+		}
+		if up.Moderation != nil {
+			// Админка-аналитика: читает проекции, построенные из доменных событий events.
+			h := proxy(up.Moderation, internalToken)
+			api.Any("/admin/moderation", auth.RequireRole("admin"), h)
+			api.Any("/admin/moderation/*path", auth.RequireRole("admin"), h)
 		}
 		if up.Files != nil {
 			h := proxy(up.Files, internalToken)
@@ -178,7 +184,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 }
 
 func upstreamsReady(ctx context.Context, up Upstreams) bool {
-	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit, up.Realtime, up.Events} {
+	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit, up.Realtime, up.Events, up.Moderation} {
 		if u == nil {
 			continue
 		}

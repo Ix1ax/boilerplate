@@ -52,7 +52,7 @@ func run(log *slog.Logger) error {
 		u, _ := url.Parse(raw)
 		return u
 	}
-	llmURL, notificationsURL, auditURL, realtimeURL, eventsURL := optional(c.LLMURL), optional(c.NotificationsURL), optional(c.AuditURL), optional(c.RealtimeURL), optional(c.EventsURL)
+	llmURL, notificationsURL, auditURL, realtimeURL, eventsURL, moderationURL := optional(c.LLMURL), optional(c.NotificationsURL), optional(c.AuditURL), optional(c.RealtimeURL), optional(c.EventsURL), optional(c.ModerationURL)
 	// Журнал аудита включается вместе с брокером; без AMQP_URL записи не публикуются.
 	var recorder audit.Recorder
 	if c.AMQPURL != "" {
@@ -70,7 +70,7 @@ func run(log *slog.Logger) error {
 		log.Info("Быстрый вход демо-аккаунтами включён", "accounts", len(demo))
 	}
 	sessions := auth.NewSessions(deps.Cache, verifier, c.OIDCIssuer, c.OIDCInternalURL, c.OIDCWebClientID, c.AppOrigin, c.SessionCookieSecure)
-	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL, Realtime: realtimeURL, Events: eventsURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder, AppOrigin: c.AppOrigin, OIDCIssuer: c.OIDCIssuer, DemoAccounts: demo}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	server := &http.Server{Addr: c.Addr, Handler: httpapi.NewGateway(log, deps, verifier, httpapi.Upstreams{Tasks: tasksURL, Files: filesURL, LLM: llmURL, Notifications: notificationsURL, Audit: auditURL, Realtime: realtimeURL, Events: eventsURL, Moderation: moderationURL}, httpapi.Options{InternalToken: c.InternalToken, Metrics: c.MetricsEnabled, MetricsToken: c.MetricsToken, Audit: recorder, AppOrigin: c.AppOrigin, OIDCIssuer: c.OIDCIssuer, DemoAccounts: demo}, sessions), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	failed := make(chan error, 1)
 	go func() {
 		log.Info("API принимает запросы", "addr", c.Addr)

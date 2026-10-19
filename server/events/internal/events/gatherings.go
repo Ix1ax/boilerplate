@@ -74,7 +74,7 @@ func checkQuorum(ctx context.Context, tx pgx.Tx, eventID string, e lockedEvent) 
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
-	if err = platform.RecordTransition(ctx, tx, "event_quorum", eventID, platform.Transition{From: "gathering", To: "reached", Actor: actorLabel(systemActor)}); err != nil {
+	if err = record(ctx, tx, "event_quorum", eventID, platform.Transition{From: "gathering", To: "reached", Actor: actorLabel(systemActor)}); err != nil {
 		return err
 	}
 	body := fmt.Sprintf("«%s», %s: записались %d из %d нужных. До встречи!", e.Title, humanTime(e.StartsAt), n, *e.MinParticipants)

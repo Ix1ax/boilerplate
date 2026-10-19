@@ -1035,6 +1035,29 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/admin/organizations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Модерация (админ)]
+      operationId: adminGetOrganization
+      summary: Карточка организации для админа
+      description: Организация в любом статусе, её представитель, история допуска с причинами и все события (во всех статусах).
+      responses:
+        '200':
+          description: Карточка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/admin/organizations/{id}/approve:
     parameters:
       - $ref: '#/components/parameters/ID'
@@ -1231,6 +1254,147 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Модерация (админ)]
+      operationId: adminEventHistory
+      summary: История события
+      description: Публикация, снятие, удаление, отмена и сбор состава — кто, когда и с какой причиной. `kind` — event или event_quorum.
+      responses:
+        '200':
+          description: Переходы от старых к новым
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HistoryEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/sports:
+    get:
+      tags: [Модерация (админ)]
+      operationId: adminListSports
+      summary: Справочник направлений для модерации
+      description: Все направления, пользовательские и скрытые первыми; кто добавил, сколько событий и активных запросов «Ищу компанию».
+      responses:
+        '200':
+          description: Направления
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminSport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/sports/{id}/hide:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: adminHideSport
+      summary: Скрыть пользовательское направление
+      description:
+        Спам, оскорбление или дубль. Направление пропадает из справочника, новые события и запросы с ним создать нельзя;
+        уже созданные события остаются (их снимают отдельно). Базовые направления не скрываются — 409. Причина обязательна.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Дубль направления «Футбол»
+      responses:
+        '200':
+          description: Направление скрыто
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/sports/{id}/show:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: adminShowSport
+      summary: Вернуть направление в справочник
+      responses:
+        '200':
+          description: Направление снова доступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/domain/republish:
+    post:
+      tags: [Модерация (админ)]
+      operationId: adminRepublishDomain
+      summary: Переотправить снимки в moderation
+      description:
+        Ставит в outbox снимки всех организаций, событий, записей, сообщений и запросов «Ищу компанию»
+        (`domain.*.changed`). Нужно, когда сервис moderation подключён позже или его база очищена. Повтор безопасен.
+      responses:
+        '202':
+          description: Сколько снимков поставлено в очередь
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued]
+                properties:
+                  queued: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/admin/comments/{id}/hide:
@@ -1893,6 +2057,57 @@ components:
               type: string
               description: Главный совет; пусто — особых советов нет
               example: возьмите дождевик и сменную обувь
+    Transition:
+      type: object
+      required: [from, to, actor, comment, created_at]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        actor:
+          {
+            type: string,
+            description: Кто принял решение (имя или «Платформа»),
+          }
+        comment: { type: string, description: Причина или комментарий }
+        created_at: { type: string, format: date-time }
+    HistoryEntry:
+      allOf:
+        - $ref: '#/components/schemas/Transition'
+        - type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [event, event_quorum] }
+    OrganizationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Organization'
+        - type: object
+          required: [history, events]
+          properties:
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/Transition'
+            events:
+              type: array
+              items:
+                $ref: '#/components/schemas/Event'
+    AdminSport:
+      allOf:
+        - $ref: '#/components/schemas/Sport'
+        - type: object
+          required:
+            [hidden, created_by, events_count, requests_count, created_at]
+          properties:
+            hidden: { type: boolean }
+            created_by:
+              {
+                type: string,
+                description: Кто добавил (пусто — базовое направление),
+              }
+            events_count: { type: integer }
+            requests_count:
+              { type: integer, description: Активные запросы «Ищу компанию» }
+            created_at: { type: string, format: date-time }
     Reason:
       type: object
       properties:

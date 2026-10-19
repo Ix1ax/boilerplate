@@ -1,0 +1,513 @@
+# Спецификация API сервиса moderation — источник правды для его маршрутов.
+# После правок: make openapi (соберёт общий packages/contracts/openapi.yaml и TS-типы).
+# Пути указаны так, как их видит клиент через gateway (/api/v1/...).
+openapi: 3.0.3
+info:
+  title: Админка-аналитика (moderation)
+  version: 0.1.0
+  description: |
+    Дашборд, журнал модерации, лента сообщений и выгрузки для администратора. Решения (допуск
+    организаций, снятие событий, скрытие сообщений) принимает сервис events; moderation получает его
+    доменные события `domain.*.changed` через RabbitMQ и строит из них собственные таблицы для чтения.
+
+    Проекция может отставать от events на несколько секунд — поле `updated_at` дашборда показывает
+    время последнего полученного изменения. Если база moderation очищена, её догоняет
+    `POST /api/v1/admin/domain/republish` сервиса events.
+servers:
+  - url: /
+    description: Через gateway на том же origin (в Docker — Nginx на :3000)
+security:
+  - keycloak:
+      - openid
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Админка
+    description: Аналитика, журнал и отчёты. Только роль `admin`.
+paths:
+  /api/v1/admin/moderation/dashboard:
+    get:
+      tags: [Админка]
+      operationId: moderationDashboard
+      summary: Дашборд администратора
+      description:
+        Что требует решения (заявки организаций, самые давние — первыми) и как живёт платформа — события, записи,
+        новички, сообщения, «Ищу компанию», сбор состава, ряд за 14 дней по Красноярску и популярные направления.
+      responses:
+        '200':
+          description: Дашборд
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/log:
+    get:
+      tags: [Админка]
+      operationId: moderationLog
+      summary: Журнал модерации
+      description:
+        Решения по организациям, смена статуса мероприятий (снятие, удаление, возврат, отмена — в том числе
+        автоматическая, когда не собран состав) и скрытие сообщений. Кто, когда и с какой причиной.
+      parameters:
+        - name: entity
+          in: query
+          description: 'organization, event или comment; несколько — через запятую'
+          schema: { type: string }
+        - name: to
+          in: query
+          description: Новый статус, например rejected или unpublished
+          schema: { type: string }
+        - name: entity_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          description: Поиск по названию, автору решения и причине
+          schema: { type: string, maxLength: 100 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [at, -at], default: -at }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/comments:
+    get:
+      tags: [Админка]
+      operationId: moderationComments
+      summary: Лента сообщений
+      description: Последние сообщения всех обсуждений в одном месте. Скрыть сообщение — `POST /api/v1/admin/comments/{id}/hide` сервиса events.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [visible, hidden] }
+        - name: event_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          description: Поиск по тексту, автору и названию мероприятия
+          schema: { type: string, maxLength: 100 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [created, -created], default: -created }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Страница сообщений
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/events.csv:
+    get:
+      tags: [Админка]
+      operationId: moderationReportEvents
+      summary: Выгрузка мероприятий
+      description: 'Все мероприятия во всех статусах: организатор, время по Красноярску, режим, статус и причина, участники, заявки, новички, состав. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/organizations.csv:
+    get:
+      tags: [Админка]
+      operationId: moderationReportOrganizations
+      summary: Выгрузка организаций
+      description: 'Организации, представители, статус допуска и причина отказа, число событий. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/moderation/reports/log.csv:
+    get:
+      tags: [Админка]
+      operationId: moderationReportLog
+      summary: Выгрузка журнала модерации
+      description: 'До 10 000 последних решений. CSV для Excel — UTF-8 с BOM, разделитель «;», статусы по-русски.'
+      responses:
+        '200':
+          description: Файл CSV
+          content:
+            text/csv:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
+      description:
+        Сессия браузера. Ставится после входа через `/auth/login`, хранит только случайный идентификатор
+        (токены Keycloak лежат на сервере). Изменяющие запросы с cookie дополнительно требуют заголовок
+        `Origin`, равный адресу приложения (защита от CSRF).
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description:
+        'Access token Keycloak для внешних клиентов и тестов. Получить локально: `POST
+        http://localhost:8180/realms/hackathon/protocol/openid-connect/token` с `grant_type=password`,
+        `client_id=hackathon-cli`, логином и паролем демо-пользователя.'
+    keycloak:
+      type: oauth2
+      description:
+        'Вход через Keycloak прямо из Swagger: нажмите Authorize → keycloak → Authorize и войдите
+        демо-пользователем (логины и пароли печатает make demo). Отдельный клиент hackathon-swagger с PKCE —
+        на вход в приложение не влияет. Адрес Keycloak gateway подставляет из OIDC_ISSUER.'
+      flows:
+        authorizationCode:
+          authorizationUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/auth'
+          tokenUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          refreshUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          scopes:
+            openid: Вход (OpenID Connect)
+            profile: Имя пользователя
+            email: Почта
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор записи (UUID)
+      schema:
+        type: string
+        format: uuid
+      example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+    Limit:
+      name: limit
+      in: query
+      description: Сколько записей вернуть (страница)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Сколько записей пропустить от начала
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100000
+        default: 0
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description:
+        'Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор
+        с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`,
+        а не выполнит действие ещё раз.'
+      schema:
+        type: string
+        maxLength: 100
+      example: 6f1e2d3c-create-task-1
+  schemas:
+    Error:
+      type: object
+      description: Единый формат ошибки всех сервисов.
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Машинный код ошибки — по нему фронтенд выбирает реакцию
+              example: validation_error
+            message:
+              type: string
+              description: Сообщение для человека, на русском
+              example: Название должно содержать от 1 до 200 символов
+            request_id:
+              type: string
+              description: Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+              example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Counter:
+      type: integer
+      minimum: 0
+    Dashboard:
+      type: object
+      required:
+        [
+          organizations,
+          events,
+          participations,
+          comments,
+          company_requests,
+          quorum,
+          series,
+          top_sports,
+          pending_organizations,
+          updated_at,
+        ]
+      properties:
+        organizations:
+          type: object
+          required: [pending, approved, rejected]
+          properties:
+            pending: { $ref: '#/components/schemas/Counter' }
+            approved: { $ref: '#/components/schemas/Counter' }
+            rejected: { $ref: '#/components/schemas/Counter' }
+        events:
+          type: object
+          required: [upcoming, unpublished, deleted, cancelled, created_week]
+          properties:
+            upcoming: { $ref: '#/components/schemas/Counter' }
+            unpublished: { $ref: '#/components/schemas/Counter' }
+            deleted: { $ref: '#/components/schemas/Counter' }
+            cancelled: { $ref: '#/components/schemas/Counter' }
+            created_week: { $ref: '#/components/schemas/Counter' }
+        participations:
+          type: object
+          required: [confirmed, pending, first_time]
+          properties:
+            confirmed: { $ref: '#/components/schemas/Counter' }
+            pending: { $ref: '#/components/schemas/Counter' }
+            first_time: { $ref: '#/components/schemas/Counter' }
+        comments:
+          type: object
+          required: [total, hidden]
+          properties:
+            total: { $ref: '#/components/schemas/Counter' }
+            hidden: { $ref: '#/components/schemas/Counter' }
+        company_requests:
+          type: object
+          required: [active]
+          properties:
+            active: { $ref: '#/components/schemas/Counter' }
+        quorum:
+          type: object
+          required: [gathering, reached, failed]
+          properties:
+            gathering: { $ref: '#/components/schemas/Counter' }
+            reached: { $ref: '#/components/schemas/Counter' }
+            failed: { $ref: '#/components/schemas/Counter' }
+        series:
+          type: array
+          description: 14 последних дней по Красноярску
+          items:
+            type: object
+            required: [date, events, participations]
+            properties:
+              date: { type: string, format: date }
+              events: { $ref: '#/components/schemas/Counter' }
+              participations: { $ref: '#/components/schemas/Counter' }
+        top_sports:
+          type: array
+          items:
+            type: object
+            required: [sport, events]
+            properties:
+              sport: { type: string }
+              events: { $ref: '#/components/schemas/Counter' }
+        pending_organizations:
+          type: array
+          description: Самые давние заявки на допуск
+          items:
+            type: object
+            required: [id, name, owner_name, created_at]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              owner_name: { type: string }
+              created_at: { type: string, format: date-time }
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время последнего полученного изменения
+    LogEntry:
+      type: object
+      required: [entity, entity_id, title, from, to, actor, comment, at]
+      properties:
+        entity: { type: string, enum: [organization, event, comment] }
+        entity_id: { type: string, format: uuid }
+        title: { type: string }
+        from: { type: string }
+        to: { type: string }
+        actor:
+          {
+            type: string,
+            description: 'Кто решил: имя администратора, организатор или «Платформа»',
+          }
+        comment: { type: string, description: Причина }
+        at: { type: string, format: date-time }
+    LogPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/LogEntry' }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    ModerationComment:
+      type: object
+      required:
+        [
+          id,
+          event_id,
+          event_title,
+          author_name,
+          body,
+          status,
+          hidden_reason,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        event_title: { type: string }
+        author_name: { type: string }
+        body: { type: string }
+        status: { type: string, enum: [visible, hidden] }
+        hidden_reason: { type: string }
+        created_at: { type: string, format: date-time }
+    CommentPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ModerationComment' }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+  responses:
+    BadRequest:
+      description: Некорректные входные данные (код ошибки и понятное сообщение в теле)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: invalid_body
+              message: Ожидается JSON с полем title
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unauthorized:
+      description: Пользователь не вошёл или токен недействителен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Войдите, чтобы продолжить
+    Forbidden:
+      description: Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: Недостаточно прав для этого действия
+    NotFound:
+      description: Запись не найдена или принадлежит другому пользователю (не различаются намеренно)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Задача не найдена
+    TooManyRequests:
+      description:
+        'Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту).
+        Заголовок `Retry-After` подсказывает, через сколько секунд повторить.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Через сколько секунд можно повторить
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limit
+              message: Слишком много запросов. Подождите минуту
+    InternalError:
+      description: Внутренняя ошибка; подробности — в логах по request_id
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Не удалось выполнить операцию
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unavailable:
+      description: Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: cache_unavailable
+              message: Попробуйте ещё раз позже
