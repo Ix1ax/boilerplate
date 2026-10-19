@@ -22,10 +22,21 @@ export const router = createBrowserRouter([
         children: [
           { index: true, lazy: () => import('@/pages/home') },
           { path: STATIC_ROUTES.LOGIN, lazy: () => import('@/pages/login') },
+          { path: STATIC_ROUTES.ABOUT, lazy: () => import('@/pages/about') },
           { path: STATIC_ROUTES.FORBIDDEN, element: <ForbiddenPage /> },
           {
+            // Весь API требует сессию: гостя отправляем на вход и возвращаем обратно.
             element: <ProtectedRoute />,
             children: [
+              {
+                path: STATIC_ROUTES.EVENTS,
+                lazy: () => import('@/pages/events'),
+              },
+              { path: 'events/:eventId', lazy: () => import('@/pages/event') },
+              {
+                path: STATIC_ROUTES.MY,
+                lazy: () => import('@/pages/my-sport'),
+              },
               {
                 path: STATIC_ROUTES.DASHBOARD,
                 element: <DashboardLayout />,

@@ -1,1 +1,7 @@
-export { login, logout } from './authApi';
+export {
+  type DemoAccount,
+  demoLogin,
+  getDemoAccounts,
+  login,
+  logout,
+} from './authApi';

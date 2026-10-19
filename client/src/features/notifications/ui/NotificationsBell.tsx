@@ -24,7 +24,7 @@ export const NotificationsBell = () => {
         render={
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             aria-label={
               unread ? `Уведомления, непрочитанных: ${unread}` : 'Уведомления'
             }
@@ -34,7 +34,7 @@ export const NotificationsBell = () => {
       >
         <BellIcon />
         {unread > 0 && (
-          <span className="bg-destructive absolute -top-1 -right-1 min-w-4 rounded-full px-1 text-[10px] leading-4 text-white">
+          <span className="absolute top-0.5 right-0.5 min-w-5 rounded-full bg-gold px-1 text-xs leading-5 font-bold text-ink">
             {unread > 9 ? '9+' : unread}
           </span>
         )}

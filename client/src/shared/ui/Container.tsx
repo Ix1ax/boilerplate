@@ -6,7 +6,7 @@ export const Container = ({ className, ...props }: ComponentProps<'div'>) => {
   return (
     <div
       data-slot="container"
-      className={cn('mx-auto w-full max-w-5xl px-4 sm:px-6', className)}
+      className={cn('mx-auto w-full max-w-[1280px] px-4 sm:px-8', className)}
       {...props}
     />
   );

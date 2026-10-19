@@ -5,3 +5,4 @@ export {
   writeLocalStorage,
   removeLocalStorage,
 } from './localStorage';
+export { initialOf } from './initial';

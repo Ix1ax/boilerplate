@@ -24,17 +24,17 @@ export const ErrorScreen = ({
       data-slot="error-screen"
       role="alert"
       className={cn(
-        'fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/60 px-6 text-center backdrop-blur-sm',
+        'fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background px-6 text-center',
         className,
       )}
     >
       <AlertTriangleIcon aria-hidden className="size-8 text-destructive" />
       <div className="space-y-1">
-        <p className="text-base font-medium">{title}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="font-heading text-2xl font-extrabold">{title}</p>
+        <p className="text-muted-foreground">{description}</p>
       </div>
       {onRetry ? (
-        <Button variant="outline" onClick={onRetry}>
+        <Button size="lg" onClick={onRetry}>
           {retryLabel}
         </Button>
       ) : null}

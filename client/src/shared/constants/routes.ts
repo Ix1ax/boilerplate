@@ -2,6 +2,12 @@ export const STATIC_ROUTES = {
   HOME: '/',
   PROFILE: '/profile',
   LOGIN: '/login',
+  EVENTS: '/events',
+  EVENT_NEW: '/events/new',
+  MY: '/my',
+  COMPANY: '/company',
+  CLUB: '/club',
+  ABOUT: '/about',
   DASHBOARD: '/dashboard',
   DASHBOARD_TASKS: '/dashboard/tasks',
   DASHBOARD_FILES: '/dashboard/files',
@@ -12,5 +18,8 @@ export const STATIC_ROUTES = {
 } as const;
 
 export const DYNAMIC_ROUTES = {
-  POST: (postId: number) => `/post/${postId}`,
+  EVENT: (eventId: string) => `/events/${eventId}`,
+  EVENT_MANAGE: (eventId: string) => `/events/${eventId}/manage`,
+  ORGANIZATION: (orgId: string) => `/organizations/${orgId}`,
+  PERSON: (userId: string) => `/people/${userId}`,
 } as const;

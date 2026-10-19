@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/golos-text": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/unbounded": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
     "@starter/contracts": "*",
     "@tailwindcss/vite": "^4.3.3",

@@ -58,7 +58,7 @@ export const DashboardLayout = () => {
     tabs.find((tab) => location.pathname.startsWith(tab.to))?.value ?? 'tasks';
 
   return (
-    <Container>
+    <Container className="py-6">
       <Section>
         <PageHeader
           title="Дашборд"

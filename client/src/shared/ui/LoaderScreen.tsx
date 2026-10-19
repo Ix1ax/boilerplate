@@ -18,7 +18,7 @@ export const LoaderScreen = ({
       aria-live="polite"
       aria-busy="true"
       className={cn(
-        'fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-sm',
+        'fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background',
         className,
       )}
     >
