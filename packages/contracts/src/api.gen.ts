@@ -164,6 +164,574 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/sports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Справочник направлений
+     * @description Базовые направления и добавленные пользователями (`is_custom`). Своё направление появляется здесь сразу после создания события с `sport_name` — правка кода не нужна.
+     */
+    get: operations['listSports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Выдача мероприятий
+     * @description Только опубликованные и ещё не закончившиеся, ближайшие первыми. Поиск `q` учитывает словоформы и ищет также по названию направления и организации.
+     */
+    get: operations['listEvents'];
+    put?: never;
+    /**
+     * Создать мероприятие
+     * @description Публикуется сразу. `as_organization=true` — от имени своей организации; если она ещё не допущена, ответ 403 (проверка на сервере). Направление — `sport_id` из справочника или `sport_name` (своё, будет добавлено в справочник).
+     */
+    post: operations['createEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Карточка мероприятия
+     * @description Опубликованное видят все. Снятое, удалённое или отменённое — организатор, записавшиеся (с причиной в `moderation_reason`) и админ; остальным — 404. `private_info` заполнено только для организатора, подтверждённых участников и админа.
+     */
+    get: operations['getEvent'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отменить своё мероприятие
+     * @description Только организатор. Причина обязательна — её увидят записавшиеся, им уйдёт уведомление.
+     */
+    post: operations['cancelEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/join': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Записаться или подать заявку
+     * @description `open` — сразу `confirmed` (или `waitlist`, если мест нет); `request` — `pending`. Повторный вызов возвращает текущую запись. После отказа или отмены можно записаться снова. Неопубликованное или прошедшее событие и собственное событие — 409.
+     */
+    post: operations['joinEvent'];
+    /**
+     * Отменить запись или заявку
+     * @description Освободившееся место при свободной записи сразу получает первый из листа ожидания.
+     */
+    delete: operations['leaveEvent'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/participants': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Участники и заявки
+     * @description Организатор и админ видят все записи (сначала ожидающие решения) с сообщениями к заявкам. Остальные — только подтверждённых участников по имени («кто собирается»).
+     */
+    get: operations['listParticipants'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/participants/{pid}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор записи или заявки (UUID) */
+        pid: components['parameters']['ParticipationID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Принять заявку
+     * @description Только организатор события (админ — нет). Заявка должна быть `pending`; при заполненном лимите мест — 409. Участник получит уведомление.
+     */
+    post: operations['approveParticipant'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/participants/{pid}/reject': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор записи или заявки (UUID) */
+        pid: components['parameters']['ParticipationID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отклонить заявку
+     * @description Только организатор события. Комментарий необязателен, участник его увидит.
+     */
+    post: operations['rejectParticipant'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Обсуждение мероприятия
+     * @description Сообщения по времени. Скрытые модератором показываются пометкой без текста (текст видит только админ).
+     */
+    get: operations['listComments'];
+    put?: never;
+    /**
+     * Задать вопрос или ответить
+     * @description Писать может любой вошедший пользователь, пока событие опубликовано. `parent_id` — ответ на сообщение верхнего уровня. Организатор получает уведомление о вопросе, автор вопроса — об ответе; открытые страницы обновляются через WebSocket-канал `room:event:{id}`.
+     */
+    post: operations['addComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/participations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Мои записи
+     * @description Все записи и заявки пользователя со статусом и кратким описанием события; будущие первыми.
+     */
+    get: operations['listMyParticipations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Мои мероприятия (как организатор)
+     * @description Все статусы, в том числе снятые и отменённые — с причиной.
+     */
+    get: operations['listMyEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/my/organization': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Моя организация и статус заявки
+     * @description Представитель видит заявку в любом статусе и причину отказа. 404 — заявки ещё нет.
+     */
+    get: operations['getMyOrganization'];
+    /**
+     * Исправить профиль организации
+     * @description После отказа правка означает повторную подачу — статус снова `pending`. Допущенная организация остаётся допущенной.
+     */
+    put: operations['updateMyOrganization'];
+    /**
+     * Подать заявку организации
+     * @description Создаёт профиль со статусом `pending`. До одобрения администратором публиковать события от имени организации нельзя. Одна организация на представителя (повтор — 409).
+     */
+    post: operations['submitOrganization'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/organizations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Каталог организаций
+     * @description Только допущенные администратором, по алфавиту.
+     */
+    get: operations['listOrganizations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/organizations/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Страница организации и её мероприятия
+     * @description Публична только после допуска; представитель и админ видят её в любом статусе.
+     */
+    get: operations['getOrganization'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Идентификатор пользователя (sub из Keycloak) */
+        id: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Профиль организатора
+     * @description Имя, о себе и ближайшие мероприятия, которые он проводит.
+     */
+    get: operations['getProfile'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/organizations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Заявки и поиск организаций
+     * @description Все статусы; ожидающие решения первыми.
+     */
+    get: operations['adminListOrganizations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/organizations/{id}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Допустить организацию
+     * @description После допуска организация публикует события без повторной модерации. Представитель получит уведомление.
+     */
+    post: operations['approveOrganization'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/organizations/{id}/reject': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отклонить заявку организации
+     * @description Причина обязательна — представитель увидит её и сможет исправить профиль.
+     */
+    post: operations['rejectOrganization'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Поиск мероприятий во всех статусах
+     * @description Те же фильтры, что у выдачи, плюс `status`. Из строки — переход к организатору и обсуждению.
+     */
+    get: operations['adminListEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/events/{id}/unpublish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Снять мероприятие с публикации
+     * @description Событие пропадает из выдачи, запись закрывается (в том числе по прямой ссылке). Существующие записи сохраняются; организатор и участники видят плашку с причиной и получают уведомление.
+     */
+    post: operations['unpublishEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/events/{id}/delete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Удалить мероприятие
+     * @description Мягкое удаление с причиной; вернуть нельзя. Записи сохраняются для истории.
+     */
+    post: operations['deleteEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/events/{id}/restore': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Вернуть снятое мероприятие в публикацию */
+    post: operations['restoreEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/comments/{id}/hide': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Скрыть сообщение
+     * @description Скрывается одно сообщение; мероприятие и остальное обсуждение остаются. Автор получит уведомление с причиной.
+     */
+    post: operations['hideComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/files': {
     parameters: {
       query?: never;
@@ -624,6 +1192,230 @@ export interface components {
       limit: number;
       offset: number;
     };
+    Sport: {
+      /** Format: uuid */
+      id: string;
+      /** @example Шахматы */
+      name: string;
+      /** @description Добавлено пользователем при создании события */
+      is_custom: boolean;
+    };
+    /** @description Кто проводит событие: человек (ссылка /profiles/{id}) или организация (/organizations/{id}) */
+    Organizer: {
+      /** @enum {string} */
+      type: 'user' | 'organization';
+      id: string;
+      /** @example Шахматный клуб «Ладья» */
+      name: string;
+    };
+    /** @description Запись текущего пользователя */
+    MyParticipation: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description confirmed — участвует; pending — ждёт решения организатора; rejected — отказ; cancelled — отменил сам; waitlist — лист ожидания
+       * @enum {string}
+       */
+      status: 'confirmed' | 'pending' | 'rejected' | 'cancelled' | 'waitlist';
+      /** @description Комментарий организатора при отказе */
+      decision_reason: string;
+    };
+    Event: {
+      /** Format: uuid */
+      id: string;
+      /** @example Шахматный турнир выходного дня */
+      title: string;
+      description: string;
+      sport: components['schemas']['Sport'];
+      /** Format: date-time */
+      starts_at: string;
+      /** Format: date-time */
+      ends_at?: string | null;
+      /** @example Красноярск, ул. Мира, 10, библиотека, 2 этаж */
+      location: string;
+      lat?: number | null;
+      lng?: number | null;
+      /**
+       * @description Для кого подходит
+       * @enum {string}
+       */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      /** @description Подготовка, инвентарь, форма */
+      requirements: string;
+      /** @example Бесплатно */
+      price_note: string;
+      /** @description Точка сбора и контакты. Заполнено только для организатора, подтверждённых участников и админа */
+      private_info: string;
+      /** @description Есть закрытая информация — клиент может подсказать «откроется после подтверждения» */
+      has_private_info: boolean;
+      /**
+       * @description open — свободная запись; request — по заявке с подтверждением
+       * @enum {string}
+       */
+      join_mode: 'open' | 'request';
+      /** @description Лимит мест; null — без лимита */
+      capacity?: number | null;
+      confirmed_count: number;
+      pending_count: number;
+      waitlist_count: number;
+      /** @enum {string} */
+      status: 'published' | 'unpublished' | 'deleted' | 'cancelled';
+      /** @description Причина снятия, удаления или отмены */
+      moderation_reason: string;
+      organizer: components['schemas']['Organizer'];
+      /** @description Текущий пользователь — организатор */
+      is_organizer: boolean;
+      my_participation?: components['schemas']['MyParticipation'] | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    EventPage: {
+      items: components['schemas']['Event'][];
+      total: number;
+      limit: number;
+      offset: number;
+    };
+    EventInput: {
+      title: string;
+      description?: string;
+      /**
+       * Format: uuid
+       * @description Направление из справочника
+       */
+      sport_id?: string;
+      /** @description Своё направление, если sport_id не задан */
+      sport_name?: string;
+      /**
+       * Format: date-time
+       * @description В будущем
+       */
+      starts_at: string;
+      /** Format: date-time */
+      ends_at?: string | null;
+      location: string;
+      lat?: number | null;
+      lng?: number | null;
+      /**
+       * @default any
+       * @enum {string}
+       */
+      level: 'any' | 'beginner' | 'amateur' | 'pro';
+      requirements?: string;
+      price_note?: string;
+      private_info?: string;
+      /** @enum {string} */
+      join_mode: 'open' | 'request';
+      capacity?: number | null;
+      /**
+       * @description От имени своей допущенной организации
+       * @default false
+       */
+      as_organization: boolean;
+    };
+    Person: {
+      id: string;
+      /** @example Анна Петрова */
+      name: string;
+      /** @description beginner, amateur, pro или пусто */
+      level: string;
+    };
+    Participant: {
+      /** Format: uuid */
+      id: string;
+      user: components['schemas']['Person'];
+      /** @enum {string} */
+      status: 'confirmed' | 'pending' | 'rejected' | 'cancelled' | 'waitlist';
+      /** @description Сообщение к заявке (видит только организатор) */
+      message: string;
+      decision_reason: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    MyEntry: components['schemas']['MyParticipation'] & {
+      event: {
+        /** Format: uuid */
+        id: string;
+        title: string;
+        sport: string;
+        /** Format: date-time */
+        starts_at: string;
+        location: string;
+        /** @enum {string} */
+        join_mode: 'open' | 'request';
+        /** @enum {string} */
+        status: 'published' | 'unpublished' | 'deleted' | 'cancelled';
+        moderation_reason: string;
+      };
+    };
+    Comment: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      event_id: string;
+      /** Format: uuid */
+      parent_id?: string | null;
+      author: components['schemas']['Person'];
+      /** @description Автор — организатор события (бейдж «Организатор») */
+      is_organizer: boolean;
+      /** @description От имени какой организации отвечает организатор */
+      organization_name: string;
+      /** @description Пусто для скрытого сообщения (кроме админа) */
+      body: string;
+      /** @enum {string} */
+      status: 'visible' | 'hidden';
+      hidden_reason: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    Organization: {
+      /** Format: uuid */
+      id: string;
+      /** @example Шахматный клуб «Ладья» */
+      name: string;
+      description: string;
+      city: string;
+      contacts: string;
+      sports: components['schemas']['Sport'][];
+      /**
+       * @description pending — на рассмотрении; approved — допущена; rejected — отклонена
+       * @enum {string}
+       */
+      status: 'pending' | 'approved' | 'rejected';
+      /** @description Причина отказа (видят представитель и админ) */
+      review_reason: string;
+      /** Format: date-time */
+      reviewed_at?: string | null;
+      owner?: components['schemas']['Person'];
+      /** @description Ближайших опубликованных мероприятий */
+      events_count: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    OrganizationPage: {
+      items: components['schemas']['Organization'][];
+      total: number;
+      limit: number;
+      offset: number;
+    };
+    OrganizationInput: {
+      name: string;
+      description: string;
+      city?: string;
+      contacts?: string;
+      sport_ids?: string[];
+    };
+    Profile: {
+      id: string;
+      name: string;
+      about: string;
+      city: string;
+      level: string;
+      events: components['schemas']['Event'][];
+    };
+    Reason: {
+      /** @description Причина решения — её увидит другая сторона */
+      reason?: string;
+    };
     /** @description Метаданные файла */
     File: {
       /** Format: uuid */
@@ -938,6 +1730,41 @@ export interface components {
         'application/json': components['schemas']['Error'];
       };
     };
+    /** @description Действие сейчас невозможно (снятое или прошедшее событие, нет мест, заявка уже рассмотрена, заявка организации уже подана) — сообщение объясняет причину */
+    Conflict: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "conflict",
+         *         "message": "Мероприятие недоступно для записи: оно снято с публикации или отменено"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description Поле формы заполнено неверно; `field` — какое поле подсветить. `reason_required` — нужна причина */
+    ValidationError: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "validation_error",
+         *         "message": "Укажите дату и время в будущем",
+         *         "field": "starts_at"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
   };
   parameters: {
     /**
@@ -954,6 +1781,8 @@ export interface components {
      * @example 6f1e2d3c-create-task-1
      */
     IdempotencyKey: string;
+    /** @description Идентификатор записи или заявки (UUID) */
+    ParticipationID: string;
   };
   requestBodies: never;
   headers: never;
@@ -1283,6 +2112,1029 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+    };
+  };
+  listSports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Направления, сначала базовые */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "items": [
+           *         {
+           *           "id": "9b2f6a1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b",
+           *           "name": "Шахматы",
+           *           "is_custom": false
+           *         },
+           *         {
+           *           "id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+           *           "name": "Алтимат-фрисби",
+           *           "is_custom": true
+           *         }
+           *       ]
+           *     }
+           */
+          'application/json': {
+            items: components['schemas']['Sport'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listEvents: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /**
+         * @description Текстовый поиск (до 100 символов)
+         * @example фрисби
+         */
+        q?: string;
+        /** @description Направления — UUID через запятую */
+        sport?: string;
+        /** @description Режим записи */
+        mode?: 'open' | 'request';
+        /** @description Уровень; `beginner` показывает и события «для всех» */
+        level?: 'any' | 'beginner' | 'amateur' | 'pro';
+        /** @description Начало не раньше (дата `2026-10-20` или RFC 3339) */
+        from?: string;
+        /** @description Начало раньше (дата или RFC 3339) */
+        to?: string;
+        /** @description Только события организации (UUID) */
+        organization?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Страница мероприятий */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  createEvent: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`, а не выполнит действие ещё раз.
+         * @example 6f1e2d3c-create-task-1
+         */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "title": "Фрисби в парке",
+         *       "description": "Учимся бросать диск и играем 5 на 5. Новичкам всё объясним.",
+         *       "sport_name": "Алтимат-фрисби",
+         *       "starts_at": "2026-10-25T10:00:00+07:00",
+         *       "ends_at": "2026-10-25T12:00:00+07:00",
+         *       "location": "Красноярск, остров Татышев, у центральной поляны",
+         *       "level": "beginner",
+         *       "requirements": "Удобная обувь, вода. Диски есть у организатора.",
+         *       "price_note": "Бесплатно",
+         *       "private_info": "Встречаемся у синего шатра, телефон организатора: +7 900 000-00-00",
+         *       "join_mode": "open",
+         *       "capacity": 14,
+         *       "as_organization": false
+         *     }
+         */
+        'application/json': components['schemas']['EventInput'];
+      };
+    };
+    responses: {
+      /** @description Мероприятие опубликовано */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      /** @description Организация ещё не допущена администратором */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "forbidden",
+           *         "message": "Организация ещё не допущена администратором: публиковать события от её имени пока нельзя"
+           *       }
+           *     }
+           */
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Мероприятие */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  cancelEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Площадку закрыли на ремонт, перенесём на следующую неделю"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Мероприятие отменено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  joinEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        /**
+         * @example {
+         *       "message": "Играю два года, есть своя доска"
+         *     }
+         */
+        'application/json': {
+          /** @description Сообщение организатору к заявке */
+          message?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Текущая запись пользователя */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+           *       "status": "pending",
+           *       "decision_reason": ""
+           *     }
+           */
+          'application/json': components['schemas']['MyParticipation'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  leaveEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Запись отменена */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listParticipants: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Список записей */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Participant'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  approveParticipant: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор записи или заявки (UUID) */
+        pid: components['parameters']['ParticipationID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Заявка принята */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Participant'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  rejectParticipant: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+        /** @description Идентификатор записи или заявки (UUID) */
+        pid: components['parameters']['ParticipationID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Турнир для игроков с рейтингом от 1400"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Заявка отклонена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Participant'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listComments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Сообщения */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Comment'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  addComment: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`, а не выполнит действие ещё раз.
+         * @example 6f1e2d3c-create-task-1
+         */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "body": "Нужна ли своя доска?"
+         *     }
+         */
+        'application/json': {
+          body: string;
+          /** Format: uuid */
+          parent_id?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Сообщение добавлено */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Comment'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      429: components['responses']['TooManyRequests'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listMyParticipations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Записи */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['MyEntry'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listMyEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Мероприятия */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventPage'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getMyOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Организация */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  updateMyOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationInput'];
+      };
+    };
+    responses: {
+      /** @description Профиль сохранён */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  submitOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "name": "Клуб скандинавской ходьбы «Сосны»",
+         *       "description": "Тренировки по выходным для всех возрастов, палки выдаём.",
+         *       "city": "Красноярск",
+         *       "contacts": "@sosny_walk, +7 900 000-00-01",
+         *       "sport_ids": []
+         *     }
+         */
+        'application/json': components['schemas']['OrganizationInput'];
+      };
+    };
+    responses: {
+      /** @description Заявка подана */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  listOrganizations: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /** @description Поиск по названию, описанию и городу */
+        q?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Организации */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrganizationPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Организация и ближайшие опубликованные события */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            organization: components['schemas']['Organization'];
+            events: components['schemas']['Event'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  getProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Идентификатор пользователя (sub из Keycloak) */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Профиль */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Profile'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminListOrganizations: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /**
+         * @description pending, approved, rejected — через запятую
+         * @example pending
+         */
+        status?: string;
+        /** @description Поиск по названию, описанию и городу */
+        q?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Организации */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrganizationPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  approveOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Организация допущена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  rejectOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Не указаны контакты и место проведения занятий"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Заявка отклонена */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  adminListEvents: {
+    parameters: {
+      query?: {
+        /** @description Сколько записей вернуть (страница) */
+        limit?: components['parameters']['Limit'];
+        /** @description Сколько записей пропустить от начала */
+        offset?: components['parameters']['Offset'];
+        /** @description published, unpublished, deleted, cancelled — через запятую */
+        status?: string;
+        /** @description Текстовый поиск */
+        q?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Мероприятия */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventPage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  unpublishEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Некорректное место проведения"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Мероприятие снято */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  deleteEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Мероприятие удалено */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  restoreEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Мероприятие снова опубликовано */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['InternalError'];
+    };
+  };
+  hideComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description Идентификатор записи (UUID)
+         * @example 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+         */
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "reason": "Реклама стороннего сервиса"
+         *     }
+         */
+        'application/json': components['schemas']['Reason'];
+      };
+    };
+    responses: {
+      /** @description Сообщение скрыто */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Comment'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationError'];
+      500: components['responses']['InternalError'];
     };
   };
   listFiles: {

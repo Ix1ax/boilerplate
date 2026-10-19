@@ -22,7 +22,7 @@ func TestProxyReplacesIdentityHeaders(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		id := auth.Identity{Subject: "user-1"}
+		id := auth.Identity{Subject: "user-1", Name: "Анна Петрова"}
 		id.RealmAccess.Roles = []string{"user"}
 		c.Set("identity", id)
 	})
@@ -34,6 +34,7 @@ func TestProxyReplacesIdentityHeaders(t *testing.T) {
 	req.Header.Set(HeaderUserID, "attacker")
 	req.Header.Set(HeaderRoles, "admin")
 	req.Header.Set(HeaderToken, "guess")
+	req.Header.Set(HeaderName, "Admin")
 	req.Header.Set("Authorization", "Bearer x")
 	req.Header.Set("Cookie", "starter_session=x")
 	resp, err := http.DefaultClient.Do(req)
@@ -43,6 +44,10 @@ func TestProxyReplacesIdentityHeaders(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 204 || got.Get(HeaderUserID) != "user-1" || got.Get(HeaderRoles) != "user" || got.Get(HeaderToken) != "secret" || got.Get("Authorization") != "" || got.Get("Cookie") != "" {
 		t.Fatalf("status=%d headers=%v", resp.StatusCode, got)
+	}
+	// Имя приходит из токена, а не от клиента, и кодируется: кириллица в заголовке недопустима.
+	if name, err := url.PathUnescape(got.Get(HeaderName)); err != nil || name != "Анна Петрова" {
+		t.Fatalf("X-User-Name=%q", got.Get(HeaderName))
 	}
 }
 

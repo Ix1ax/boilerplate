@@ -1,0 +1,233 @@
+{
+  "organizations": [
+    {
+      "user": "org",
+      "name": "Шахматный клуб «Ладья»",
+      "description": "Клуб для всех, кто любит шахматы: от новичков до перворазрядников. Турниры по выходным, блиц по средам, разбор партий с тренером.",
+      "city": "Красноярск",
+      "contacts": "ladya-chess.example, +7 900 000-00-10",
+      "sports": ["Шахматы"],
+      "review": "approve"
+    },
+    {
+      "user": "org_pending",
+      "name": "Клуб скандинавской ходьбы «Сосны»",
+      "description": "Тренировки по выходным в Академгородке для всех возрастов. Палки выдаём, технику ставим с нуля.",
+      "city": "Красноярск",
+      "contacts": "@sosny_walk",
+      "sports": ["Скандинавская ходьба"]
+    },
+    {
+      "user": "org_rejected",
+      "name": "Фитнес-студия «Пульс»",
+      "description": "Групповые тренировки и персональные программы.",
+      "city": "Красноярск",
+      "contacts": "",
+      "sports": ["Йога"],
+      "review": "reject",
+      "reason": "Не указаны контакты и адрес, где проходят занятия. Дополните профиль и подайте заявку снова."
+    }
+  ],
+  "events": [
+    {
+      "key": "chess-tournament",
+      "user": "org",
+      "as_organization": true,
+      "title": "Шахматный турнир выходного дня",
+      "description": "Швейцарская система, 7 туров по 15 минут + 5 секунд. Разбор партий с тренером после турнира.",
+      "sport": "Шахматы",
+      "day": 3,
+      "time": "11:00",
+      "hours": 4,
+      "location": "Красноярск, ул. Мира, 10, библиотека им. Горького, 2 этаж",
+      "level": "amateur",
+      "requirements": "Знание правил и шахматной нотации. Доски и часы есть в клубе.",
+      "price_note": "200 ₽ на призовой фонд",
+      "private_info": "Вход со двора, код домофона 24. Регистрация участников с 10:30.",
+      "join_mode": "request",
+      "capacity": 16
+    },
+    {
+      "key": "chess-blitz",
+      "user": "org",
+      "as_organization": true,
+      "title": "Блиц по средам для всех",
+      "description": "Дружеский блиц 3+2. Новичкам подберём соперника по силам и подскажем правила.",
+      "sport": "Шахматы",
+      "day": 5,
+      "time": "19:00",
+      "hours": 2,
+      "location": "Красноярск, ул. Мира, 10, библиотека им. Горького, 2 этаж",
+      "level": "any",
+      "requirements": "",
+      "price_note": "Бесплатно",
+      "private_info": "Зал № 4, после входа направо.",
+      "join_mode": "open"
+    },
+    {
+      "key": "morning-exercise",
+      "user": "second",
+      "title": "Утренняя зарядка во дворе",
+      "description": "20 минут простых упражнений на свежем воздухе. Подходит любому возрасту, можно прийти с детьми.",
+      "sport": "Зарядка во дворе",
+      "day": 1,
+      "time": "07:30",
+      "hours": 1,
+      "location": "Красноярск, ул. Ленина, 120, спортивная площадка во дворе",
+      "level": "beginner",
+      "requirements": "Удобная одежда. Коврик по желанию.",
+      "price_note": "Бесплатно",
+      "private_info": "",
+      "join_mode": "open"
+    },
+    {
+      "key": "run",
+      "user": "second",
+      "title": "Пробежка вдоль Енисея, 5 км",
+      "description": "Лёгкий темп около 6:00 на километр, никого не бросаем. После — чай в кафе на набережной.",
+      "sport": "Бег",
+      "day": 2,
+      "time": "08:00",
+      "hours": 1,
+      "location": "Красноярск, Центральная набережная, у Коммунального моста",
+      "level": "beginner",
+      "requirements": "Беговая обувь, вода.",
+      "price_note": "Бесплатно",
+      "private_info": "Встречаемся у лестницы к воде, телефон организатора: +7 900 000-00-20",
+      "join_mode": "open",
+      "capacity": 2
+    },
+    {
+      "key": "workout",
+      "user": "second",
+      "title": "Воркаут на турниках",
+      "description": "Подтягивания, отжимания на брусьях, базовые элементы. Покажем технику с нуля.",
+      "sport": "Воркаут",
+      "day": 4,
+      "time": "18:30",
+      "hours": 2,
+      "location": "Красноярск, остров Татышев, воркаут-площадка у главного входа",
+      "level": "any",
+      "requirements": "Перчатки по желанию.",
+      "price_note": "Бесплатно",
+      "private_info": "",
+      "join_mode": "open"
+    },
+    {
+      "key": "yoga",
+      "user": "demo",
+      "title": "Йога на рассвете",
+      "description": "Мягкая хатха-йога для начинающих. Группа маленькая, поэтому запись по заявке.",
+      "sport": "Йога",
+      "day": 6,
+      "time": "07:00",
+      "hours": 1,
+      "location": "Красноярск, парк Горького, поляна у фонтана",
+      "level": "beginner",
+      "requirements": "Свой коврик и плед.",
+      "price_note": "Бесплатно",
+      "private_info": "Если дождь — переносимся в беседку у восточного входа.",
+      "join_mode": "request",
+      "capacity": 8
+    },
+    {
+      "key": "basketball",
+      "user": "org_rejected",
+      "title": "Баскетбол 3×3 по вечерам",
+      "description": "Собираем команды на месте, играем до 11 очков. Уровень — уверенный любитель.",
+      "sport": "Баскетбол",
+      "day": 2,
+      "time": "20:00",
+      "hours": 2,
+      "location": "Красноярск, ул. Высотная, 2, открытая площадка СФУ",
+      "level": "amateur",
+      "requirements": "Кроссовки. Мяч есть.",
+      "price_note": "Бесплатно",
+      "private_info": "",
+      "join_mode": "open"
+    },
+    {
+      "key": "football",
+      "user": "org_rejected",
+      "title": "Футбол 7×7 в манеже",
+      "description": "Аренда манежа на два часа, делим стоимость на всех. Нужен стабильный состав, поэтому запись по заявке.",
+      "sport": "Футбол",
+      "day": 7,
+      "time": "21:00",
+      "hours": 2,
+      "location": "Красноярск, ул. Партизана Железняка, 42, манеж «Арена»",
+      "level": "amateur",
+      "requirements": "Сороконожки или кроссовки, тёмная и светлая футболки.",
+      "price_note": "≈ 400 ₽ с человека за аренду",
+      "private_info": "Перевод за аренду — организатору после игры.",
+      "join_mode": "request",
+      "capacity": 14
+    },
+    {
+      "key": "spam",
+      "user": "org_rejected",
+      "title": "Продам абонемент в зал",
+      "description": "Годовой абонемент, недорого.",
+      "sport": "Плавание",
+      "day": 3,
+      "time": "12:00",
+      "hours": 1,
+      "location": "Красноярск, пишите в личку",
+      "level": "any",
+      "requirements": "",
+      "price_note": "",
+      "private_info": "",
+      "join_mode": "open",
+      "moderate": "Это объявление о продаже, а не совместная активность."
+    }
+  ],
+  "participations": [
+    {
+      "event": "chess-tournament",
+      "user": "second",
+      "message": "Играю два года, рейтинг на lichess около 1500."
+    },
+    {
+      "event": "chess-tournament",
+      "user": "org_rejected",
+      "message": "Хочу попробовать, турниров раньше не играл."
+    },
+    { "event": "chess-blitz", "user": "second" },
+    { "event": "morning-exercise", "user": "org" },
+    { "event": "run", "user": "org" },
+    { "event": "run", "user": "org_rejected" },
+    { "event": "workout", "user": "org_rejected" },
+    {
+      "event": "yoga",
+      "user": "org_pending",
+      "message": "Занимаюсь полгода, есть свой коврик."
+    },
+    { "event": "football", "user": "second", "message": "Играю в защите." },
+    {
+      "event": "football",
+      "user": "org",
+      "message": "Могу на ворота.",
+      "decision": "approve"
+    }
+  ],
+  "comments": [
+    {
+      "event": "chess-tournament",
+      "user": "demo",
+      "body": "Нужна ли своя доска и часы?",
+      "reply": "Нет, всё есть в клубе. Возьмите только ручку для записи партий."
+    },
+    {
+      "event": "run",
+      "user": "org_rejected",
+      "body": "Какой будет темп? Я только начинаю.",
+      "reply": "Около 6:00 на километр, отстающих ждём. Приходите!"
+    },
+    {
+      "event": "chess-blitz",
+      "user": "org_rejected",
+      "body": "Скидки на кроссовки до 70% по ссылке в профиле!",
+      "hide": "Реклама, не относится к мероприятию."
+    }
+  ]
+}

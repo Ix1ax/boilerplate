@@ -1,0 +1,1518 @@
+# Спецификация API сервиса events — источник правды для его маршрутов.
+# После правок: make openapi (соберёт общий packages/contracts/openapi.yaml и TS-типы).
+# Пути указаны так, как их видит клиент через gateway (/api/v1/...).
+openapi: 3.0.3
+info:
+  title: Спортивные активности (events)
+  version: 0.1.0
+  description: |
+    Домен кейса «Платформа совместных спортивных активностей»: справочник направлений,
+    организации с допуском администратором, мероприятия с двумя режимами записи, заявки
+    участников и обсуждение. Модель данных — docs/data-model.md.
+
+    **Роли.** Пользователь ищет, записывается, задаёт вопросы и создаёт свои события.
+    Представитель организации подаёт заявку на допуск и после одобрения публикует события
+    от её имени — сразу, без повторной модерации. Администратор (`admin`) допускает
+    организации, снимает события и скрывает сообщения, но **не** решает заявки участников:
+    это делает организатор события.
+
+    **Режимы записи.** `open` — запись сразу подтверждена (`confirmed`), при заполненном лимите —
+    лист ожидания (`waitlist`), освободившееся место получает первый из листа. `request` — заявка
+    `pending`, организатор принимает (`confirmed`) или отклоняет (`rejected`).
+
+    **Статусы события.** `published` → `unpublished` | `deleted` (админ, с причиной) |
+    `cancelled` (организатор, с причиной); `unpublished` → `published` (админ вернул).
+    На неопубликованное событие нельзя записаться, в том числе по прямой ссылке (409).
+    Уже записавшиеся видят событие с плашкой и причиной.
+
+    **Уведомления.** Решения (заявка, допуск, снятие), новые вопросы и ответы уходят
+    в колокольчик и MAX через событие `notification.requested`.
+servers:
+  - url: /
+    description: Через gateway на том же origin (в Docker — Nginx на :3000)
+security:
+  - keycloak:
+      - openid
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Мероприятия
+    description: Выдача, карточка и создание мероприятий; отмена организатором.
+  - name: Запись
+    description: Запись и заявки участников; решения по заявкам принимает организатор.
+  - name: Обсуждение
+    description: Вопросы и ответы под мероприятием. Ответ организатора помечен.
+  - name: Организации
+    description: Заявка на допуск, каталог и страницы допущенных организаций.
+  - name: Профили и справочники
+    description: Направления спорта и публичные профили организаторов.
+  - name: Модерация (админ)
+    description: Допуск организаций, снятие мероприятий, скрытие сообщений. Только роль `admin`.
+paths:
+  /api/v1/sports:
+    get:
+      tags: [Профили и справочники]
+      operationId: listSports
+      summary: Справочник направлений
+      description:
+        Базовые направления и добавленные пользователями (`is_custom`). Своё направление
+        появляется здесь сразу после создания события с `sport_name` — правка кода не нужна.
+      responses:
+        '200':
+          description: Направления, сначала базовые
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sport'
+              example:
+                items:
+                  - id: 9b2f6a1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b
+                    name: Шахматы
+                    is_custom: false
+                  - id: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                    name: Алтимат-фрисби
+                    is_custom: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events:
+    get:
+      tags: [Мероприятия]
+      operationId: listEvents
+      summary: Выдача мероприятий
+      description:
+        Только опубликованные и ещё не закончившиеся, ближайшие первыми. Поиск `q`
+        учитывает словоформы и ищет также по названию направления и организации.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: q
+          in: query
+          description: Текстовый поиск (до 100 символов)
+          schema: { type: string, maxLength: 100 }
+          example: фрисби
+        - name: sport
+          in: query
+          description: Направления — UUID через запятую
+          schema: { type: string }
+        - name: mode
+          in: query
+          description: Режим записи
+          schema: { type: string, enum: [open, request] }
+        - name: level
+          in: query
+          description: Уровень; `beginner` показывает и события «для всех»
+          schema: { type: string, enum: [any, beginner, amateur, pro] }
+        - name: from
+          in: query
+          description: Начало не раньше (дата `2026-10-20` или RFC 3339)
+          schema: { type: string }
+        - name: to
+          in: query
+          description: Начало раньше (дата или RFC 3339)
+          schema: { type: string }
+        - name: organization
+          in: query
+          description: Только события организации (UUID)
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Страница мероприятий
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Мероприятия]
+      operationId: createEvent
+      summary: Создать мероприятие
+      description:
+        Публикуется сразу. `as_organization=true` — от имени своей организации; если она
+        ещё не допущена, ответ 403 (проверка на сервере). Направление — `sport_id` из справочника
+        или `sport_name` (своё, будет добавлено в справочник).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventInput'
+            example:
+              title: Фрисби в парке
+              description: Учимся бросать диск и играем 5 на 5. Новичкам всё объясним.
+              sport_name: Алтимат-фрисби
+              starts_at: 2026-10-25T10:00:00+07:00
+              ends_at: 2026-10-25T12:00:00+07:00
+              location: Красноярск, остров Татышев, у центральной поляны
+              level: beginner
+              requirements: Удобная обувь, вода. Диски есть у организатора.
+              price_note: Бесплатно
+              private_info: 'Встречаемся у синего шатра, телефон организатора: +7 900 000-00-00'
+              join_mode: open
+              capacity: 14
+              as_organization: false
+      responses:
+        '201':
+          description: Мероприятие опубликовано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Организация ещё не допущена администратором
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: forbidden
+                  message: 'Организация ещё не допущена администратором: публиковать события от её имени пока нельзя'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Мероприятия]
+      operationId: getEvent
+      summary: Карточка мероприятия
+      description:
+        Опубликованное видят все. Снятое, удалённое или отменённое — организатор, записавшиеся
+        (с причиной в `moderation_reason`) и админ; остальным — 404. `private_info` заполнено только
+        для организатора, подтверждённых участников и админа.
+      responses:
+        '200':
+          description: Мероприятие
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Мероприятия]
+      operationId: cancelEvent
+      summary: Отменить своё мероприятие
+      description: Только организатор. Причина обязательна — её увидят записавшиеся, им уйдёт уведомление.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Площадку закрыли на ремонт, перенесём на следующую неделю
+      responses:
+        '200':
+          description: Мероприятие отменено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/join:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Запись]
+      operationId: joinEvent
+      summary: Записаться или подать заявку
+      description:
+        '`open` — сразу `confirmed` (или `waitlist`, если мест нет); `request` — `pending`.
+        Повторный вызов возвращает текущую запись. После отказа или отмены можно записаться снова.
+        Неопубликованное или прошедшее событие и собственное событие — 409.'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  maxLength: 500
+                  description: Сообщение организатору к заявке
+            example:
+              message: Играю два года, есть своя доска
+      responses:
+        '200':
+          description: Текущая запись пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyParticipation'
+              example:
+                id: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                status: pending
+                decision_reason: ''
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Запись]
+      operationId: leaveEvent
+      summary: Отменить запись или заявку
+      description: Освободившееся место при свободной записи сразу получает первый из листа ожидания.
+      responses:
+        '204':
+          description: Запись отменена
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/participants:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Запись]
+      operationId: listParticipants
+      summary: Участники и заявки
+      description:
+        Организатор и админ видят все записи (сначала ожидающие решения) с сообщениями к заявкам.
+        Остальные — только подтверждённых участников по имени («кто собирается»).
+      responses:
+        '200':
+          description: Список записей
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/participants/{pid}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/ParticipationID'
+    post:
+      tags: [Запись]
+      operationId: approveParticipant
+      summary: Принять заявку
+      description:
+        Только организатор события (админ — нет). Заявка должна быть `pending`;
+        при заполненном лимите мест — 409. Участник получит уведомление.
+      responses:
+        '200':
+          description: Заявка принята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/participants/{pid}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/ParticipationID'
+    post:
+      tags: [Запись]
+      operationId: rejectParticipant
+      summary: Отклонить заявку
+      description: Только организатор события. Комментарий необязателен, участник его увидит.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Турнир для игроков с рейтингом от 1400
+      responses:
+        '200':
+          description: Заявка отклонена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/events/{id}/comments:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Обсуждение]
+      operationId: listComments
+      summary: Обсуждение мероприятия
+      description:
+        Сообщения по времени. Скрытые модератором показываются пометкой без текста
+        (текст видит только админ).
+      responses:
+        '200':
+          description: Сообщения
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Обсуждение]
+      operationId: addComment
+      summary: Задать вопрос или ответить
+      description:
+        Писать может любой вошедший пользователь, пока событие опубликовано. `parent_id` —
+        ответ на сообщение верхнего уровня. Организатор получает уведомление о вопросе, автор вопроса —
+        об ответе; открытые страницы обновляются через WebSocket-канал `room:event:{id}`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+            example:
+              body: Нужна ли своя доска?
+      responses:
+        '201':
+          description: Сообщение добавлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/participations:
+    get:
+      tags: [Запись]
+      operationId: listMyParticipations
+      summary: Мои записи
+      description: Все записи и заявки пользователя со статусом и кратким описанием события; будущие первыми.
+      responses:
+        '200':
+          description: Записи
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MyEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/events:
+    get:
+      tags: [Мероприятия]
+      operationId: listMyEvents
+      summary: Мои мероприятия (как организатор)
+      description: Все статусы, в том числе снятые и отменённые — с причиной.
+      responses:
+        '200':
+          description: Мероприятия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/my/organization:
+    get:
+      tags: [Организации]
+      operationId: getMyOrganization
+      summary: Моя организация и статус заявки
+      description: Представитель видит заявку в любом статусе и причину отказа. 404 — заявки ещё нет.
+      responses:
+        '200':
+          description: Организация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Организации]
+      operationId: submitOrganization
+      summary: Подать заявку организации
+      description:
+        Создаёт профиль со статусом `pending`. До одобрения администратором публиковать
+        события от имени организации нельзя. Одна организация на представителя (повтор — 409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+            example:
+              name: Клуб скандинавской ходьбы «Сосны»
+              description: Тренировки по выходным для всех возрастов, палки выдаём.
+              city: Красноярск
+              contacts: '@sosny_walk, +7 900 000-00-01'
+              sport_ids: []
+      responses:
+        '201':
+          description: Заявка подана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [Организации]
+      operationId: updateMyOrganization
+      summary: Исправить профиль организации
+      description:
+        После отказа правка означает повторную подачу — статус снова `pending`.
+        Допущенная организация остаётся допущенной.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '200':
+          description: Профиль сохранён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/organizations:
+    get:
+      tags: [Организации]
+      operationId: listOrganizations
+      summary: Каталог организаций
+      description: Только допущенные администратором, по алфавиту.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: q
+          in: query
+          description: Поиск по названию, описанию и городу
+          schema: { type: string }
+      responses:
+        '200':
+          description: Организации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/organizations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Организации]
+      operationId: getOrganization
+      summary: Страница организации и её мероприятия
+      description: Публична только после допуска; представитель и админ видят её в любом статусе.
+      responses:
+        '200':
+          description: Организация и ближайшие опубликованные события
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization, events]
+                properties:
+                  organization:
+                    $ref: '#/components/schemas/Organization'
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/profiles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Идентификатор пользователя (sub из Keycloak)
+        schema: { type: string, maxLength: 100 }
+    get:
+      tags: [Профили и справочники]
+      operationId: getProfile
+      summary: Профиль организатора
+      description: Имя, о себе и ближайшие мероприятия, которые он проводит.
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/organizations:
+    get:
+      tags: [Модерация (админ)]
+      operationId: adminListOrganizations
+      summary: Заявки и поиск организаций
+      description: Все статусы; ожидающие решения первыми.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: status
+          in: query
+          description: pending, approved, rejected — через запятую
+          schema: { type: string }
+          example: pending
+        - name: q
+          in: query
+          description: Поиск по названию, описанию и городу
+          schema: { type: string }
+      responses:
+        '200':
+          description: Организации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/organizations/{id}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: approveOrganization
+      summary: Допустить организацию
+      description:
+        После допуска организация публикует события без повторной модерации. Представитель
+        получит уведомление.
+      responses:
+        '200':
+          description: Организация допущена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/organizations/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: rejectOrganization
+      summary: Отклонить заявку организации
+      description: Причина обязательна — представитель увидит её и сможет исправить профиль.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Не указаны контакты и место проведения занятий
+      responses:
+        '200':
+          description: Заявка отклонена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events:
+    get:
+      tags: [Модерация (админ)]
+      operationId: adminListEvents
+      summary: Поиск мероприятий во всех статусах
+      description: Те же фильтры, что у выдачи, плюс `status`. Из строки — переход к организатору и обсуждению.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: status
+          in: query
+          description: published, unpublished, deleted, cancelled — через запятую
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Текстовый поиск
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Мероприятия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/unpublish:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: unpublishEvent
+      summary: Снять мероприятие с публикации
+      description:
+        Событие пропадает из выдачи, запись закрывается (в том числе по прямой ссылке).
+        Существующие записи сохраняются; организатор и участники видят плашку с причиной и получают уведомление.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Некорректное место проведения
+      responses:
+        '200':
+          description: Мероприятие снято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/delete:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: deleteEvent
+      summary: Удалить мероприятие
+      description: Мягкое удаление с причиной; вернуть нельзя. Записи сохраняются для истории.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      responses:
+        '200':
+          description: Мероприятие удалено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/events/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: restoreEvent
+      summary: Вернуть снятое мероприятие в публикацию
+      responses:
+        '200':
+          description: Мероприятие снова опубликовано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/comments/{id}/hide:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Модерация (админ)]
+      operationId: hideComment
+      summary: Скрыть сообщение
+      description:
+        Скрывается одно сообщение; мероприятие и остальное обсуждение остаются. Автор получит
+        уведомление с причиной.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+            example:
+              reason: Реклама стороннего сервиса
+      responses:
+        '200':
+          description: Сообщение скрыто
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: starter_session
+      description:
+        Сессия браузера. Ставится после входа через `/auth/login`, хранит только случайный идентификатор
+        (токены Keycloak лежат на сервере). Изменяющие запросы с cookie дополнительно требуют заголовок
+        `Origin`, равный адресу приложения (защита от CSRF).
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description:
+        'Access token Keycloak для внешних клиентов и тестов. Получить локально: `POST
+        http://localhost:8180/realms/hackathon/protocol/openid-connect/token` с `grant_type=password`,
+        `client_id=hackathon-cli`, логином и паролем демо-пользователя.'
+    keycloak:
+      type: oauth2
+      description:
+        'Вход через Keycloak прямо из Swagger: нажмите Authorize → keycloak → Authorize и войдите
+        демо-пользователем (логины и пароли печатает make demo). Отдельный клиент hackathon-swagger с PKCE —
+        на вход в приложение не влияет. Адрес Keycloak gateway подставляет из OIDC_ISSUER.'
+      flows:
+        authorizationCode:
+          authorizationUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/auth'
+          tokenUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          refreshUrl: '{{OIDC_ISSUER}}/protocol/openid-connect/token'
+          scopes:
+            openid: Вход (OpenID Connect)
+            profile: Имя пользователя
+            email: Почта
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор записи (UUID)
+      schema:
+        type: string
+        format: uuid
+      example: 3f6c2a4e-8b1d-4c3a-9e2f-1a2b3c4d5e6f
+    Limit:
+      name: limit
+      in: query
+      description: Сколько записей вернуть (страница)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Сколько записей пропустить от начала
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100000
+        default: 0
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description:
+        'Необязательный ключ защиты от двойной отправки (двойной клик, повтор после обрыва сети). Повтор
+        с тем же ключом в течение 24 часов вернёт сохранённый ответ с заголовком `Idempotent-Replayed: true`,
+        а не выполнит действие ещё раз.'
+      schema:
+        type: string
+        maxLength: 100
+      example: 6f1e2d3c-create-task-1
+    ParticipationID:
+      name: pid
+      in: path
+      required: true
+      description: Идентификатор записи или заявки (UUID)
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Error:
+      type: object
+      description: Единый формат ошибки всех сервисов.
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Машинный код ошибки — по нему фронтенд выбирает реакцию
+              example: validation_error
+            message:
+              type: string
+              description: Сообщение для человека, на русском
+              example: Название должно содержать от 1 до 200 символов
+            request_id:
+              type: string
+              description: Идентификатор запроса — по нему ошибку находят в логах всех сервисов
+              example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Sport:
+      type: object
+      required: [id, name, is_custom]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Шахматы }
+        is_custom:
+          type: boolean
+          description: Добавлено пользователем при создании события
+    Organizer:
+      type: object
+      description: 'Кто проводит событие: человек (ссылка /profiles/{id}) или организация (/organizations/{id})'
+      required: [type, id, name]
+      properties:
+        type: { type: string, enum: [user, organization] }
+        id: { type: string }
+        name: { type: string, example: Шахматный клуб «Ладья» }
+    MyParticipation:
+      type: object
+      description: Запись текущего пользователя
+      required: [id, status, decision_reason]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [confirmed, pending, rejected, cancelled, waitlist]
+          description:
+            'confirmed — участвует; pending — ждёт решения организатора; rejected — отказ;
+            cancelled — отменил сам; waitlist — лист ожидания'
+        decision_reason:
+          type: string
+          description: Комментарий организатора при отказе
+    Event:
+      type: object
+      required:
+        [
+          id,
+          title,
+          description,
+          sport,
+          starts_at,
+          location,
+          level,
+          requirements,
+          price_note,
+          private_info,
+          has_private_info,
+          join_mode,
+          confirmed_count,
+          pending_count,
+          waitlist_count,
+          status,
+          moderation_reason,
+          organizer,
+          is_organizer,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, example: Шахматный турнир выходного дня }
+        description: { type: string }
+        sport:
+          $ref: '#/components/schemas/Sport'
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time, nullable: true }
+        location:
+          {
+            type: string,
+            example: 'Красноярск, ул. Мира, 10, библиотека, 2 этаж',
+          }
+        lat: { type: number, nullable: true }
+        lng: { type: number, nullable: true }
+        level:
+          type: string
+          enum: [any, beginner, amateur, pro]
+          description: Для кого подходит
+        requirements:
+          type: string
+          description: Подготовка, инвентарь, форма
+        price_note: { type: string, example: Бесплатно }
+        private_info:
+          type: string
+          description: Точка сбора и контакты. Заполнено только для организатора, подтверждённых участников и админа
+        has_private_info:
+          type: boolean
+          description: Есть закрытая информация — клиент может подсказать «откроется после подтверждения»
+        join_mode:
+          type: string
+          enum: [open, request]
+          description: 'open — свободная запись; request — по заявке с подтверждением'
+        capacity:
+          {
+            type: integer,
+            nullable: true,
+            description: 'Лимит мест; null — без лимита',
+          }
+        confirmed_count: { type: integer }
+        pending_count: { type: integer }
+        waitlist_count: { type: integer }
+        status:
+          type: string
+          enum: [published, unpublished, deleted, cancelled]
+        moderation_reason:
+          type: string
+          description: Причина снятия, удаления или отмены
+        organizer:
+          $ref: '#/components/schemas/Organizer'
+        is_organizer:
+          type: boolean
+          description: Текущий пользователь — организатор
+        my_participation:
+          allOf:
+            - $ref: '#/components/schemas/MyParticipation'
+          nullable: true
+        created_at: { type: string, format: date-time }
+    EventPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    EventInput:
+      type: object
+      required: [title, starts_at, location, join_mode]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        sport_id:
+          type: string
+          format: uuid
+          description: Направление из справочника
+        sport_name:
+          type: string
+          minLength: 2
+          maxLength: 60
+          description: Своё направление, если sport_id не задан
+        starts_at: { type: string, format: date-time, description: В будущем }
+        ends_at: { type: string, format: date-time, nullable: true }
+        location: { type: string, minLength: 3, maxLength: 300 }
+        lat: { type: number, nullable: true }
+        lng: { type: number, nullable: true }
+        level:
+          { type: string, enum: [any, beginner, amateur, pro], default: any }
+        requirements: { type: string, maxLength: 2000 }
+        price_note: { type: string, maxLength: 200 }
+        private_info: { type: string, maxLength: 2000 }
+        join_mode: { type: string, enum: [open, request] }
+        capacity: { type: integer, minimum: 1, maximum: 10000, nullable: true }
+        as_organization:
+          type: boolean
+          default: false
+          description: От имени своей допущенной организации
+    Person:
+      type: object
+      required: [id, name, level]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Анна Петрова }
+        level: { type: string, description: 'beginner, amateur, pro или пусто' }
+    Participant:
+      type: object
+      required: [id, user, status, message, decision_reason, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        user:
+          $ref: '#/components/schemas/Person'
+        status:
+          {
+            type: string,
+            enum: [confirmed, pending, rejected, cancelled, waitlist],
+          }
+        message:
+          type: string
+          description: Сообщение к заявке (видит только организатор)
+        decision_reason: { type: string }
+        created_at: { type: string, format: date-time }
+    MyEntry:
+      allOf:
+        - $ref: '#/components/schemas/MyParticipation'
+        - type: object
+          required: [event]
+          properties:
+            event:
+              type: object
+              required:
+                [
+                  id,
+                  title,
+                  sport,
+                  starts_at,
+                  location,
+                  join_mode,
+                  status,
+                  moderation_reason,
+                ]
+              properties:
+                id: { type: string, format: uuid }
+                title: { type: string }
+                sport: { type: string }
+                starts_at: { type: string, format: date-time }
+                location: { type: string }
+                join_mode: { type: string, enum: [open, request] }
+                status:
+                  {
+                    type: string,
+                    enum: [published, unpublished, deleted, cancelled],
+                  }
+                moderation_reason: { type: string }
+    Comment:
+      type: object
+      required:
+        [
+          id,
+          event_id,
+          author,
+          is_organizer,
+          organization_name,
+          body,
+          status,
+          hidden_reason,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        parent_id: { type: string, format: uuid, nullable: true }
+        author:
+          $ref: '#/components/schemas/Person'
+        is_organizer:
+          type: boolean
+          description: Автор — организатор события (бейдж «Организатор»)
+        organization_name:
+          type: string
+          description: От имени какой организации отвечает организатор
+        body:
+          type: string
+          description: Пусто для скрытого сообщения (кроме админа)
+        status: { type: string, enum: [visible, hidden] }
+        hidden_reason: { type: string }
+        created_at: { type: string, format: date-time }
+    Organization:
+      type: object
+      required:
+        [
+          id,
+          name,
+          description,
+          city,
+          contacts,
+          sports,
+          status,
+          review_reason,
+          events_count,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Шахматный клуб «Ладья» }
+        description: { type: string }
+        city: { type: string }
+        contacts: { type: string }
+        sports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sport'
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          description: 'pending — на рассмотрении; approved — допущена; rejected — отклонена'
+        review_reason:
+          type: string
+          description: Причина отказа (видят представитель и админ)
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        owner:
+          $ref: '#/components/schemas/Person'
+        events_count:
+          type: integer
+          description: Ближайших опубликованных мероприятий
+        created_at: { type: string, format: date-time }
+    OrganizationPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    OrganizationInput:
+      type: object
+      required: [name, description]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, minLength: 10, maxLength: 3000 }
+        city: { type: string, maxLength: 100 }
+        contacts: { type: string, maxLength: 500 }
+        sport_ids:
+          type: array
+          maxItems: 20
+          items: { type: string, format: uuid }
+    Profile:
+      type: object
+      required: [id, name, about, city, level, events]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        about: { type: string }
+        city: { type: string }
+        level: { type: string }
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+    Reason:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+          description: Причина решения — её увидит другая сторона
+  responses:
+    BadRequest:
+      description: Некорректные входные данные (код ошибки и понятное сообщение в теле)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: invalid_body
+              message: Ожидается JSON с полем title
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unauthorized:
+      description: Пользователь не вошёл или токен недействителен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Войдите, чтобы продолжить
+    Forbidden:
+      description: Нет прав (нужна другая роль) или запрос пришёл с чужого адреса (Origin)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: Недостаточно прав для этого действия
+    NotFound:
+      description: Запись не найдена или принадлежит другому пользователю (не различаются намеренно)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Задача не найдена
+    TooManyRequests:
+      description:
+        'Превышен лимит: 60 изменяющих запросов в минуту на пользователя (для ИИ — 10 в минуту).
+        Заголовок `Retry-After` подсказывает, через сколько секунд повторить.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Через сколько секунд можно повторить
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limit
+              message: Слишком много запросов. Подождите минуту
+    InternalError:
+      description: Внутренняя ошибка; подробности — в логах по request_id
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Не удалось выполнить операцию
+              request_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+    Unavailable:
+      description: Зависимость временно недоступна (база, хранилище, Redis, модель) — повторите позже
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: cache_unavailable
+              message: Попробуйте ещё раз позже
+    Conflict:
+      description:
+        Действие сейчас невозможно (снятое или прошедшее событие, нет мест, заявка уже рассмотрена,
+        заявка организации уже подана) — сообщение объясняет причину
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: conflict
+              message: 'Мероприятие недоступно для записи: оно снято с публикации или отменено'
+    ValidationError:
+      description: Поле формы заполнено неверно; `field` — какое поле подсветить. `reason_required` — нужна причина
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: validation_error
+              message: Укажите дату и время в будущем
+              field: starts_at

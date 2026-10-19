@@ -58,6 +58,7 @@ for (const name of [
   'FILES_DB_PASSWORD',
   'NOTIFICATIONS_DB_PASSWORD',
   'AUDIT_DB_PASSWORD',
+  'EVENTS_DB_PASSWORD',
   'KEYCLOAK_DB_PASSWORD',
   'RABBITMQ_PASSWORD',
   'REDIS_PASSWORD',
@@ -67,6 +68,9 @@ for (const name of [
   'DEMO_PASSWORD',
   'ADMIN_DEMO_PASSWORD',
   'SECOND_DEMO_PASSWORD',
+  'ORG_DEMO_PASSWORD',
+  'ORG_PENDING_DEMO_PASSWORD',
+  'ORG_REJECTED_DEMO_PASSWORD',
   'MAILPIT_PASSWORD',
   ...(production ? ['METRICS_TOKEN'] : []),
 ]) {
@@ -114,17 +118,39 @@ for (const client of realm.clients) {
     client.webOrigins = origins;
   }
 }
+// Демо-аккаунты кейса: имена видны в обсуждениях и списках участников.
 realm.users = [
-  ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Демо', ['user']],
-  ['SECOND_DEMO_EMAIL', 'SECOND_DEMO_PASSWORD', 'Второй', ['user']],
-  ['ADMIN_DEMO_EMAIL', 'ADMIN_DEMO_PASSWORD', 'Админ', ['user', 'admin']],
-].map(([email, password, name, realmRoles]) => ({
+  ['DEMO_EMAIL', 'DEMO_PASSWORD', 'Анна', 'Смирнова', ['user']],
+  ['SECOND_DEMO_EMAIL', 'SECOND_DEMO_PASSWORD', 'Игорь', 'Волков', ['user']],
+  ['ORG_DEMO_EMAIL', 'ORG_DEMO_PASSWORD', 'Олег', 'Ладьин', ['user']],
+  [
+    'ORG_PENDING_DEMO_EMAIL',
+    'ORG_PENDING_DEMO_PASSWORD',
+    'Мария',
+    'Соснова',
+    ['user'],
+  ],
+  [
+    'ORG_REJECTED_DEMO_EMAIL',
+    'ORG_REJECTED_DEMO_PASSWORD',
+    'Пётр',
+    'Пульсов',
+    ['user'],
+  ],
+  [
+    'ADMIN_DEMO_EMAIL',
+    'ADMIN_DEMO_PASSWORD',
+    'Модератор',
+    'Платформы',
+    ['user', 'admin'],
+  ],
+].map(([email, password, firstName, lastName, realmRoles]) => ({
   username: values[email],
   email: values[email],
   enabled: true,
   emailVerified: true,
-  firstName: name,
-  lastName: 'Пользователь',
+  firstName,
+  lastName,
   realmRoles,
   credentials: [
     { type: 'password', value: '${' + password + '}', temporary: false },

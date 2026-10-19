@@ -48,6 +48,18 @@ services:
     healthcheck:
       <<: *pg-health
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  events-postgres:
+    container_name: events-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${EVENTS_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${EVENTS_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${EVENTS_DB_NAME:?required}
+    ports: ['127.0.0.1:${EVENTS_DB_PORT:-5437}:5432']
+    volumes: [events-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
   audit-postgres:
     container_name: audit-postgres
     image: postgres:17-alpine
@@ -137,6 +149,9 @@ services:
       DEMO_PASSWORD: ${DEMO_PASSWORD:?required}
       ADMIN_DEMO_PASSWORD: ${ADMIN_DEMO_PASSWORD:?required}
       SECOND_DEMO_PASSWORD: ${SECOND_DEMO_PASSWORD:?required}
+      ORG_DEMO_PASSWORD: ${ORG_DEMO_PASSWORD:?required}
+      ORG_PENDING_DEMO_PASSWORD: ${ORG_PENDING_DEMO_PASSWORD:?required}
+      ORG_REJECTED_DEMO_PASSWORD: ${ORG_REJECTED_DEMO_PASSWORD:?required}
       KC_HOSTNAME: http://localhost:8180
       KC_HEALTH_ENABLED: 'true'
       JAVA_OPTS_KC_HEAP: '-Xms128m -Xmx384m'
@@ -215,6 +230,28 @@ services:
       DATABASE_URL: postgres://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@audit-postgres:5432/${AUDIT_DB_NAME}?sslmode=disable
     depends_on:
       audit-postgres: { condition: service_healthy }
+  events-migrate:
+    container_name: events-migrate
+    profiles: [app]
+    build: ./server/events
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${EVENTS_DB_USER}:${EVENTS_DB_PASSWORD}@events-postgres:5432/${EVENTS_DB_NAME}?sslmode=disable
+    depends_on:
+      events-postgres: { condition: service_healthy }
+  events-service:
+    container_name: events-service
+    profiles: [app]
+    build: ./server/events
+    environment:
+      DATABASE_URL: postgres://${EVENTS_DB_USER}:${EVENTS_DB_PASSWORD}@events-postgres:5432/${EVENTS_DB_NAME}?sslmode=disable
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      events-migrate: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+    healthcheck: *svc-health
   tasks-service:
     container_name: tasks-service
     profiles: [app]
@@ -325,6 +362,7 @@ services:
       NOTIFICATIONS_URL: http://notifications-service:8080
       AUDIT_URL: http://audit-service:8080
       REALTIME_URL: http://realtime-service:8080
+      EVENTS_URL: http://events-service:8080
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
@@ -340,6 +378,7 @@ services:
       notifications-service: { condition: service_healthy }
       audit-service: { condition: service_healthy }
       realtime-service: { condition: service_healthy }
+      events-service: { condition: service_healthy }
     healthcheck: *svc-health
   web-service:
     container_name: web-service
@@ -360,6 +399,7 @@ volumes:
   tasks-postgres-data:
   files-postgres-data:
   notifications-postgres-data:
+  events-postgres-data:
   audit-postgres-data:
   keycloak-postgres-data:
   files-s3-data:

@@ -21,10 +21,13 @@ const (
 	HeaderRoles = "X-User-Roles"
 	// HeaderEmail — адрес из JWT: нужен сервисам, чтобы отправить письмо (уведомления).
 	HeaderEmail = "X-User-Email"
+	// HeaderName — отображаемое имя из JWT, URL-кодированное (заголовки HTTP не допускают
+	// кириллицу как есть). Нужно сервисам, чтобы показывать авторов и участников по имени.
+	HeaderName = "X-User-Name"
 )
 
 // Upstreams — адреса внутренних сервисов, за которыми стоит gateway.
-type Upstreams struct{ Tasks, Files, LLM, Notifications, Audit, Realtime *url.URL }
+type Upstreams struct{ Tasks, Files, LLM, Notifications, Audit, Realtime, Events *url.URL }
 
 // slowUpstream — для долгих ответов (LLM, SSE): иначе gateway оборвёт их по таймаутам.
 const slowUpstream = 3 * time.Minute
@@ -56,6 +59,7 @@ func proxy(target *url.URL, token string, slow ...time.Duration) gin.HandlerFunc
 		c.Request.Header.Set(HeaderUserID, identity.Subject)
 		c.Request.Header.Set(HeaderRoles, strings.Join(identity.RealmAccess.Roles, ","))
 		c.Request.Header.Set(HeaderEmail, identity.Email)
+		c.Request.Header.Set(HeaderName, url.PathEscape(identity.Name))
 		c.Request.Header.Set("X-Request-ID", c.GetString("request_id"))
 		if len(slow) > 0 {
 			_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(slow[0] + 10*time.Second))

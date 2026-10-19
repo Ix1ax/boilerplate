@@ -2,10 +2,11 @@ go 1.26.0
 
 use (
 	./server/audit
+	./server/events
 	./server/files
 	./server/gateway
 	./server/llm
 	./server/notifications
-	./server/tasks
 	./server/realtime
+	./server/tasks
 )

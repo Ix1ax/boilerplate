@@ -17,8 +17,11 @@ RabbitMQ        http://localhost:15672  (${env.RABBITMQ_USER})
 Почта (тест)    http://localhost:8025
 
 Тестовые пользователи:
-  Роль            Email                         Пароль
-  пользователь    ${env.DEMO_EMAIL.padEnd(29)} ${env.DEMO_PASSWORD}
-  пользователь 2  ${env.SECOND_DEMO_EMAIL.padEnd(29)} ${env.SECOND_DEMO_PASSWORD}
-  администратор   ${env.ADMIN_DEMO_EMAIL.padEnd(29)} ${env.ADMIN_DEMO_PASSWORD}
+  Роль                          Email                         Пароль
+  пользователь (Анна)           ${env.DEMO_EMAIL.padEnd(29)} ${env.DEMO_PASSWORD}
+  пользователь (Игорь)          ${env.SECOND_DEMO_EMAIL.padEnd(29)} ${env.SECOND_DEMO_PASSWORD}
+  организация допущена (Олег)   ${env.ORG_DEMO_EMAIL.padEnd(29)} ${env.ORG_DEMO_PASSWORD}
+  организация ждёт (Мария)      ${env.ORG_PENDING_DEMO_EMAIL.padEnd(29)} ${env.ORG_PENDING_DEMO_PASSWORD}
+  организация отклонена (Пётр)  ${env.ORG_REJECTED_DEMO_EMAIL.padEnd(29)} ${env.ORG_REJECTED_DEMO_PASSWORD}
+  администратор                 ${env.ADMIN_DEMO_EMAIL.padEnd(29)} ${env.ADMIN_DEMO_PASSWORD}
 `);
