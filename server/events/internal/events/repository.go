@@ -312,14 +312,14 @@ ON CONFLICT (lower(btrim(name))) DO UPDATE SET name=sports.name RETURNING id,hid
 type lockedEvent struct {
 	OrganizerID, Status, JoinMode, Title, QuorumStatus string
 	StartsAt                                           time.Time
-	EndsAt                                             *time.Time
+	EndsAt, QuorumDeadline                             *time.Time
 	Capacity, MinParticipants                          *int
 }
 
 func lockEvent(ctx context.Context, tx pgx.Tx, id string) (lockedEvent, error) {
 	var e lockedEvent
-	err := tx.QueryRow(ctx, "SELECT organizer_id,status,join_mode,title,starts_at,ends_at,capacity,min_participants,quorum_status FROM events WHERE id=$1 FOR UPDATE", id).
-		Scan(&e.OrganizerID, &e.Status, &e.JoinMode, &e.Title, &e.StartsAt, &e.EndsAt, &e.Capacity, &e.MinParticipants, &e.QuorumStatus)
+	err := tx.QueryRow(ctx, "SELECT organizer_id,status,join_mode,title,starts_at,ends_at,capacity,min_participants,quorum_status,quorum_deadline FROM events WHERE id=$1 FOR UPDATE", id).
+		Scan(&e.OrganizerID, &e.Status, &e.JoinMode, &e.Title, &e.StartsAt, &e.EndsAt, &e.Capacity, &e.MinParticipants, &e.QuorumStatus, &e.QuorumDeadline)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return e, ErrNotFound
 	}
@@ -355,6 +355,10 @@ func (r *Repository) Join(ctx context.Context, a Actor, eventID, message string,
 		err = tx.QueryRow(ctx, "SELECT id,status FROM participations WHERE event_id=$1 AND user_id=$2 FOR UPDATE", eventID, a.ID).Scan(&existingID, &from)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
+		}
+		// Отказ или исключение — решение организатора: иначе его отменил бы повторный клик «Записаться».
+		if from == "rejected" {
+			return ErrRejected
 		}
 		if from == "confirmed" || from == "pending" || from == "waitlist" {
 			out = MyParticipation{ID: existingID, Status: from}
@@ -438,6 +442,23 @@ func (r *Repository) Leave(ctx context.Context, a Actor, eventID string) error {
 		if from != "confirmed" || e.Status != "published" {
 			return nil
 		}
+		return promoteWaitlist(ctx, tx, eventID, e)
+	})
+}
+
+// Под блокировкой события свободные места сначала получает очередь.
+func promoteWaitlist(ctx context.Context, tx pgx.Tx, eventID string, e lockedEvent) error {
+	if e.JoinMode != "open" || e.Status != "published" || !endOf(e).After(time.Now()) {
+		return nil
+	}
+	for {
+		n, err := confirmedCount(ctx, tx, eventID)
+		if err != nil {
+			return err
+		}
+		if e.Capacity != nil && n >= *e.Capacity {
+			return nil
+		}
 		var nextID, nextUser string
 		err = tx.QueryRow(ctx, "SELECT id,user_id FROM participations WHERE event_id=$1 AND status='waitlist' ORDER BY created_at, id LIMIT 1 FOR UPDATE", eventID).Scan(&nextID, &nextUser)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -455,8 +476,10 @@ func (r *Repository) Leave(ctx context.Context, a Actor, eventID string) error {
 		if err = notify(ctx, tx, nextUser, "Освободилось место — вы участвуете", "«"+e.Title+"»: запись подтверждена из листа ожидания", "/events/"+eventID); err != nil {
 			return err
 		}
-		return afterConfirmed(ctx, tx, eventID, nextID, e)
-	})
+		if err = afterConfirmed(ctx, tx, eventID, nextID, e); err != nil {
+			return err
+		}
+	}
 }
 
 const participantSelect = `SELECT p.id,p.user_id,COALESCE(pr.display_name,''),COALESCE(pr.level,''),p.status,p.message,p.decision_reason,p.created_at,
@@ -617,6 +640,8 @@ func (r *Repository) ModerateEvent(ctx context.Context, a Actor, id, to, reason 
 	return r.GetEvent(ctx, a, id)
 }
 
+var eventClosedNote = map[string]string{"unpublished": "Мероприятие снято с публикации: ", "deleted": "Мероприятие удалено: ", "cancelled": "Организатор отменил мероприятие: "}
+
 func changeEventStatus(ctx context.Context, tx pgx.Tx, a Actor, id string, e lockedEvent, to, reason, title string) error {
 	if err := eventWorkflow.Check(e.Status, to, reason); err != nil {
 		return err
@@ -626,6 +651,12 @@ func changeEventStatus(ctx context.Context, tx pgx.Tx, a Actor, id string, e loc
 	}
 	if err := record(ctx, tx, "event", id, platform.Transition{From: e.Status, To: to, Actor: actorLabel(a), Comment: reason}); err != nil {
 		return err
+	}
+	// Снятое, удалённое или отменённое событие больше не в выдаче: жалобы на него закрыты.
+	if to != "published" {
+		if err := closeReports(ctx, tx, a, "event", id, "resolved", eventClosedNote[to]+reason); err != nil {
+			return err
+		}
 	}
 	body := "«" + e.Title + "»"
 	if reason != "" {
@@ -685,8 +716,8 @@ LEFT JOIN profiles pr ON pr.user_id=c.author_id`
 func scanComment(row pgx.Row, a Actor) (Comment, error) {
 	var c Comment
 	err := row.Scan(&c.ID, &c.EventID, &c.ParentID, &c.Author.ID, &c.Author.Name, &c.Author.Level, &c.IsOrganizer, &c.OrganizationName, &c.Body, &c.Status, &c.HiddenReason, &c.CreatedAt)
-	// Скрытое сообщение: остальным видна только пометка, текст — админу.
-	if err == nil && c.Status == "hidden" && !a.Admin {
+	// Скрытое модератором или удалённое автором: остальным видна только пометка, текст — админу.
+	if err == nil && c.Status != "visible" && !a.Admin {
 		c.Body = ""
 	}
 	return c, err
@@ -774,6 +805,9 @@ func (r *Repository) HideComment(ctx context.Context, a Actor, id, reason string
 			return err
 		}
 		if err = record(ctx, tx, "comment", id, platform.Transition{From: "visible", To: "hidden", Actor: actorLabel(a), Comment: reason}); err != nil {
+			return err
+		}
+		if err = closeReports(ctx, tx, a, "comment", id, "resolved", "Сообщение скрыто: "+reason); err != nil {
 			return err
 		}
 		if err = notify(ctx, tx, author, "Ваше сообщение скрыто модератором", "«"+title+"»: "+reason, "/events/"+eventID+"#discussion"); err != nil {
@@ -872,16 +906,20 @@ func (r *Repository) UpdateOrganization(ctx context.Context, a Actor, in Organiz
 			if err = orgWorkflow.Check(status, next, ""); err != nil {
 				return err
 			}
-			if err = record(ctx, tx, "organization", id, platform.Transition{From: status, To: next, Actor: actorLabel(a), Comment: "Профиль исправлен и подан повторно"}); err != nil {
-				return err
-			}
 		}
 		if _, err = tx.Exec(ctx, `UPDATE organizations SET name=$2,description=$3,city=$4,contacts=$5,status=$6,
 review_reason=CASE WHEN $6='pending' THEN '' ELSE review_reason END, updated_at=now() WHERE id=$1`,
 			id, in.Name, in.Description, in.City, in.Contacts, next); err != nil {
 			return err
 		}
-		return setOrgSports(ctx, tx, id, in.SportIDs)
+		if err = setOrgSports(ctx, tx, id, in.SportIDs); err != nil {
+			return err
+		}
+		comment := "Профиль организации изменён"
+		if status != next {
+			comment = "Профиль исправлен и подан повторно"
+		}
+		return record(ctx, tx, "organization", id, platform.Transition{From: status, To: next, Actor: actorLabel(a), Comment: comment})
 	})
 	if err != nil {
 		return Organization{}, err

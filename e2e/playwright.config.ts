@@ -10,6 +10,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
     trace: 'retain-on-failure',
+    // Без анимаций вступление приложения длится 200 мс вместо 4 с, а снимки и клики стабильны.
+    reducedMotion: 'reduce',
     screenshot: 'only-on-failure',
   },
   projects: [

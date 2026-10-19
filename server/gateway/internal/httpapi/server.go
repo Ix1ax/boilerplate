@@ -39,8 +39,6 @@ type Options struct {
 	AppOrigin string
 	// OIDCIssuer — публичный адрес realm Keycloak; подставляется в Swagger для входа.
 	OIDCIssuer string
-	// DemoAccounts включает быстрый вход «Войти как…» (DEMO_LOGIN=true); пусто — вход только через форму.
-	DemoAccounts []auth.DemoAccount
 }
 
 // NewGateway собирает роутер. Порядок обработки запроса:
@@ -75,6 +73,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	apidocs.Register(r, map[string]*url.URL{
 		"tasks": up.Tasks, "files": up.Files, "notifications": up.Notifications,
 		"audit": up.Audit, "realtime": up.Realtime, "llm": up.LLM, "events": up.Events, "moderation": up.Moderation,
+		"identity": up.Identity,
 	}, opts.OIDCIssuer)
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/readyz", func(c *gin.Context) {
@@ -89,9 +88,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 	if len(sessions) > 0 && sessions[0] != nil {
 		r.Use(sessions[0].CSRF())
 		sessions[0].Register(r)
-		if len(opts.DemoAccounts) > 0 {
-			sessions[0].RegisterDemo(r, opts.DemoAccounts)
-		}
+		sessions[0].RegisterProviders(r)
 	}
 	api := r.Group("/api/v1", auth.Middleware(verifier, sessions...))
 	api.GET("/me", func(c *gin.Context) {
@@ -100,7 +97,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 		if roles == nil {
 			roles = []string{}
 		}
-		c.JSON(200, gin.H{"id": i.Subject, "email": i.Email, "name": i.Name, "roles": roles})
+		c.JSON(200, gin.H{"id": i.Subject, "email": i.Email, "name": i.Name, "roles": roles, "provider": i.Provider})
 	})
 	api.GET("/admin/ping", auth.RequireRole("admin"), func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	if d != nil {
@@ -155,7 +152,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 				api.Any(prefix+"/*path", h)
 			}
 			// Модерация: роль проверяется и здесь, и в самом сервисе.
-			for _, prefix := range []string{"/admin/events", "/admin/organizations", "/admin/comments", "/admin/sports", "/admin/domain"} {
+			for _, prefix := range []string{"/admin/events", "/admin/organizations", "/admin/comments", "/admin/sports", "/admin/domain", "/admin/reports"} {
 				api.Any(prefix, auth.RequireRole("admin"), h)
 				api.Any(prefix+"/*path", auth.RequireRole("admin"), h)
 			}
@@ -165,6 +162,12 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 			h := proxy(up.Moderation, internalToken)
 			api.Any("/admin/moderation", auth.RequireRole("admin"), h)
 			api.Any("/admin/moderation/*path", auth.RequireRole("admin"), h)
+		}
+		if up.Identity != nil {
+			// Учётные записи обычной регистрации: поиск и блокировка — только админ.
+			h := proxy(up.Identity, internalToken)
+			api.Any("/admin/accounts", auth.RequireRole("admin"), h)
+			api.Any("/admin/accounts/*path", auth.RequireRole("admin"), h)
 		}
 		if up.Files != nil {
 			h := proxy(up.Files, internalToken)
@@ -184,7 +187,7 @@ func NewGateway(log *slog.Logger, d *platform.Dependencies, verifier auth.Verifi
 }
 
 func upstreamsReady(ctx context.Context, up Upstreams) bool {
-	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit, up.Realtime, up.Events, up.Moderation} {
+	for _, u := range []*url.URL{up.Tasks, up.Files, up.LLM, up.Notifications, up.Audit, up.Realtime, up.Events, up.Moderation, up.Identity} {
 		if u == nil {
 			continue
 		}

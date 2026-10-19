@@ -133,3 +133,35 @@ func TestProjections(t *testing.T) {
 		t.Fatalf("отчёт по организациям: %v", orgRows)
 	}
 }
+
+func TestProjectionVersionOverridesTransactionTime(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	repo := NewRepository(isolatedDB(t, ctx))
+	id := uuid.NewString()
+	at := time.Now().UTC()
+	apply := func(version int64, when time.Time, status string) {
+		t.Helper()
+		snapshot, err := json.Marshal(map[string]any{"id": id, "status": status})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = repo.Apply(ctx, uuid.NewString(), Envelope{Entity: "organization", ID: id, Version: version, At: when, Snapshot: snapshot}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply(0, at, "pending") // сообщение, созданное до обновления сервиса
+	apply(1, at.Add(-time.Minute), "rejected")
+	apply(2, at.Add(-2*time.Minute), "approved") // позже записано, раньше началась транзакция
+	apply(1, at.Add(time.Minute), "rejected")    // запоздавшая доставка
+	apply(2, at.Add(time.Minute), "rejected")    // дубль версии не заменяет данные
+	apply(0, at.Add(time.Hour), "pending")       // старый формат не откатывает новую версию
+	var status string
+	var version int64
+	if err := repo.db.QueryRow(ctx, "SELECT status,domain_version FROM organizations WHERE id=$1", id).Scan(&status, &version); err != nil {
+		t.Fatal(err)
+	}
+	if status != "approved" || version != 2 {
+		t.Fatalf("проекция откатилась: status=%s, version=%d", status, version)
+	}
+}

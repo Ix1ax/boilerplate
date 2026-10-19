@@ -23,8 +23,12 @@ const stateCookie = "starter_oidc_state"
 // Это предел с момента входа: обновление токенов не начинает новые восемь часов.
 const sessionLifetime = 8 * time.Hour
 
+// session — либо токены «Столото ID» (Keycloak), либо пользователь обычной регистрации (Local).
+// У локальной сессии нет токена: личность подтвердил сервис identity при входе, а актуальный
+// статус учётной записи gateway сверяет с ним периодически (см. checkLocal).
 type session struct {
-	Token    *oauth2.Token `json:"token"`
+	Token    *oauth2.Token `json:"token,omitempty"`
+	Local    *Identity     `json:"local,omitempty"`
 	Deadline time.Time     `json:"deadline"`
 }
 
@@ -44,6 +48,8 @@ type Sessions struct {
 	issuer   string
 	secure   bool
 	refresh  singleflight.Group
+	// accounts — сервис обычной регистрации; nil — доступен только вход через «Столото ID».
+	accounts Accounts
 }
 
 // NewSessions настраивает вход через Keycloak (Authorization Code + PKCE) с возвратом
@@ -84,6 +90,9 @@ func safeNext(value string) string {
 }
 
 // Register добавляет /auth/login, /auth/callback и /auth/logout.
+// sessionsKey — множество сессий пользователя: смена пароля закрывает все остальные.
+func sessionsKey(subject string) string { return "user_sessions:" + subject }
+
 func (s *Sessions) Register(r *gin.Engine) {
 	r.GET("/auth/login", func(c *gin.Context) {
 		state := randomID()
@@ -127,13 +136,27 @@ func (s *Sessions) Register(r *gin.Engine) {
 			return
 		}
 		// Сначала закрываем серверную сессию. При сбое Redis оставляем cookie для повтора выхода.
+		local := false
 		if id, _ := c.Cookie(sessionCookie); id != "" {
-			if err := s.cache.Del(c.Request.Context(), "session:"+id).Err(); err != nil {
+			ctx := c.Request.Context()
+			if raw, err := s.cache.Get(ctx, "session:"+id).Bytes(); err == nil {
+				var current session
+				if json.Unmarshal(raw, &current) == nil && current.Local != nil {
+					local = true
+					_ = s.cache.SRem(ctx, sessionsKey(current.Local.Subject), id).Err()
+				}
+			}
+			if err := s.cache.Del(ctx, "session:"+id).Err(); err != nil {
 				sessionError(c, 503, "session_unavailable", "Не удалось завершить сессию. Повторите выход")
 				return
 			}
 		}
 		s.cookie(c, sessionCookie, "", -1)
+		// У обычной регистрации нет сессии в Keycloak: выходить там не нужно.
+		if local {
+			c.JSON(200, gin.H{"url": s.origin + "/"})
+			return
+		}
 		params := url.Values{"client_id": {s.oauth.ClientID}, "post_logout_redirect_uri": {s.origin + "/"}}
 		c.JSON(200, gin.H{"url": s.issuer + "/protocol/openid-connect/logout?" + params.Encode()})
 	})
@@ -146,17 +169,35 @@ func (s *Sessions) start(c *gin.Context, ctx context.Context, token *oauth2.Toke
 		sessionError(c, 401, "invalid_token", "Сервер входа выдал недопустимый токен")
 		return false
 	}
+	_, ok := s.save(c, ctx, session{Token: token, Deadline: time.Now().Add(sessionLifetime)})
+	return ok
+}
+
+// save записывает новую сессию, заменяет прежнюю из cookie и возвращает идентификатор.
+// Новый идентификатор при каждом входе защищает от фиксации сессии.
+func (s *Sessions) save(c *gin.Context, ctx context.Context, data session) (string, bool) {
 	id := randomID()
-	data, _ := json.Marshal(session{Token: token, Deadline: time.Now().Add(sessionLifetime)})
-	if err := s.cache.Set(ctx, "session:"+id, data, sessionLifetime).Err(); err != nil {
+	raw, _ := json.Marshal(data)
+	if err := s.cache.Set(ctx, "session:"+id, raw, sessionLifetime).Err(); err != nil {
 		sessionError(c, 503, "session_unavailable", "Не удалось сохранить сессию")
-		return false
+		return "", false
+	}
+	if data.Local != nil {
+		key := sessionsKey(data.Local.Subject)
+		pipe := s.cache.TxPipeline()
+		pipe.SAdd(ctx, key, id)
+		pipe.Expire(ctx, key, sessionLifetime)
+		if _, err := pipe.Exec(ctx); err != nil {
+			_ = s.cache.Del(ctx, "session:"+id).Err()
+			sessionError(c, 503, "session_unavailable", "Не удалось сохранить сессию")
+			return "", false
+		}
 	}
 	if old, _ := c.Cookie(sessionCookie); old != "" {
 		_ = s.cache.Del(ctx, "session:"+old).Err()
 	}
 	s.cookie(c, sessionCookie, id, int(sessionLifetime.Seconds()))
-	return true
+	return id, true
 }
 
 // Bearer-клиенты не используют браузерную сессию. Для cookie-запросов,
@@ -171,11 +212,29 @@ func (s *Sessions) CSRF() gin.HandlerFunc {
 	}
 }
 
+// resolved — что нашлось в сессии: токен «Столото ID» или пользователь обычной регистрации.
+type resolved struct {
+	token string
+	local *Identity
+}
+
 // Токен нужен только Go: браузер присылает cookie, а обновление проходит внутри того же запроса.
 func (s *Sessions) AccessToken(c *gin.Context) (string, error) {
+	r, err := s.resolve(c)
+	return r.token, err
+}
+
+// Authenticate возвращает пользователя локальной сессии или токен SSO-сессии.
+// redis.Nil — сессии нет (или она закрыта); другая ошибка — временный сбой инфраструктуры.
+func (s *Sessions) Authenticate(c *gin.Context) (*Identity, string, error) {
+	r, err := s.resolve(c)
+	return r.local, r.token, err
+}
+
+func (s *Sessions) resolve(c *gin.Context) (resolved, error) {
 	id, err := c.Cookie(sessionCookie)
 	if err != nil || id == "" {
-		return "", redis.Nil
+		return resolved{}, redis.Nil
 	}
 	// Параллельные запросы одной сессии делят обновление токена только в этом процессе API.
 	// При нескольких репликах и ротации refresh token нужна распределённая блокировка.
@@ -183,23 +242,32 @@ func (s *Sessions) AccessToken(c *gin.Context) (string, error) {
 		ctx := context.WithValue(c.Request.Context(), oauth2.HTTPClient, s.client)
 		raw, err := s.cache.Get(ctx, "session:"+id).Bytes()
 		if err != nil {
-			return "", err
+			return resolved{}, err
 		}
 		var current session
-		if json.Unmarshal(raw, &current) != nil || current.Token == nil || time.Now().After(current.Deadline) {
-			return "", redis.Nil
+		if json.Unmarshal(raw, &current) != nil || time.Now().After(current.Deadline) {
+			return resolved{}, redis.Nil
+		}
+		if current.Local != nil {
+			if err := s.checkLocal(ctx, id, current.Local); err != nil {
+				return resolved{}, err
+			}
+			return resolved{local: current.Local}, nil
+		}
+		if current.Token == nil {
+			return resolved{}, redis.Nil
 		}
 		if current.Token.Expiry.After(time.Now().Add(30 * time.Second)) {
-			return current.Token.AccessToken, nil
+			return resolved{token: current.Token.AccessToken}, nil
 		}
 		token, err := s.oauth.TokenSource(ctx, current.Token).Token()
 		if err != nil {
 			var response *oauth2.RetrieveError
 			if errors.As(err, &response) && response.Response.StatusCode == 400 {
 				_ = s.cache.Del(ctx, "session:"+id).Err()
-				return "", redis.Nil
+				return resolved{}, redis.Nil
 			}
-			return "", err
+			return resolved{}, err
 		}
 		// Сохраняем весь ответ: Keycloak может выдать новый refresh token вместо прежнего.
 		current.Token = token
@@ -207,19 +275,19 @@ func (s *Sessions) AccessToken(c *gin.Context) (string, error) {
 		// SET XX не позволяет запоздалому refresh восстановить удалённую при выходе сессию.
 		saved, err := s.cache.SetXX(ctx, "session:"+id, data, time.Until(current.Deadline)).Result()
 		if err != nil {
-			return "", err
+			return resolved{}, err
 		}
 		if !saved {
-			return "", redis.Nil
+			return resolved{}, redis.Nil
 		}
-		return token.AccessToken, nil
+		return resolved{token: token.AccessToken}, nil
 	})
 	if err != nil {
 		// Cookie удаляем при потере сессии, но сохраняем при временной ошибке инфраструктуры.
 		if errors.Is(err, redis.Nil) {
 			s.cookie(c, sessionCookie, "", -1)
 		}
-		return "", err
+		return resolved{}, err
 	}
-	return result.(string), nil
+	return result.(resolved), nil
 }

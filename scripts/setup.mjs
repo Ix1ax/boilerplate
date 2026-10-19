@@ -60,6 +60,7 @@ for (const name of [
   'AUDIT_DB_PASSWORD',
   'EVENTS_DB_PASSWORD',
   'MODERATION_DB_PASSWORD',
+  'IDENTITY_DB_PASSWORD',
   'KEYCLOAK_DB_PASSWORD',
   'RABBITMQ_PASSWORD',
   'REDIS_PASSWORD',
@@ -103,9 +104,9 @@ if (production) {
 const origin = new URL(values.APP_ORIGIN).origin;
 for (const client of realm.clients) {
   if (client.clientId === 'hackathon-web') {
-    // Быстрый вход демо-аккаунтами: gateway получает токен по паролю (password grant) этим же
-    // клиентом, чтобы обновление и выход работали как при обычном входе.
-    client.directAccessGrantsEnabled = values.DEMO_LOGIN === 'true';
+    // «Столото ID» — только перенаправление на страницу входа (PKCE). Пароли SSO-пользователей
+    // gateway не видит: вход по паролю в приложении идёт через свои учётные записи (identity).
+    client.directAccessGrantsEnabled = false;
     client.redirectUris = [`${origin}/auth/callback`];
     client.webOrigins = [origin];
     client.attributes['post.logout.redirect.uris'] = `${origin}/`;

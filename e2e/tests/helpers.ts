@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 
 // Демо-учётные данные создаёт make setup; в репозиторий они не попадают.
 export const env = Object.fromEntries(
@@ -23,7 +23,29 @@ export const login = async (
   await page.locator('#password').fill(password);
   await page.locator('#kc-login').click();
   await expect(page).toHaveURL(/\/dashboard\/tasks/);
+  await appReady(page);
 };
+
+// Приложение сначала показывает вступление без разметки страницы: ждём основной контент.
+export const appReady = (page: Page) =>
+  expect(page.locator('main')).toBeVisible({ timeout: 15_000 });
 
 export const loginAsAdmin = (page: Page) =>
   login(page, env.ADMIN_DEMO_EMAIL, env.ADMIN_DEMO_PASSWORD);
+
+// Обучение (driver.js) запускается при первом входе и перекрывает экран: тесты сценариев
+// проверяют сами экраны, поэтому для всех вкладок контекста обучение считается пройденным.
+// Сам тур проверяется отдельно, где нужно, через обычный test из @playwright/test.
+export const test = base.extend({
+  context: async ({ context }, use) => {
+    await context.addInitScript(() => {
+      const getItem = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (key: string) {
+        return key.startsWith('onboarding:')
+          ? 'dismissed'
+          : getItem.call(this, key);
+      };
+    });
+    await use(context);
+  },
+});

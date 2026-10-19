@@ -27,7 +27,9 @@ const (
 )
 
 // Upstreams — адреса внутренних сервисов, за которыми стоит gateway.
-type Upstreams struct{ Tasks, Files, LLM, Notifications, Audit, Realtime, Events, Moderation *url.URL }
+type Upstreams struct {
+	Tasks, Files, LLM, Notifications, Audit, Realtime, Events, Moderation, Identity *url.URL
+}
 
 // slowUpstream — для долгих ответов (LLM, SSE): иначе gateway оборвёт их по таймаутам.
 const slowUpstream = 3 * time.Minute

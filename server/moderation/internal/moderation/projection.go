@@ -18,6 +18,7 @@ import (
 
 // Envelope — data доменного события (см. events/internal/events/domain.go).
 type Envelope struct {
+	Version  int64           `json:"version"`
 	Entity   string          `json:"entity"`
 	ID       string          `json:"id"`
 	Kind     string          `json:"kind"`
@@ -42,15 +43,17 @@ var projections = map[string]struct {
 	"company_request": {"company_requests", []string{"user_id", "sport", "level", "status", "created_at"}},
 }
 
-// upsertSQL — вставка снимка или обновление, только если он не старше сохранённого.
+// upsertSQL принимает только следующую версию. Время используется лишь для старых
+// сообщений без версии, пока сущность ещё не получила версионированный снимок.
 func upsertSQL(table string, columns []string) string {
 	excluded := make([]string, len(columns))
 	for i, c := range columns {
 		excluded[i] = "EXCLUDED." + c
 	}
-	return fmt.Sprintf(`INSERT INTO %[1]s SELECT (jsonb_populate_record(NULL::%[1]s, $1::jsonb || jsonb_build_object('changed_at', $2::timestamptz))).*
-ON CONFLICT (id) DO UPDATE SET (%[2]s, changed_at) = ROW(%[3]s, EXCLUDED.changed_at)
-WHERE %[1]s.changed_at <= EXCLUDED.changed_at`, table, strings.Join(columns, ", "), strings.Join(excluded, ", "))
+	return fmt.Sprintf(`INSERT INTO %[1]s SELECT (jsonb_populate_record(NULL::%[1]s, $1::jsonb || jsonb_build_object('changed_at', $2::timestamptz, 'domain_version', $3::bigint))).*
+ON CONFLICT (id) DO UPDATE SET (%[2]s, changed_at, domain_version) = ROW(%[3]s, EXCLUDED.changed_at, EXCLUDED.domain_version)
+WHERE %[1]s.domain_version < EXCLUDED.domain_version
+   OR (%[1]s.domain_version = 0 AND EXCLUDED.domain_version = 0 AND %[1]s.changed_at <= EXCLUDED.changed_at)`, table, strings.Join(columns, ", "), strings.Join(excluded, ", "))
 }
 
 // Logged — попадает ли переход в журнал модерации: решения по организациям, смена статуса событий
@@ -66,7 +69,8 @@ func Logged(e Envelope) bool {
 	case "event":
 		return e.Kind == "event"
 	case "comment":
-		return e.To == "hidden"
+		// Скрытие модератором и возврат скрытого; удаление автором — не решение модерации.
+		return e.To == "hidden" || e.From == "hidden"
 	}
 	return false
 }
@@ -76,7 +80,7 @@ type Repository struct{ db *pgxpool.Pool }
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
 // Apply сохраняет снимок и запись журнала в одной транзакции. Повтор того же события безопасен:
-// проекция не откатится (changed_at), журнал не задвоится (message_id).
+// проекция не откатится (domain_version), журнал не задвоится (message_id).
 func (r *Repository) Apply(ctx context.Context, messageID string, e Envelope) error {
 	p, ok := projections[e.Entity]
 	if !ok {
@@ -87,7 +91,7 @@ func (r *Repository) Apply(ctx context.Context, messageID string, e Envelope) er
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, upsertSQL(p.table, p.columns), string(e.Snapshot), e.At); err != nil {
+	if _, err = tx.Exec(ctx, upsertSQL(p.table, p.columns), string(e.Snapshot), e.At, e.Version); err != nil {
 		return fmt.Errorf("проекция %s: %w", p.table, err)
 	}
 	if Logged(e) {
@@ -142,7 +146,7 @@ func (s *Service) HandleEvent(ctx context.Context, messageID, eventType string, 
 		return nil
 	}
 	var e Envelope
-	if json.Unmarshal(data, &e) != nil || uuid.Validate(e.ID) != nil || uuid.Validate(messageID) != nil || e.At.IsZero() {
+	if json.Unmarshal(data, &e) != nil || uuid.Validate(e.ID) != nil || uuid.Validate(messageID) != nil || e.At.IsZero() || e.Version < 0 {
 		return nil
 	}
 	if len(e.Snapshot) == 0 || string(e.Snapshot) == "null" {

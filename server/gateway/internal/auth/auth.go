@@ -18,20 +18,36 @@ type Identity struct {
 	RealmAccess struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
+	// Provider — способ входа: sso («Столото ID», Keycloak) или local (почта и пароль).
+	// В токене Keycloak такого поля нет, его выставляет Middleware.
+	Provider string `json:"provider,omitempty"`
 }
+
+const (
+	ProviderSSO   = "sso"
+	ProviderLocal = "local"
+)
 
 // Middleware пускает дальше только вошедшего пользователя. Токен берётся из заголовка
 // Authorization (внешние клиенты, тесты) или из серверной сессии по cookie (браузер).
+// Сессия обычной регистрации токена не содержит: в ней сам пользователь, проверенный identity.
 // После проверки Identity лежит в контексте запроса — см. Current.
 func Middleware(verifier Verifier, sessions ...*Sessions) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Явный Bearer принадлежит внешнему клиенту: не подменяем его браузерной сессией.
 		header := c.GetHeader("Authorization")
 		if header == "" && len(sessions) > 0 && sessions[0] != nil {
-			token, err := sessions[0].AccessToken(c)
-			// Недоступность Redis или Keycloak не означает выход: клиент сможет повторить запрос.
+			local, token, err := sessions[0].Authenticate(c)
+			// Недоступность Redis, Keycloak или identity не означает выход: клиент сможет повторить запрос.
 			if err != nil && !errors.Is(err, redis.Nil) {
 				sessionError(c, 503, "session_unavailable", "Сессия временно недоступна. Повторите запрос")
+				return
+			}
+			if local != nil {
+				identity := *local
+				identity.Provider = ProviderLocal
+				c.Set("identity", identity)
+				c.Next()
 				return
 			}
 			if token != "" {
@@ -53,6 +69,7 @@ func Middleware(verifier Verifier, sessions ...*Sessions) gin.HandlerFunc {
 			unauthorized(c)
 			return
 		}
+		identity.Provider = ProviderSSO
 		c.Set("identity", identity)
 		c.Next()
 	}

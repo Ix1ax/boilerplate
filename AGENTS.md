@@ -8,7 +8,8 @@
 
 | Путь                           | Что это                                                                                                                                                             |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `server/gateway`               | Единственный публичный вход (:8080): Keycloak OIDC/PKCE, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы                                              |
+| `server/gateway`               | Единственный публичный вход (:8080): «Столото ID» (Keycloak OIDC/PKCE) и обычная регистрация, сессии в Redis, JWT, роли, CSRF, rate limit, прокси в сервисы         |
+| `server/identity`              | Учётные записи обычной регистрации: почта и пароль (Argon2id), защита от подбора, блокировка админом (`/api/v1/admin/accounts`). Сессии выдаёт gateway              |
 | `server/events`                | **Домен кейса**: мероприятия, организации с допуском, записи и заявки, обсуждение, модерация (`docs/data-model.md`)                                                 |
 | `server/moderation`            | Админка-аналитика: дашборд, журнал модерации, лента сообщений, CSV. Строит свои таблицы из доменных событий `domain.*.changed` сервиса events, чужие базы не читает |
 | `server/tasks`, `server/files` | Примеры доменных сервисов. **Шаблон для нового сервиса — `server/tasks`**                                                                                           |
@@ -36,7 +37,7 @@
 make setup        # .env с паролями и INTERNAL_TOKEN (идемпотентно)
 make up / down    # весь стек в Docker
 make llm          # контейнер llm-ollama + модель Qwen (несколько ГБ, один раз)
-make gateway|tasks|files|llm-svc|web   # запуск вне Docker после make infra
+make gateway|tasks|files|identity|llm-svc|web   # запуск вне Docker после make infra
 make test         # юнит-тесты Go + vitest
 make check        # test + gofmt + vet + typecheck + lint + build
 make integration  # тесты с реальными Postgres/Redis

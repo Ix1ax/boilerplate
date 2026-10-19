@@ -29,6 +29,7 @@ import (
 //	… /my/company-requests, /sports/demand               «Ищу компанию» (company_routes.go)
 //	… /events/:id/buddy, /remind, /weather              проводники, напоминания, погода (gathering_routes.go)
 //	… /my/profile, PATCH /events/:id, /alternatives, /calendar.ics  extra_routes.go
+//	… жалобы, удаление своего сообщения, исключение участника    report_routes.go
 func Register(parent *gin.RouterGroup, s *Service) {
 	g := parent.Group("", profileSync(s))
 	g.GET("/sports", func(c *gin.Context) {
@@ -253,6 +254,7 @@ func Register(parent *gin.RouterGroup, s *Service) {
 	registerCompany(g, s)
 	registerGatherings(g, s)
 	registerExtras(g, s)
+	registerReports(g, s)
 }
 
 // RegisterAdmin — модерация. Роль admin проверяется и в gateway, и здесь.
@@ -264,6 +266,7 @@ func Register(parent *gin.RouterGroup, s *Service) {
 //	POST /admin/events/:id/restore                 вернуть в публикацию
 //	POST /admin/comments/:id/hide                  скрыть сообщение с причиной
 //	… карточки, история, справочник, переотправка    admin.go (registerAdminExtra)
+//	… очередь жалоб, возврат скрытого сообщения       report_routes.go
 func RegisterAdmin(g *gin.RouterGroup, s *Service) {
 	admin := g.Group("/admin", platform.RequireRole("admin"), profileSync(s))
 	admin.GET("/organizations", func(c *gin.Context) {
@@ -339,6 +342,7 @@ func RegisterAdmin(g *gin.RouterGroup, s *Service) {
 		c.JSON(200, cm)
 	}))
 	registerAdminExtra(admin, s)
+	registerAdminReports(admin, s)
 }
 
 func actor(c *gin.Context) Actor {
@@ -451,12 +455,16 @@ func handle(c *gin.Context, err error) bool {
 		c.AbortWithStatusJSON(422, gin.H{"error": gin.H{"code": "validation_error", "message": fe.Message, "field": fe.Field, "request_id": c.GetString("request_id")}})
 	case errors.Is(err, ErrNotFound):
 		fail(c, 404, "not_found", "Не найдено или недоступно")
-	case errors.Is(err, ErrOrgNotApproved), errors.Is(err, ErrNotOrganizer), errors.Is(err, ErrNotEventOwner):
+	case errors.Is(err, ErrOrgNotApproved), errors.Is(err, ErrNotOrganizer), errors.Is(err, ErrNotEventOwner), errors.Is(err, ErrNotAuthor):
 		fail(c, 403, "forbidden", err.Error())
 	case errors.Is(err, ErrEventClosed), errors.Is(err, ErrEventPast), errors.Is(err, ErrOwnEvent),
 		errors.Is(err, ErrFull), errors.Is(err, ErrOrgExists), errors.Is(err, ErrRequestExists),
-		errors.Is(err, ErrNotConfirmed), errors.Is(err, ErrNewcomerBuddy), errors.Is(err, ErrRemindedRecently), errors.Is(err, ErrBaseSport), errors.Is(err, ErrNotParticipant), errors.Is(err, ErrSportHidden):
+		errors.Is(err, ErrNotConfirmed), errors.Is(err, ErrNewcomerBuddy), errors.Is(err, ErrRemindedRecently), errors.Is(err, ErrBaseSport), errors.Is(err, ErrNotParticipant), errors.Is(err, ErrSportHidden),
+		errors.Is(err, ErrRejected), errors.Is(err, ErrOwnTarget), errors.Is(err, ErrReportExists):
 		fail(c, 409, "conflict", err.Error())
+	case errors.Is(err, ErrTooManyReports):
+		c.Header("Retry-After", "3600")
+		fail(c, 429, "rate_limit", err.Error())
 	case errors.Is(err, ErrBadParent):
 		fail(c, 422, "validation_error", err.Error())
 	case errors.Is(err, platform.ErrTransition):

@@ -1,13 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
-import { login, loginAsAdmin } from './helpers';
+import { appReady, login, loginAsAdmin, test } from './helpers';
 
 // Виджет widgets/accessibility — сторонний компонент (open-accessibility-widget),
 // его разметку не проверяем: нарушения внутри него не относятся к нашему коду.
 const AXE_EXCLUDE = '[class*="acsb"]';
 
 const checkPage = async (page: Page) => {
+  await appReady(page);
   const results = await new AxeBuilder({ page }).exclude(AXE_EXCLUDE).analyze();
   expect(
     results.violations,

@@ -36,6 +36,12 @@ FROM comments c JOIN events e ON e.id=c.event_id LEFT JOIN profiles pr ON pr.use
 FROM company_requests r JOIN sports s ON s.id=r.sport_id WHERE r.id=$1::uuid) x`,
 }
 
+// domainTables — где лежит счётчик версии снимка сущности.
+var domainTables = map[string]string{
+	"event": "events", "organization": "organizations", "participation": "participations",
+	"comment": "comments", "company_request": "company_requests",
+}
+
 // entityOf — какая сущность описывает переход: смена состава — это изменение события.
 var entityOf = map[string]string{"event_quorum": "event"}
 
@@ -56,10 +62,16 @@ func emitDomain(ctx context.Context, tx pgx.Tx, entityType, id string, t platfor
 	if !ok {
 		return fmt.Errorf("нет снимка для сущности %q", entity)
 	}
+	// Версия растёт под блокировкой строки, в том числе при переотправке. Время начала
+	// транзакции не отражает порядок изменений, если транзакция ждала эту блокировку.
+	var version int64
+	if err := tx.QueryRow(ctx, "UPDATE "+domainTables[entity]+" SET domain_version=domain_version+1 WHERE id=$1 RETURNING domain_version", id).Scan(&version); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, `INSERT INTO outbox(id,type,user_id,request_id,payload)
 SELECT $2, $3, '', $4, jsonb_build_object('entity',$5::text,'id',$1::text,'kind',$6::text,'from',$7::text,'to',$8::text,
-  'actor',$9::text,'comment',$10::text,'at',now(),'snapshot',(`+snapshot+`))`,
-		id, uuid.NewString(), "domain."+entity+".changed", platform.RequestID(ctx), entity, entityType, t.From, t.To, t.Actor, t.Comment)
+  'actor',$9::text,'comment',$10::text,'at',clock_timestamp(),'version',$11::bigint,'snapshot',(`+snapshot+`))`,
+		id, uuid.NewString(), "domain."+entity+".changed", platform.RequestID(ctx), entity, entityType, t.From, t.To, t.Actor, t.Comment, version)
 	return err
 }
 

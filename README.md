@@ -1,6 +1,6 @@
 # Стартовая монорепа для хакатонов
 
-Самостоятельный шаблон: Vite + React + TypeScript, Go-микросервисы (gateway, tasks, files, notifications, audit, realtime, llm), отдельный PostgreSQL на каждый сервис, RabbitMQ, Redis, приватные файлы S3, локальная LLM (Qwen) и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
+Самостоятельный шаблон: Vite + React + TypeScript, Go-микросервисы (gateway, identity, events, moderation, tasks, files, notifications, audit, realtime, llm), отдельный PostgreSQL на каждый сервис, RabbitMQ, Redis, приватные файлы S3, локальная LLM (Qwen) и Keycloak. Вход, проверка токенов и прав выполняются в Go. Браузер использует HttpOnly cookie с идентификатором сессии; access и refresh token хранятся в Redis.
 
 ## Быстрый старт
 
@@ -43,7 +43,7 @@ make demo
 
 ## Что включено
 
-- Вход и регистрация Keycloak через Authorization Code + PKCE S256, одноразовый `state`, серверное обновление токенов, выход.
+- Два способа входа: «Столото ID» (Keycloak, Authorization Code + PKCE S256, одноразовый `state`, серверное обновление токенов) и обычная регистрация по почте и паролю (сервис `identity`: Argon2id, защита от подбора, блокировка админом). В обоих случаях браузер получает только HttpOnly cookie.
 - Проверка JWT: подпись, issuer, audience и срок действия. Роли `user` и `admin`; пример проверки роли — `/api/v1/admin/ping`.
 - Задачи и файлы с пагинацией. Чтение, изменение и удаление ограничены владельцем в SQL.
 - Загрузка PNG, JPEG, WebP, PDF и текста до 10 МиБ. Тип проверяется по содержимому, скачивание доступно только владельцу.
@@ -130,9 +130,12 @@ Vite слушает порт 3000 и проксирует `/api`, `/auth` и `/h
 | Метод         | Путь                                | Назначение                                    |
 | ------------- | ----------------------------------- | --------------------------------------------- |
 | GET           | `/healthz`, `/readyz`               | Процесс API / зависимости                     |
-| GET           | `/auth/login?next=/dashboard/tasks` | Начать вход через Keycloak                    |
+| GET           | `/auth/providers`                   | Доступные способы входа                       |
+| GET           | `/auth/login?next=/dashboard/tasks` | Войти через «Столото ID» (Keycloak)           |
 | GET           | `/auth/callback`                    | Проверить state, обменять код, создать сессию |
-| POST          | `/auth/logout`                      | Удалить сессию и получить URL выхода Keycloak |
+| POST          | `/auth/local/register`, `/login`    | Регистрация и вход по почте и паролю          |
+| POST          | `/auth/local/password`              | Сменить пароль обычной регистрации            |
+| POST          | `/auth/logout`                      | Удалить сессию и получить URL выхода          |
 | GET           | `/api/v1/me`                        | Пользователь и массив `roles`                 |
 | GET           | `/api/v1/admin/ping`                | Пример проверки роли admin                    |
 | GET, POST     | `/api/v1/tasks`                     | Список / создание задачи                      |

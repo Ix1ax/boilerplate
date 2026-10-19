@@ -86,7 +86,8 @@ func (s *Service) UpdateEvent(ctx context.Context, a Actor, id string, p EventPa
 	if p.StartsAt != nil && in.MinParticipants != nil {
 		in.QuorumDeadline = nil // срок сбора состава считается заново от нового начала
 	}
-	if err := ValidateEvent(&in, time.Now()); err != nil {
+	// Неизменённый срок уже мог пройти: это не мешает исправить место встречи.
+	if err := validateEvent(&in, time.Now(), p.StartsAt != nil); err != nil {
 		return Event{}, err
 	}
 	changes := EventChanges{OldStartsAt: cur.StartsAt, OldLocation: cur.Location,
@@ -137,6 +138,13 @@ func (r *Repository) UpdateEvent(ctx context.Context, a Actor, id string, in Eve
 level=$9, requirements=$10, price_note=$11, private_info=$12, capacity=$13, quorum_deadline=$14, outdoor=$15, updated_at=now() WHERE id=$1`,
 			id, in.Title, in.Description, in.StartsAt, in.EndsAt, in.Location, in.Lat, in.Lng, in.Level, in.Requirements,
 			in.PriceNote, in.PrivateInfo, in.Capacity, in.QuorumDeadline, in.Outdoor); err != nil {
+			return err
+		}
+		// Добавленные места сначала получает лист ожидания, иначе их займёт следующий записавшийся.
+		if e, err = lockEvent(ctx, tx, id); err != nil {
+			return err
+		}
+		if err = promoteWaitlist(ctx, tx, id, e); err != nil {
 			return err
 		}
 		if c.Time {

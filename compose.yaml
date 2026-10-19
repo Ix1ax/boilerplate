@@ -60,6 +60,19 @@ services:
     healthcheck:
       <<: *pg-health
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+  # Учётные записи обычной регистрации (почта и пароль) — отдельно от базы Keycloak.
+  identity-postgres:
+    container_name: identity-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${IDENTITY_DB_USER:?run make setup}
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:?run make setup}
+      POSTGRES_DB: ${IDENTITY_DB_NAME:?required}
+    ports: ['127.0.0.1:${IDENTITY_DB_PORT:-5439}:5432']
+    volumes: [identity-postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *pg-health
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
   moderation-postgres:
     container_name: moderation-postgres
     image: postgres:17-alpine
@@ -251,6 +264,27 @@ services:
       DATABASE_URL: postgres://${EVENTS_DB_USER}:${EVENTS_DB_PASSWORD}@events-postgres:5432/${EVENTS_DB_NAME}?sslmode=disable
     depends_on:
       events-postgres: { condition: service_healthy }
+  identity-migrate:
+    container_name: identity-migrate
+    profiles: [app]
+    build: ./server/identity
+    command: [migrate, up]
+    environment:
+      DATABASE_URL: postgres://${IDENTITY_DB_USER}:${IDENTITY_DB_PASSWORD}@identity-postgres:5432/${IDENTITY_DB_NAME}?sslmode=disable
+    depends_on:
+      identity-postgres: { condition: service_healthy }
+  # Обычная регистрация и вход по паролю; сессии выдаёт gateway.
+  identity-service:
+    container_name: identity-service
+    profiles: [app]
+    build: ./server/identity
+    environment:
+      DATABASE_URL: postgres://${IDENTITY_DB_USER}:${IDENTITY_DB_PASSWORD}@identity-postgres:5432/${IDENTITY_DB_NAME}?sslmode=disable
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
+    restart: on-failure:3
+    depends_on:
+      identity-migrate: { condition: service_completed_successfully }
+    healthcheck: *svc-health
   moderation-migrate:
     container_name: moderation-migrate
     profiles: [app]
@@ -399,23 +433,11 @@ services:
       REALTIME_URL: http://realtime-service:8080
       EVENTS_URL: http://events-service:8080
       MODERATION_URL: http://moderation-service:8080
+      IDENTITY_URL: http://identity-service:8080
       AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?run make setup}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
-      DEMO_LOGIN: ${DEMO_LOGIN:-false}
-      DEMO_EMAIL: ${DEMO_EMAIL:-}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
-      SECOND_DEMO_EMAIL: ${SECOND_DEMO_EMAIL:-}
-      SECOND_DEMO_PASSWORD: ${SECOND_DEMO_PASSWORD:-}
-      ORG_DEMO_EMAIL: ${ORG_DEMO_EMAIL:-}
-      ORG_DEMO_PASSWORD: ${ORG_DEMO_PASSWORD:-}
-      ORG_PENDING_DEMO_EMAIL: ${ORG_PENDING_DEMO_EMAIL:-}
-      ORG_PENDING_DEMO_PASSWORD: ${ORG_PENDING_DEMO_PASSWORD:-}
-      ORG_REJECTED_DEMO_EMAIL: ${ORG_REJECTED_DEMO_EMAIL:-}
-      ORG_REJECTED_DEMO_PASSWORD: ${ORG_REJECTED_DEMO_PASSWORD:-}
-      ADMIN_DEMO_EMAIL: ${ADMIN_DEMO_EMAIL:-}
-      ADMIN_DEMO_PASSWORD: ${ADMIN_DEMO_PASSWORD:-}
     ports: ['127.0.0.1:8080:8080']
     restart: on-failure:3
     depends_on:
@@ -429,6 +451,7 @@ services:
       realtime-service: { condition: service_healthy }
       events-service: { condition: service_healthy }
       moderation-service: { condition: service_healthy }
+      identity-service: { condition: service_healthy }
     healthcheck: *svc-health
   admin-service:
     container_name: admin-service
@@ -463,6 +486,7 @@ volumes:
   notifications-postgres-data:
   events-postgres-data:
   moderation-postgres-data:
+  identity-postgres-data:
   audit-postgres-data:
   keycloak-postgres-data:
   files-s3-data:
